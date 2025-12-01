@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pawnshopms-app
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - ./:/var/www/html
+      - ./docker/php.ini:/usr/local/etc/php/conf.d/custom.ini
+    ports:
+      - "8800:80"
+    environment:
+      - APP_ENV=production
+      - APP_DEBUG=false
+    networks:
+      - pawnshopms-network
+
+networks:
+  pawnshopms-network:
+    driver: bridge
+

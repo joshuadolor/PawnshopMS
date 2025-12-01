@@ -1,0 +1,108 @@
+#!/bin/bash
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+echo -e "${GREEN}========================================${NC}"
+echo -e "${GREEN}PawnshopMS Docker Deployment Script${NC}"
+echo -e "${GREEN}========================================${NC}"
+echo ""
+
+# Check if Docker is installed
+if ! command -v docker &> /dev/null; then
+    echo -e "${RED}Docker is not installed. Please install Docker first.${NC}"
+    echo "Install with: curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh"
+    exit 1
+fi
+
+# Check if Docker Compose is installed
+if ! command -v docker compose &> /dev/null && ! command -v docker-compose &> /dev/null; then
+    echo -e "${RED}Docker Compose is not installed. Please install Docker Compose first.${NC}"
+    exit 1
+fi
+
+# Check if .env file exists
+if [ ! -f .env ]; then
+    echo -e "${YELLOW}.env file not found. Creating from .env.example...${NC}"
+    if [ -f .env.example ]; then
+        cp .env.example .env
+        echo -e "${GREEN}.env file created. Please edit it with your configuration.${NC}"
+    else
+        echo -e "${RED}.env.example not found. Please create .env file manually.${NC}"
+        exit 1
+    fi
+fi
+
+# Stop existing containers if running
+echo -e "${YELLOW}Stopping existing containers...${NC}"
+docker compose down 2>/dev/null || true
+
+# Build Docker image
+echo -e "${YELLOW}Building Docker image...${NC}"
+docker compose build --no-cache
+
+if [ $? -ne 0 ]; then
+    echo -e "${RED}Docker build failed!${NC}"
+    exit 1
+fi
+
+# Start containers
+echo -e "${YELLOW}Starting containers...${NC}"
+docker compose up -d
+
+if [ $? -ne 0 ]; then
+    echo -e "${RED}Failed to start containers!${NC}"
+    exit 1
+fi
+
+# Wait for container to be ready
+echo -e "${YELLOW}Waiting for container to be ready...${NC}"
+sleep 5
+
+# Generate application key if not set
+echo -e "${YELLOW}Checking application key...${NC}"
+docker compose exec -T app php artisan key:generate --force 2>/dev/null || true
+
+# Run migrations
+echo -e "${YELLOW}Running database migrations...${NC}"
+docker compose exec -T app php artisan migrate --force
+
+if [ $? -ne 0 ]; then
+    echo -e "${YELLOW}Migration failed. This might be normal if database is not configured.${NC}"
+fi
+
+# Run seeders
+read -p "Do you want to run database seeders? (y/n) " -n 1 -r
+echo
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    echo -e "${YELLOW}Running database seeders...${NC}"
+    docker compose exec -T app php artisan db:seed --force
+fi
+
+# Optimize Laravel
+echo -e "${YELLOW}Optimizing Laravel...${NC}"
+docker compose exec -T app php artisan config:cache
+docker compose exec -T app php artisan route:cache
+docker compose exec -T app php artisan view:cache
+
+# Get container status
+echo ""
+echo -e "${GREEN}========================================${NC}"
+echo -e "${GREEN}Deployment Complete!${NC}"
+echo -e "${GREEN}========================================${NC}"
+echo ""
+echo -e "${GREEN}Container Status:${NC}"
+docker compose ps
+echo ""
+echo -e "${GREEN}Application is running on: http://localhost:8800${NC}"
+echo ""
+echo -e "${YELLOW}Useful commands:${NC}"
+echo "  View logs:        docker compose logs -f"
+echo "  Stop container:  docker compose down"
+echo "  Restart:         docker compose restart"
+echo "  Shell access:    docker compose exec app bash"
+echo ""
+
