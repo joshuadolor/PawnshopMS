@@ -24,18 +24,11 @@ class ConfigSeeder extends Seeder
                 'description' => 'Service charge for Sangla transactions (in currency amount)',
             ],
             [
-                'key' => 'sangla_interest_rate',
-                'value' => '3',
-                'label' => 'Sangla Default Interest Rate (%)',
-                'type' => 'percentage',
-                'description' => 'Default interest rate for Sangla transactions (percentage)',
-            ],
-            [
                 'key' => 'sangla_interest_period',
                 'value' => 'per_month',
                 'label' => 'Sangla Interest Period',
                 'type' => 'text',
-                'description' => 'Default interest period (per_annum, per_month, others)',
+                'description' => 'Default interest period (per_annum, per_month)',
             ],
         ];
 

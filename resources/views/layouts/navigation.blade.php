@@ -17,7 +17,10 @@
                     </x-nav-link>
                     @if(Auth::user()->isAdminOrSuperAdmin())
                         <x-nav-link :href="route('users.index')" :active="request()->routeIs('users.*')">
-                            User Management
+                            Users
+                        </x-nav-link>
+                        <x-nav-link :href="route('branches.index')" :active="request()->routeIs('branches.*')">
+                            Branches
                         </x-nav-link>
                         <x-nav-link :href="route('item-types.index')" :active="request()->routeIs('item-types.*')">
                             Item Types
@@ -84,6 +87,9 @@
             @if(Auth::user()->isAdminOrSuperAdmin())
                 <x-responsive-nav-link :href="route('users.index')" :active="request()->routeIs('users.*')">
                     User Management
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('branches.index')" :active="request()->routeIs('branches.*')">
+                    Branches
                 </x-responsive-nav-link>
                 <x-responsive-nav-link :href="route('item-types.index')" :active="request()->routeIs('item-types.*')">
                     Item Types

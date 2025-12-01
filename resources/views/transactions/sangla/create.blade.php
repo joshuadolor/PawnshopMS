@@ -33,11 +33,25 @@
                             <x-input-error :messages="$errors->get('address')" class="mt-2" />
                         </div>
 
+                        <!-- Appraised Value -->
+                        <div class="mt-4">
+                            <x-input-label for="appraised_value" value="Appraised Value" />
+                            <x-text-input id="appraised_value" name="appraised_value" type="number" step="0.01" min="0" class="mt-1 block w-full" :value="old('appraised_value')" required />
+                            <x-input-error :messages="$errors->get('appraised_value')" class="mt-2" />
+                        </div>
+
                         <!-- Loan Amount -->
                         <div class="mt-4">
                             <x-input-label for="loan_amount" value="Loan Amount" />
                             <x-text-input id="loan_amount" name="loan_amount" type="number" step="0.01" min="0" class="mt-1 block w-full" :value="old('loan_amount')" required />
                             <x-input-error :messages="$errors->get('loan_amount')" class="mt-2" />
+                        </div>
+
+                        <!-- Interest Rate -->
+                        <div class="mt-4">
+                            <x-input-label for="interest_rate" value="Interest Rate (%)" />
+                            <x-text-input id="interest_rate" name="interest_rate" type="number" step="0.01" min="0" max="100" class="mt-1 block w-full" :value="old('interest_rate')" required />
+                            <x-input-error :messages="$errors->get('interest_rate')" class="mt-2" />
                         </div>
 
                         <!-- Interest Rate Period -->
@@ -182,10 +196,10 @@
             const maturityDateInput = document.getElementById('maturity_date');
             const expiryDateInput = document.getElementById('expiry_date');
             const loanAmountInput = document.getElementById('loan_amount');
+            const interestRateInput = document.getElementById('interest_rate');
             const interestRatePeriodInputs = document.querySelectorAll('input[name="interest_rate_period"]');
             
             // Config values from backend
-            const interestRate = {{ $interestRate }};
             const serviceCharge = {{ $serviceCharge }};
             
             // Check if "Other" is selected on page load (for validation errors)
@@ -230,12 +244,13 @@
             // Calculate amounts function
             function calculateAmounts() {
                 const principal = parseFloat(loanAmountInput.value) || 0;
+                const interestRate = parseFloat(interestRateInput.value) || 0;
                 const maturityDate = maturityDateInput.value;
                 const selectedPeriod = document.querySelector('input[name="interest_rate_period"]:checked')?.value;
                 
                 let interest = 0;
                 
-                if (principal > 0 && maturityDate && selectedPeriod) {
+                if (principal > 0 && interestRate > 0 && maturityDate && selectedPeriod) {
                     const today = new Date();
                     const maturity = new Date(maturityDate);
                     const timeDiff = maturity - today;
@@ -268,6 +283,8 @@
             // Add event listeners for calculation
             loanAmountInput.addEventListener('input', calculateAmounts);
             loanAmountInput.addEventListener('change', calculateAmounts);
+            interestRateInput.addEventListener('input', calculateAmounts);
+            interestRateInput.addEventListener('change', calculateAmounts);
             maturityDateInput.addEventListener('change', calculateAmounts);
             interestRatePeriodInputs.forEach(input => {
                 input.addEventListener('change', calculateAmounts);

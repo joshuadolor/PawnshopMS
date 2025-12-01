@@ -28,7 +28,6 @@ class SanglaController extends Controller
         }
 
         // Get config values
-        $interestRate = Config::getValue('sangla_interest_rate', 0);
         $serviceCharge = Config::getValue('sangla_service_charge', 0);
         $interestPeriod = Config::getValue('sangla_interest_period', 'per_month');
 
@@ -43,7 +42,6 @@ class SanglaController extends Controller
 
         return view('transactions.sangla.create', [
             'itemTypes' => $itemTypes,
-            'interestRate' => $interestRate,
             'serviceCharge' => $serviceCharge,
             'interestPeriod' => $interestPeriod,
             'defaultMaturityDate' => $defaultMaturityDate,

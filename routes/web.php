@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\BranchController;
 use App\Http\Controllers\ConfigController;
 use App\Http\Controllers\ItemTypeController;
 use App\Http\Controllers\ProfileController;
@@ -36,6 +37,9 @@ Route::middleware('auth')->group(function () {
         
         // Item Type Management Routes
         Route::resource('item-types', ItemTypeController::class)->except(['show', 'edit', 'update']);
+        
+        // Branch Management Routes
+        Route::resource('branches', BranchController::class)->except(['show', 'edit', 'update']);
         
         // Configuration Management Routes
         Route::get('/configs', [ConfigController::class, 'index'])->name('configs.index');
