@@ -51,5 +51,8 @@ class DatabaseSeeder extends Seeder
             'is_active' => true,
             'password' => Hash::make('password'),
         ]);
+
+        // Seed Item Types
+        $this->call(ItemTypeSeeder::class);
     }
 }

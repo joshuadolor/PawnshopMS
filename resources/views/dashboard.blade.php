@@ -109,15 +109,19 @@
         }
 
         function selectTransactionMode(mode) {
-            // Placeholder - will be implemented later
-            console.log(`Selected ${mode} mode for ${currentTransactionType} transaction`);
             closeTransactionDialog();
             
-            // TODO: Navigate to appropriate page or show form based on mode
             if (mode === 'manual') {
-                // Navigate to manual transaction form
+                // TODO: Navigate to manual transaction form
+                console.log(`Manual mode for ${currentTransactionType} - to be implemented`);
             } else if (mode === 'process') {
-                // Navigate to process transaction form
+                // Navigate to process transaction form based on transaction type
+                if (currentTransactionType === 'Sangla') {
+                    window.location.href = '{{ route("transactions.sangla.create") }}';
+                } else {
+                    // TODO: Add other transaction types
+                    console.log(`Process mode for ${currentTransactionType} - to be implemented`);
+                }
             }
         }
 

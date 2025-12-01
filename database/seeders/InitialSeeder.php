@@ -26,6 +26,8 @@ class InitialSeeder extends Seeder
             'role' => 'superadmin',
             'password' => Hash::make(env('SUPERADMIN_PASSWORD', 'password')),
         ]);
-        
+
+        // Seed Item Types
+        $this->call(ItemTypeSeeder::class);
     }
 }

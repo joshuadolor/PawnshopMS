@@ -19,6 +19,9 @@
                         <x-nav-link :href="route('users.index')" :active="request()->routeIs('users.*')">
                             User Management
                         </x-nav-link>
+                        <x-nav-link :href="route('item-types.index')" :active="request()->routeIs('item-types.*')">
+                            Item Types
+                        </x-nav-link>
                     @endif
                 </div>
             </div>
@@ -78,6 +81,9 @@
             @if(Auth::user()->isAdminOrSuperAdmin())
                 <x-responsive-nav-link :href="route('users.index')" :active="request()->routeIs('users.*')">
                     User Management
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('item-types.index')" :active="request()->routeIs('item-types.*')">
+                    Item Types
                 </x-responsive-nav-link>
             @endif
         </div>

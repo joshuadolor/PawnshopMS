@@ -1,6 +1,8 @@
 <?php
 
+use App\Http\Controllers\ItemTypeController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\UserController;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use Illuminate\Support\Facades\Route;
@@ -18,12 +20,21 @@ Route::middleware('auth')->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
+    // Transaction Routes
+    Route::prefix('transactions')->name('transactions.')->group(function () {
+        Route::get('/sangla/create', [TransactionController::class, 'createSangla'])->name('sangla.create');
+        Route::post('/sangla', [TransactionController::class, 'storeSangla'])->name('sangla.store');
+    });
+
     // User Management Routes (Admin and Superadmin only)
     Route::middleware(EnsureUserIsAdmin::class)->group(function () {
         Route::resource('users', UserController::class)->except(['show', 'edit', 'update']);
         Route::patch('/users/{user}/status', [UserController::class, 'updateStatus'])->name('users.update-status');
         Route::patch('/users/{user}/role', [UserController::class, 'updateRole'])->name('users.update-role');
         Route::post('/users/{user}/reset-password', [UserController::class, 'resetPassword'])->name('users.reset-password');
+        
+        // Item Type Management Routes
+        Route::resource('item-types', ItemTypeController::class)->except(['show', 'edit', 'update']);
     });
 });
 

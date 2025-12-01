@@ -88,7 +88,7 @@
                                                 @if($user->id !== Auth::id())
                                                     <button 
                                                         type="button" 
-                                                        onclick="openDeleteDialog({{ $user->id }}, {{ json_encode($user->name) }}, {{ json_encode(route('users.destroy', $user)) }})"
+                                                        onclick="openDeleteDialog({{ $user->id }}, {{ json_encode($user->name) }}, {{ json_encode($user->username) }}, {{ json_encode(route('users.destroy', $user)) }})"
                                                         class="text-red-600 hover:text-red-900">
                                                         Delete
                                                     </button>
@@ -207,9 +207,24 @@
             @csrf
             @method('DELETE')
             <h3 class="text-lg font-semibold text-gray-900 mb-4">Delete User</h3>
-            <p class="text-sm text-gray-600 mb-6">
+            <p class="text-sm text-gray-600 mb-4">
                 Are you sure you want to delete the account for <span id="deleteUserName" class="font-medium"></span>? This action cannot be undone.
             </p>
+            <p class="text-sm text-gray-600 mb-4 font-medium">
+                To confirm, please type the username: <span id="deleteUserUsername" class="text-red-600"></span>
+            </p>
+            <div class="mb-6">
+                <x-input-label for="deleteUsernameConfirm" value="Type username to confirm" />
+                <x-text-input 
+                    id="deleteUsernameConfirm" 
+                    name="username_confirm" 
+                    type="text" 
+                    class="mt-1 block w-full" 
+                    placeholder="Enter username"
+                    autocomplete="off"
+                />
+                <p id="deleteUsernameError" class="mt-2 text-sm text-red-600 hidden">Username does not match</p>
+            </div>
             <div class="flex justify-end space-x-3">
                 <button 
                     type="button" 
@@ -219,7 +234,9 @@
                 </button>
                 <button 
                     type="submit" 
-                    class="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                    id="deleteConfirmButton"
+                    disabled
+                    class="px-4 py-2 text-sm font-medium text-white bg-gray-400 border border-transparent rounded-md cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
                     Delete
                 </button>
             </div>
@@ -282,20 +299,75 @@
         }
 
         // Delete Dialog
-        function openDeleteDialog(userId, userName, routeUrl) {
+        let deleteUserUsername = '';
+
+        function openDeleteDialog(userId, userName, userUsername, routeUrl) {
             const dialog = document.getElementById('deleteDialog');
             const form = document.getElementById('deleteForm');
             const userNameSpan = document.getElementById('deleteUserName');
+            const userUsernameSpan = document.getElementById('deleteUserUsername');
+            const usernameInput = document.getElementById('deleteUsernameConfirm');
+            const deleteButton = document.getElementById('deleteConfirmButton');
+            const errorMessage = document.getElementById('deleteUsernameError');
             
+            deleteUserUsername = userUsername;
             userNameSpan.textContent = userName;
+            userUsernameSpan.textContent = userUsername;
             form.action = routeUrl;
+            
+            // Reset form state
+            usernameInput.value = '';
+            deleteButton.disabled = true;
+            deleteButton.className = 'px-4 py-2 text-sm font-medium text-white bg-gray-400 border border-transparent rounded-md cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500';
+            errorMessage.classList.add('hidden');
             
             dialog.showModal();
         }
 
         function closeDeleteDialog() {
-            document.getElementById('deleteDialog').close();
+            const dialog = document.getElementById('deleteDialog');
+            const usernameInput = document.getElementById('deleteUsernameConfirm');
+            const deleteButton = document.getElementById('deleteConfirmButton');
+            const errorMessage = document.getElementById('deleteUsernameError');
+            
+            // Reset form
+            usernameInput.value = '';
+            deleteButton.disabled = true;
+            deleteButton.className = 'px-4 py-2 text-sm font-medium text-white bg-gray-400 border border-transparent rounded-md cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500';
+            errorMessage.classList.add('hidden');
+            
+            dialog.close();
         }
+
+        // Validate username input for delete dialog
+        document.addEventListener('DOMContentLoaded', function() {
+            const usernameInput = document.getElementById('deleteUsernameConfirm');
+            const deleteButton = document.getElementById('deleteConfirmButton');
+            const errorMessage = document.getElementById('deleteUsernameError');
+            
+            if (usernameInput) {
+                usernameInput.addEventListener('input', function() {
+                    const inputValue = this.value.trim();
+                    
+                    if (inputValue === deleteUserUsername) {
+                        // Username matches - enable delete button
+                        deleteButton.disabled = false;
+                        deleteButton.className = 'px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500';
+                        errorMessage.classList.add('hidden');
+                    } else {
+                        // Username doesn't match - disable delete button
+                        deleteButton.disabled = true;
+                        deleteButton.className = 'px-4 py-2 text-sm font-medium text-white bg-gray-400 border border-transparent rounded-md cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500';
+                        
+                        if (inputValue.length > 0) {
+                            errorMessage.classList.remove('hidden');
+                        } else {
+                            errorMessage.classList.add('hidden');
+                        }
+                    }
+                });
+            }
+        });
 
         // Close dialogs when clicking outside
         ['statusDialog', 'roleDialog', 'resetPasswordDialog', 'deleteDialog'].forEach(dialogId => {
