@@ -9,7 +9,7 @@
         <div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-6 text-gray-900">
-                    <form method="POST" action="{{ route('transactions.sangla.store') }}">
+                    <form method="POST" action="{{ route('transactions.sangla.store') }}" enctype="multipart/form-data">
                         @csrf
 
                         <!-- Branch Selection (only show if user has multiple branches) -->
@@ -252,6 +252,20 @@
                             <x-input-error :messages="$errors->get('item_description')" class="mt-2" />
                         </div>
 
+                        <!-- Item Image -->
+                        <x-image-capture 
+                            name="item_image" 
+                            label="Item Image" 
+                            :value="old('item_image')" 
+                        />
+
+                        <!-- Pawner ID/Photo -->
+                        <x-image-capture 
+                            name="pawner_id_image" 
+                            label="Pawner ID/Photo" 
+                            :value="old('pawner_id_image')" 
+                        />
+
                         <div class="flex items-center justify-end mt-6 gap-4">
                             <a href="{{ route('dashboard') }}" class="text-gray-600 hover:text-gray-900 font-medium">
                                 Cancel
@@ -486,6 +500,62 @@
             
             // Initial calculation if values exist
             calculateAmounts();
+        });
+
+        // Image capture functions (global)
+        function openCamera(fieldName) {
+            const input = document.getElementById(fieldName + '_input');
+            if (input) {
+                // Set capture attribute to use camera
+                input.setAttribute('capture', 'environment');
+                input.click();
+            }
+        }
+
+        function selectImage(fieldName) {
+            const input = document.getElementById(fieldName + '_input');
+            if (input) {
+                // Remove capture attribute to allow file selection
+                input.removeAttribute('capture');
+                input.click();
+            }
+        }
+
+        function removeImage(fieldName) {
+            const input = document.getElementById(fieldName + '_input');
+            const preview = document.getElementById(fieldName + '_preview');
+            const previewContainer = document.getElementById(fieldName + '_preview_container');
+            const removeBtn = document.getElementById(fieldName + '_remove_btn');
+            
+            if (input) input.value = '';
+            if (preview) preview.src = '';
+            if (previewContainer) previewContainer.classList.add('hidden');
+            if (removeBtn) removeBtn.classList.add('hidden');
+        }
+
+        // Handle file selection for image capture components
+        document.addEventListener('DOMContentLoaded', function() {
+            ['item_image', 'pawner_id_image'].forEach(function(fieldName) {
+                const input = document.getElementById(fieldName + '_input');
+                if (input) {
+                    input.addEventListener('change', function(e) {
+                        const file = e.target.files[0];
+                        if (file) {
+                            const reader = new FileReader();
+                            reader.onload = function(event) {
+                                const preview = document.getElementById(fieldName + '_preview');
+                                const previewContainer = document.getElementById(fieldName + '_preview_container');
+                                const removeBtn = document.getElementById(fieldName + '_remove_btn');
+                                
+                                if (preview) preview.src = event.target.result;
+                                if (previewContainer) previewContainer.classList.remove('hidden');
+                                if (removeBtn) removeBtn.classList.remove('hidden');
+                            };
+                            reader.readAsDataURL(file);
+                        }
+                    });
+                }
+            });
         });
     </script>
 </x-app-layout>

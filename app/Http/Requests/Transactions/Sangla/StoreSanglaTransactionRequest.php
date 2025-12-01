@@ -35,6 +35,8 @@ class StoreSanglaTransactionRequest extends FormRequest
             'expiry_date' => ['required', 'date', 'after_or_equal:maturity_date'],
             'item_type' => ['required', 'exists:item_types,id'],
             'item_description' => ['required', 'string'],
+            'item_image' => ['required', 'image', 'mimes:jpeg,jpg,png', 'max:5120'], // 5MB max
+            'pawner_id_image' => ['required', 'image', 'mimes:jpeg,jpg,png', 'max:5120'], // 5MB max
         ];
 
         // Admins and superadmins can select any branch
