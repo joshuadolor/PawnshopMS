@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Requests;
+namespace App\Http\Requests\Transactions\Sangla;
 
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -71,6 +71,24 @@ class StoreSanglaTransactionRequest extends FormRequest
             $rules['custom_item_type'] = ['required', 'string', 'min:3', 'max:255'];
         }
 
+        // If item type has subtypes, require subtype
+        if ($this->itemTypeHasSubtypes()) {
+            $itemTypeId = $this->input('item_type');
+            $itemType = \App\Models\ItemType::with('subtypes')->find($itemTypeId);
+            if ($itemType && $itemType->subtypes->count() > 0) {
+                $subtypeIds = $itemType->subtypes->pluck('id')->toArray();
+                $rules['item_type_subtype'] = [
+                    'required',
+                    'exists:item_type_subtypes,id',
+                    function ($attribute, $value, $fail) use ($subtypeIds) {
+                        if (!in_array($value, $subtypeIds)) {
+                            $fail('The selected subtype is invalid for this item type.');
+                        }
+                    }
+                ];
+            }
+        }
+
         return $rules;
     }
 
@@ -87,6 +105,21 @@ class StoreSanglaTransactionRequest extends FormRequest
         $otherItemType = \App\Models\ItemType::where('name', 'Other')->first();
         
         return $otherItemType && $itemTypeId == $otherItemType->id;
+    }
+
+    /**
+     * Check if the selected item type has subtypes.
+     */
+    private function itemTypeHasSubtypes(): bool
+    {
+        $itemTypeId = $this->input('item_type');
+        if (!$itemTypeId) {
+            return false;
+        }
+
+        $itemType = \App\Models\ItemType::with('subtypes')->find($itemTypeId);
+        
+        return $itemType && $itemType->subtypes->count() > 0;
     }
 }
 

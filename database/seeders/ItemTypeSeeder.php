@@ -26,6 +26,7 @@ class ItemTypeSeeder extends Seeder
             'Musical Instruments',
             'Sports Equipment',
             'Collectibles',
+            'Other'
         ];
 
         foreach ($itemTypes as $itemType) {

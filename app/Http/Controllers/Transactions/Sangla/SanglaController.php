@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Transactions\Sangla;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\StoreSanglaTransactionRequest;
+use App\Http\Requests\Transactions\Sangla\StoreSanglaTransactionRequest;
 use App\Models\Branch;
 use App\Models\Config;
 use App\Models\ItemType;
@@ -17,16 +17,10 @@ class SanglaController extends Controller
      */
     public function create(): View
     {
-        $itemTypes = ItemType::where('name', '!=', 'Other')
+        $itemTypes = ItemType::with('subtypes')
             ->orderByRaw("CASE WHEN name = 'Jewelry' THEN 0 ELSE 1 END")
             ->orderBy('name', 'asc')
             ->get();
-
-        // Append "Other" as the last item if it exists
-        $other = ItemType::where('name', 'Other')->first();
-        if ($other) {
-            $itemTypes->push($other);
-        }
 
         // Get config values
         $serviceCharge = Config::getValue('sangla_service_charge', 0);

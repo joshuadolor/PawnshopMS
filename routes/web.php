@@ -1,11 +1,11 @@
 <?php
 
-use App\Http\Controllers\BranchController;
-use App\Http\Controllers\ConfigController;
-use App\Http\Controllers\ItemTypeController;
+use App\Http\Controllers\Branch\BranchController;
+use App\Http\Controllers\Config\ConfigController;
+use App\Http\Controllers\ItemType\ItemTypeController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Transactions\Sangla\SanglaController;
-use App\Http\Controllers\UserController;
+use App\Http\Controllers\User\UserController;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use Illuminate\Support\Facades\Route;
 
@@ -38,6 +38,8 @@ Route::middleware('auth')->group(function () {
         
         // Item Type Management Routes
         Route::resource('item-types', ItemTypeController::class)->except(['show', 'edit', 'update']);
+        Route::post('/item-types/{itemType}/subtypes', [ItemTypeController::class, 'storeSubtype'])->name('item-types.subtypes.store');
+        Route::delete('/item-types/{itemType}/subtypes/{subtype}', [ItemTypeController::class, 'destroySubtype'])->name('item-types.subtypes.destroy');
         
         // Branch Management Routes
         Route::resource('branches', BranchController::class)->except(['show', 'edit', 'update']);

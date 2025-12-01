@@ -18,28 +18,18 @@ class BranchSeeder extends Seeder
         $branches = [
             [
                 'name' => 'Grand Daet',
-                'address' => 'Daet, Camarines Norte',
-                'contact_number' => '',
             ],
             [
                 'name' => 'Grand Labo',
-                'address' => 'Labo, Camarines Norte',
-                'contact_number' => '',
             ],
             [
                 'name' => 'Everlucky',
-                'address' => '',
-                'contact_number' => '',
             ],
             [
                 'name' => 'Dolor',
-                'address' => '',
-                'contact_number' => '',
             ],
             [
                 'name' => 'Wiltan',
-                'address' => '',
-                'contact_number' => '',
             ],
         ];
 

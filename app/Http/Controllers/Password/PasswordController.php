@@ -1,8 +1,9 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Password;
 
-use App\Http\Requests\UpdatePasswordRequest;
+use App\Http\Controllers\Controller;
+use App\Http\Requests\Password\UpdatePasswordRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Hash;
 

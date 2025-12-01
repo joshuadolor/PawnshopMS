@@ -14,4 +14,20 @@ class ItemType extends Model
     protected $fillable = [
         'name',
     ];
+
+    /**
+     * Get the subtypes for the item type.
+     */
+    public function subtypes()
+    {
+        return $this->hasMany(ItemTypeSubtype::class);
+    }
+
+    /**
+     * Check if the item type has subtypes.
+     */
+    public function hasSubtypes(): bool
+    {
+        return $this->subtypes()->count() > 0;
+    }
 }

@@ -1,8 +1,9 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Branch;
 
-use App\Http\Requests\StoreBranchRequest;
+use App\Http\Controllers\Controller;
+use App\Http\Requests\Branch\StoreBranchRequest;
 use App\Models\Branch;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;

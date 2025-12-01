@@ -1,11 +1,10 @@
 <?php
 
-namespace App\Http\Requests;
+namespace App\Http\Requests\User;
 
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rules\Password;
 
-class UpdatePasswordRequest extends FormRequest
+class UpdateUserBranchesRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
@@ -23,17 +22,9 @@ class UpdatePasswordRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'current_password' => ['required', 'current_password'],
-            'password' => ['required', Password::defaults(), 'confirmed'],
+            'branches' => ['required', 'array', 'min:1'],
+            'branches.*' => ['exists:branches,id'],
         ];
-    }
-
-    /**
-     * Get the error bag name for validation errors.
-     */
-    public function errorBag(): string
-    {
-        return 'updatePassword';
     }
 }
 

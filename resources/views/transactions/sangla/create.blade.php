@@ -166,12 +166,25 @@
                             <select id="item_type" name="item_type" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500" required>
                                 <option value="">Select Item Type</option>
                                 @foreach($itemTypes as $itemType)
-                                    <option value="{{ $itemType->id }}" {{ old('item_type') == $itemType->id ? 'selected' : '' }}>
+                                    <option 
+                                        value="{{ $itemType->id }}" 
+                                        data-has-subtypes="{{ $itemType->subtypes->count() > 0 ? '1' : '0' }}"
+                                        data-subtypes="{{ json_encode($itemType->subtypes->pluck('name', 'id')->toArray()) }}"
+                                        {{ old('item_type') == $itemType->id ? 'selected' : '' }}>
                                         {{ $itemType->name }}
                                     </option>
                                 @endforeach
                             </select>
                             <x-input-error :messages="$errors->get('item_type')" class="mt-2" />
+                        </div>
+
+                        <!-- Item Type Subtype (shown when item type has subtypes) -->
+                        <div id="item_type_subtype_container" class="mt-4 hidden">
+                            <x-input-label for="item_type_subtype" value="Subtype" />
+                            <select id="item_type_subtype" name="item_type_subtype" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                <option value="">Select a subtype</option>
+                            </select>
+                            <x-input-error :messages="$errors->get('item_type_subtype')" class="mt-2" />
                         </div>
 
                         <!-- Custom Item Type (shown when "Other" is selected) -->
@@ -214,6 +227,8 @@
             const itemTypeSelect = document.getElementById('item_type');
             const customItemTypeContainer = document.getElementById('custom_item_type_container');
             const customItemTypeInput = document.getElementById('custom_item_type');
+            const itemTypeSubtypeContainer = document.getElementById('item_type_subtype_container');
+            const itemTypeSubtypeSelect = document.getElementById('item_type_subtype');
             const maturityDateInput = document.getElementById('maturity_date');
             const expiryDateInput = document.getElementById('expiry_date');
             const loanAmountInput = document.getElementById('loan_amount');
@@ -230,19 +245,60 @@
                 customItemTypeInput.required = true;
             }
 
+            // Check if item type with subtypes is selected on page load
+            const selectedOption = itemTypeSelect.options[itemTypeSelect.selectedIndex];
+            if (selectedOption && selectedOption.getAttribute('data-has-subtypes') === '1') {
+                updateSubtypeDropdown(selectedOption);
+            }
+
             itemTypeSelect.addEventListener('change', function() {
                 const selectedOption = this.options[this.selectedIndex];
                 const isOther = selectedOption.text === 'Other';
+                const hasSubtypes = selectedOption.getAttribute('data-has-subtypes') === '1';
                 
+                // Handle "Other" item type
                 if (isOther) {
                     customItemTypeContainer.classList.remove('hidden');
                     customItemTypeInput.required = true;
+                    itemTypeSubtypeContainer.classList.add('hidden');
+                    itemTypeSubtypeSelect.required = false;
+                    itemTypeSubtypeSelect.innerHTML = '<option value="">Select a subtype</option>';
                 } else {
                     customItemTypeContainer.classList.add('hidden');
                     customItemTypeInput.required = false;
                     customItemTypeInput.value = '';
                 }
+                
+                // Handle subtypes
+                if (hasSubtypes) {
+                    itemTypeSubtypeContainer.classList.remove('hidden');
+                    itemTypeSubtypeSelect.required = true;
+                    updateSubtypeDropdown(selectedOption);
+                } else {
+                    itemTypeSubtypeContainer.classList.add('hidden');
+                    itemTypeSubtypeSelect.required = false;
+                    itemTypeSubtypeSelect.innerHTML = '<option value="">Select a subtype</option>';
+                }
             });
+
+            function updateSubtypeDropdown(option) {
+                const subtypesJson = option.getAttribute('data-subtypes');
+                if (subtypesJson) {
+                    const subtypes = JSON.parse(subtypesJson);
+                    const oldSubtype = {{ old('item_type_subtype', 'null') }};
+                    itemTypeSubtypeSelect.innerHTML = '<option value="">Select a subtype</option>';
+                    Object.entries(subtypes).forEach(([id, name]) => {
+                        const optionElement = document.createElement('option');
+                        optionElement.value = id;
+                        optionElement.textContent = name;
+                        // Check if this was the old value
+                        if (oldSubtype && oldSubtype == id) {
+                            optionElement.selected = true;
+                        }
+                        itemTypeSubtypeSelect.appendChild(optionElement);
+                    });
+                }
+            }
 
             // Set minimum date for maturity date (today)
             const today = new Date().toISOString().split('T')[0];

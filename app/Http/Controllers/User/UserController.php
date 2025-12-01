@@ -1,11 +1,12 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\User;
 
-use App\Http\Requests\StoreUserRequest;
-use App\Http\Requests\UpdateUserBranchesRequest;
-use App\Http\Requests\UpdateUserRoleRequest;
-use App\Http\Requests\UpdateUserStatusRequest;
+use App\Http\Controllers\Controller;
+use App\Http\Requests\User\StoreUserRequest;
+use App\Http\Requests\User\UpdateUserBranchesRequest;
+use App\Http\Requests\User\UpdateUserRoleRequest;
+use App\Http\Requests\User\UpdateUserStatusRequest;
 use App\Models\Branch;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;

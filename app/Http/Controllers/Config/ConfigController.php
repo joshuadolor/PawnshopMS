@@ -1,8 +1,9 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Config;
 
-use App\Http\Requests\UpdateConfigRequest;
+use App\Http\Controllers\Controller;
+use App\Http\Requests\Config\UpdateConfigRequest;
 use App\Models\Config;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;

@@ -1,25 +1,17 @@
 <?php
 
-namespace App\Http\Requests;
+namespace App\Http\Requests\ItemType;
 
-use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
 
-class UpdateUserStatusRequest extends FormRequest
+class StoreItemTypeRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
      */
     public function authorize(): bool
     {
-        $user = $this->route('user');
-        
-        // Prevent admin from modifying superadmin
-        if ($this->user()->isAdmin() && $user instanceof User && $user->isSuperAdmin()) {
-            return false;
-        }
-
-        return $this->user()->isAdminOrSuperAdmin();
+        return true;
     }
 
     /**
@@ -30,7 +22,7 @@ class UpdateUserStatusRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'is_active' => ['required', 'boolean'],
+            'name' => ['required', 'string', 'min:3', 'max:255', 'unique:item_types,name'],
         ];
     }
 }

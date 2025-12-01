@@ -1,17 +1,25 @@
 <?php
 
-namespace App\Http\Requests;
+namespace App\Http\Requests\User;
 
+use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
 
-class UpdateUserBranchesRequest extends FormRequest
+class UpdateUserStatusRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
      */
     public function authorize(): bool
     {
-        return true;
+        $user = $this->route('user');
+        
+        // Prevent admin from modifying superadmin
+        if ($this->user()->isAdmin() && $user instanceof User && $user->isSuperAdmin()) {
+            return false;
+        }
+
+        return $this->user()->isAdminOrSuperAdmin();
     }
 
     /**
@@ -22,8 +30,7 @@ class UpdateUserBranchesRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'branches' => ['required', 'array', 'min:1'],
-            'branches.*' => ['exists:branches,id'],
+            'is_active' => ['required', 'boolean'],
         ];
     }
 }
