@@ -22,19 +22,34 @@
         <div>
             <x-input-label for="update_password_current_password" value="Current Password" />
             <x-text-input id="update_password_current_password" name="current_password" type="password" class="mt-1 block w-full" autocomplete="current-password" />
-            <x-input-error :messages="$errors->updatePassword->get('current_password')" class="mt-2" />
+            @php
+                $currentPasswordErrors = isset($errors->updatePassword) && $errors->updatePassword->has('current_password') 
+                    ? $errors->updatePassword->get('current_password') 
+                    : $errors->get('current_password');
+            @endphp
+            <x-input-error :messages="$currentPasswordErrors" class="mt-2" />
         </div>
 
         <div>
             <x-input-label for="update_password_password" value="New Password" />
             <x-text-input id="update_password_password" name="password" type="password" class="mt-1 block w-full" autocomplete="new-password" />
-            <x-input-error :messages="$errors->updatePassword->get('password')" class="mt-2" />
+            @php
+                $passwordErrors = isset($errors->updatePassword) && $errors->updatePassword->has('password') 
+                    ? $errors->updatePassword->get('password') 
+                    : $errors->get('password');
+            @endphp
+            <x-input-error :messages="$passwordErrors" class="mt-2" />
         </div>
 
         <div>
             <x-input-label for="update_password_password_confirmation" value="Confirm Password" />
             <x-text-input id="update_password_password_confirmation" name="password_confirmation" type="password" class="mt-1 block w-full" autocomplete="new-password" />
-            <x-input-error :messages="$errors->updatePassword->get('password_confirmation')" class="mt-2" />
+            @php
+                $passwordConfirmationErrors = isset($errors->updatePassword) && $errors->updatePassword->has('password_confirmation') 
+                    ? $errors->updatePassword->get('password_confirmation') 
+                    : $errors->get('password_confirmation');
+            @endphp
+            <x-input-error :messages="$passwordConfirmationErrors" class="mt-2" />
         </div>
 
         <div class="flex items-center gap-4">

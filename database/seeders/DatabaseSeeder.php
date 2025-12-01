@@ -24,6 +24,7 @@ class DatabaseSeeder extends Seeder
             'phone_number' => '1234567890',
             'email' => null,
             'role' => 'superadmin',
+            'is_active' => true,
             'password' => Hash::make(env('SUPERADMIN_PASSWORD', 'password')),
         ]);
 
@@ -35,6 +36,7 @@ class DatabaseSeeder extends Seeder
             'phone_number' => '1234567891',
             'email' => null,
             'role' => 'admin',
+            'is_active' => true,
             'password' => Hash::make('password'),
         ]);
 
@@ -46,6 +48,7 @@ class DatabaseSeeder extends Seeder
             'phone_number' => '1234567892',
             'email' => null,
             'role' => 'staff',
+            'is_active' => true,
             'password' => Hash::make('password'),
         ]);
     }

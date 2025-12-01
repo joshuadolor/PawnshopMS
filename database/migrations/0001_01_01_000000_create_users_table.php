@@ -15,10 +15,11 @@ return new class extends Migration
             $table->id();
             $table->string('first_name');
             $table->string('last_name');
-            $table->string('phone_number');
+            $table->string('phone_number')->nullable();
             $table->string('username')->unique();
             $table->string('email')->nullable();
             $table->string('role')->default('staff'); // superadmin, admin, staff
+            $table->boolean('is_active')->default(false);
             $table->string('password');
             $table->rememberToken();
             $table->timestamps();

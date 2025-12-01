@@ -15,6 +15,11 @@
                     <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                         Dashboard
                     </x-nav-link>
+                    @if(Auth::user()->isAdminOrSuperAdmin())
+                        <x-nav-link :href="route('users.index')" :active="request()->routeIs('users.*')">
+                            User Management
+                        </x-nav-link>
+                    @endif
                 </div>
             </div>
 
@@ -70,6 +75,11 @@
             <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                 Dashboard
             </x-responsive-nav-link>
+            @if(Auth::user()->isAdminOrSuperAdmin())
+                <x-responsive-nav-link :href="route('users.index')" :active="request()->routeIs('users.*')">
+                    User Management
+                </x-responsive-nav-link>
+            @endif
         </div>
 
         <!-- Responsive Settings Options -->

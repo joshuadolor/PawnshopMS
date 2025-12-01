@@ -23,6 +23,7 @@ class User extends Authenticatable
         'email',
         'phone_number',
         'role',
+        'is_active',
         'password',
     ];
 
@@ -45,6 +46,7 @@ class User extends Authenticatable
     {
         return [
             'password' => 'hashed',
+            'is_active' => 'boolean',
         ];
     }
 
@@ -62,5 +64,29 @@ class User extends Authenticatable
     public function getAuthIdentifierName(): string
     {
         return 'username';
+    }
+
+    /**
+     * Check if user is superadmin.
+     */
+    public function isSuperAdmin(): bool
+    {
+        return $this->role === 'superadmin';
+    }
+
+    /**
+     * Check if user is admin.
+     */
+    public function isAdmin(): bool
+    {
+        return $this->role === 'admin';
+    }
+
+    /**
+     * Check if user is admin or superadmin.
+     */
+    public function isAdminOrSuperAdmin(): bool
+    {
+        return in_array($this->role, ['admin', 'superadmin']);
     }
 }

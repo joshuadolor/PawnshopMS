@@ -3,13 +3,11 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Auth\StoreRegisteredUserRequest;
 use App\Models\User;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\Rules;
 use Illuminate\View\View;
 
 class RegisteredUserController extends Controller
@@ -27,27 +25,22 @@ class RegisteredUserController extends Controller
      *
      * @throws \Illuminate\Validation\ValidationException
      */
-    public function store(Request $request): RedirectResponse
+    public function store(StoreRegisteredUserRequest $request): RedirectResponse
     {
-        $request->validate([
-            'first_name' => ['required', 'string', 'max:255'],
-            'last_name' => ['required', 'string', 'max:255'],
-            'username' => ['required', 'string', 'max:255', 'unique:users,username'],
-            'password' => ['required', 'confirmed', Rules\Password::defaults()],
-        ]);
+        $validated = $request->validated();
 
         $user = User::create([
-            'first_name' => $request->first_name,
-            'last_name' => $request->last_name,
-            'username' => $request->username,
-            'password' => Hash::make($request->password),
+            'first_name' => $validated['first_name'],
+            'last_name' => $validated['last_name'],
+            'username' => $validated['username'],
+            'password' => Hash::make($validated['password']),
             'role' => 'staff', // Default role for new registrations
+            'is_active' => false, // New users need admin approval
         ]);
 
         event(new Registered($user));
 
-        Auth::login($user);
-
-        return redirect(route('dashboard', absolute: false));
+        // Don't auto-login, user needs to be activated by admin
+        return redirect(route('login'))->with('status', 'Your account has been created. Please wait for an administrator to activate your account.');
     }
 }
