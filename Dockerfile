@@ -31,12 +31,6 @@ RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 775 /var/www/html/storage \
     && chmod -R 775 /var/www/html/bootstrap/cache
 
-# Install PHP dependencies
-RUN composer install --optimize-autoloader --no-dev
-
-# Install Node dependencies and build assets
-RUN npm install && npm run build
-
 # Copy Nginx configuration
 COPY docker/nginx.conf /etc/nginx/sites-available/default
 
