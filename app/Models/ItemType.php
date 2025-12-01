@@ -30,4 +30,20 @@ class ItemType extends Model
     {
         return $this->subtypes()->count() > 0;
     }
+
+    /**
+     * Get the tags for the item type.
+     */
+    public function tags()
+    {
+        return $this->hasMany(ItemTypeTag::class);
+    }
+
+    /**
+     * Check if the item type has tags.
+     */
+    public function hasTags(): bool
+    {
+        return $this->tags()->count() > 0;
+    }
 }

@@ -33,6 +33,9 @@ class InitialSeeder extends Seeder
         // Seed Item Type Subtypes
         $this->call(ItemTypeSubtypeSeeder::class);
 
+        // Seed Item Type Tags
+        $this->call(ItemTypeTagSeeder::class);
+
         // Seed Branches
         $this->call(BranchSeeder::class);
 

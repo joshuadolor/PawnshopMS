@@ -24,12 +24,12 @@ class StoreSanglaTransactionRequest extends FormRequest
         $user = $this->user();
         
         $rules = [
-            'first_name' => ['required', 'string', 'max:255'],
-            'last_name' => ['required', 'string', 'max:255'],
+            'first_name' => ['required', 'string', 'max:100'],
+            'last_name' => ['required', 'string', 'max:100'],
             'address' => ['required', 'string'],
             'appraised_value' => ['required', 'numeric', 'min:0'],
-            'loan_amount' => ['required', 'numeric', 'min:0'],
-            'interest_rate' => ['required', 'numeric', 'min:0', 'max:100'],
+            'loan_amount' => ['required', 'numeric','decimal:1', 'min:0'],
+            'interest_rate' => ['required', 'numeric','decimal:1', 'min:0', 'max:100'],
             'interest_rate_period' => ['required', 'in:per_annum,per_month,others'],
             'maturity_date' => ['required', 'date', 'after_or_equal:today'],
             'expiry_date' => ['required', 'date', 'after_or_equal:maturity_date'],
@@ -89,6 +89,53 @@ class StoreSanglaTransactionRequest extends FormRequest
             }
         }
 
+        // If item type has tags, require at least one tag
+        if ($this->itemTypeHasTags()) {
+            $itemTypeId = $this->input('item_type');
+            $itemType = \App\Models\ItemType::with('tags')->find($itemTypeId);
+            if ($itemType && $itemType->tags->count() > 0) {
+                $tagIds = $itemType->tags->pluck('id')->toArray();
+                $rules['item_type_tags'] = [
+                    'required',
+                    'array',
+                    'min:1',
+                    function ($attribute, $value, $fail) use ($tagIds) {
+                        foreach ($value as $tagId) {
+                            $tagIdInt = (int) $tagId;
+                            if (!in_array($tagIdInt, $tagIds)) {
+                                $fail('One or more selected tags are invalid for this item type.');
+                                return;
+                            }
+                        }
+                    }
+                ];
+                $rules['item_type_tags.*'] = ['exists:item_type_tags,id'];
+            }
+        }
+
+        // If "Jewelry" is selected, require grams
+        if ($this->isJewelryItemType()) {
+            $rules['grams'] = [
+                'required',
+                'numeric',
+                'min:0',
+                function ($attribute, $value, $fail) {
+                    // Check if value has more than one decimal place
+                    if ($value !== null && $value !== '') {
+                        $parts = explode('.', (string)$value);
+                        if (count($parts) > 1 && strlen($parts[1]) > 1) {
+                            $fail('Grams must have only one decimal place.');
+                        }
+                    }
+                }
+            ];
+        }
+
+        // If "Vehicles" or "Cars" is selected, require OR&CR/Serial
+        if ($this->isVehiclesItemType()) {
+            $rules['orcr_serial'] = ['required', 'string', 'max:255'];
+        }
+
         return $rules;
     }
 
@@ -120,6 +167,51 @@ class StoreSanglaTransactionRequest extends FormRequest
         $itemType = \App\Models\ItemType::with('subtypes')->find($itemTypeId);
         
         return $itemType && $itemType->subtypes->count() > 0;
+    }
+
+    /**
+     * Check if the selected item type has tags.
+     */
+    private function itemTypeHasTags(): bool
+    {
+        $itemTypeId = $this->input('item_type');
+        if (!$itemTypeId) {
+            return false;
+        }
+
+        $itemType = \App\Models\ItemType::with('tags')->find($itemTypeId);
+        
+        return $itemType && $itemType->tags->count() > 0;
+    }
+
+    /**
+     * Check if "Jewelry" item type is selected.
+     */
+    private function isJewelryItemType(): bool
+    {
+        $itemTypeId = $this->input('item_type');
+        if (!$itemTypeId) {
+            return false;
+        }
+
+        $jewelryItemType = \App\Models\ItemType::where('name', 'Jewelry')->first();
+        
+        return $jewelryItemType && $itemTypeId == $jewelryItemType->id;
+    }
+
+    /**
+     * Check if "Vehicles" or "Cars" item type is selected.
+     */
+    private function isVehiclesItemType(): bool
+    {
+        $itemTypeId = $this->input('item_type');
+        if (!$itemTypeId) {
+            return false;
+        }
+
+        $itemType = \App\Models\ItemType::find($itemTypeId);
+        
+        return $itemType && in_array($itemType->name, ['Vehicles', 'Cars']);
     }
 }
 

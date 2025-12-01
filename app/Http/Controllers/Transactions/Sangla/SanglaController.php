@@ -17,7 +17,7 @@ class SanglaController extends Controller
      */
     public function create(): View
     {
-        $itemTypes = ItemType::with('subtypes')
+        $itemTypes = ItemType::with(['subtypes', 'tags'])
             ->orderByRaw("CASE WHEN name = 'Jewelry' THEN 0 ELSE 1 END")
             ->orderBy('name', 'asc')
             ->get();

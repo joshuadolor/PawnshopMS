@@ -78,21 +78,21 @@
                         <!-- Interest Rate Period -->
                         <div class="mt-4">
                             <x-input-label value="Interest Rate Period" />
-                            <div class="mt-2 space-y-2">
+                            <div class="mt-2 flex flex-wrap gap-2">
                                 @php
                                     $selectedPeriod = old('interest_rate_period', $interestPeriod);
                                 @endphp
-                                <label class="inline-flex items-center w-full p-4 border-2 border-gray-300 rounded-lg hover:bg-gray-50 active:bg-gray-100 cursor-pointer touch-manipulation transition-colors">
-                                    <input type="radio" name="interest_rate_period" value="per_annum" {{ $selectedPeriod === 'per_annum' ? 'checked' : '' }} class="w-5 h-5 text-indigo-600 focus:ring-indigo-500" required>
-                                    <span class="ms-3 text-base text-gray-700 font-medium">Per Annum</span>
+                                <label class="inline-flex items-center px-4 py-2 border-2 border-gray-300 rounded-lg hover:bg-gray-50 active:bg-gray-100 cursor-pointer touch-manipulation transition-colors">
+                                    <input type="radio" name="interest_rate_period" value="per_annum" {{ $selectedPeriod === 'per_annum' ? 'checked' : '' }} class="w-4 h-4 text-indigo-600 focus:ring-indigo-500" required>
+                                    <span class="ms-2 text-sm text-gray-700 font-medium">Per Annum</span>
                                 </label>
-                                <label class="inline-flex items-center w-full p-4 border-2 border-gray-300 rounded-lg hover:bg-gray-50 active:bg-gray-100 cursor-pointer touch-manipulation transition-colors">
-                                    <input type="radio" name="interest_rate_period" value="per_month" {{ $selectedPeriod === 'per_month' ? 'checked' : '' }} class="w-5 h-5 text-indigo-600 focus:ring-indigo-500" required>
-                                    <span class="ms-3 text-base text-gray-700 font-medium">Per Month</span>
+                                <label class="inline-flex items-center px-4 py-2 border-2 border-gray-300 rounded-lg hover:bg-gray-50 active:bg-gray-100 cursor-pointer touch-manipulation transition-colors">
+                                    <input type="radio" name="interest_rate_period" value="per_month" {{ $selectedPeriod === 'per_month' ? 'checked' : '' }} class="w-4 h-4 text-indigo-600 focus:ring-indigo-500" required>
+                                    <span class="ms-2 text-sm text-gray-700 font-medium">Per Month</span>
                                 </label>
-                                <label class="inline-flex items-center w-full p-4 border-2 border-gray-300 rounded-lg hover:bg-gray-50 active:bg-gray-100 cursor-pointer touch-manipulation transition-colors">
-                                    <input type="radio" name="interest_rate_period" value="others" {{ $selectedPeriod === 'others' ? 'checked' : '' }} class="w-5 h-5 text-indigo-600 focus:ring-indigo-500" required>
-                                    <span class="ms-3 text-base text-gray-700 font-medium">Others</span>
+                                <label class="inline-flex items-center px-4 py-2 border-2 border-gray-300 rounded-lg hover:bg-gray-50 active:bg-gray-100 cursor-pointer touch-manipulation transition-colors">
+                                    <input type="radio" name="interest_rate_period" value="others" {{ $selectedPeriod === 'others' ? 'checked' : '' }} class="w-4 h-4 text-indigo-600 focus:ring-indigo-500" required>
+                                    <span class="ms-2 text-sm text-gray-700 font-medium">Others</span>
                                 </label>
                             </div>
                             <x-input-error :messages="$errors->get('interest_rate_period')" class="mt-2" />
@@ -169,7 +169,9 @@
                                     <option 
                                         value="{{ $itemType->id }}" 
                                         data-has-subtypes="{{ $itemType->subtypes->count() > 0 ? '1' : '0' }}"
+                                        data-has-tags="{{ $itemType->tags->count() > 0 ? '1' : '0' }}"
                                         data-subtypes="{{ json_encode($itemType->subtypes->pluck('name', 'id')->toArray()) }}"
+                                        data-tags="{{ json_encode($itemType->tags->pluck('name', 'id')->toArray()) }}"
                                         {{ old('item_type') == $itemType->id ? 'selected' : '' }}>
                                         {{ $itemType->name }}
                                     </option>
@@ -187,6 +189,15 @@
                             <x-input-error :messages="$errors->get('item_type_subtype')" class="mt-2" />
                         </div>
 
+                        <!-- Item Type Tags (shown when item type has tags) -->
+                        <div id="item_type_tags_container" class="mt-4 hidden">
+                            <x-input-label for="item_type_tags" value="Tags" />
+                            <div id="item_type_tags_checkboxes" class="mt-2 flex flex-wrap gap-2">
+                                <!-- Tags will be dynamically added here as checkboxes -->
+                            </div>
+                            <x-input-error :messages="$errors->get('item_type_tags')" class="mt-2" />
+                        </div>
+
                         <!-- Custom Item Type (shown when "Other" is selected) -->
                         <div id="custom_item_type_container" class="mt-4 hidden">
                             <x-input-label for="custom_item_type" value="Custom Item Type" />
@@ -201,6 +212,37 @@
                             />
                             <p class="mt-1 text-sm text-gray-500">Minimum 3 characters required</p>
                             <x-input-error :messages="$errors->get('custom_item_type')" class="mt-2" />
+                        </div>
+
+                        <!-- Grams (shown when "Jewelry" is selected) -->
+                        <div id="grams_container" class="mt-4 hidden">
+                            <x-input-label for="grams" value="Grams" />
+                            <x-text-input 
+                                id="grams" 
+                                name="grams" 
+                                type="number" 
+                                class="mt-1 block w-full" 
+                                :value="old('grams')"
+                                placeholder="0.0"
+                                step="0.1"
+                                min="0"
+                            />
+                            <p class="mt-1 text-sm text-gray-500">Enter weight in grams (single decimal place)</p>
+                            <x-input-error :messages="$errors->get('grams')" class="mt-2" />
+                        </div>
+
+                        <!-- OR&CR/Serial (shown when "Vehicles" is selected) -->
+                        <div id="orcr_serial_container" class="mt-4 hidden">
+                            <x-input-label for="orcr_serial" value="OR&CR/Serial" />
+                            <x-text-input 
+                                id="orcr_serial" 
+                                name="orcr_serial" 
+                                type="text" 
+                                class="mt-1 block w-full" 
+                                :value="old('orcr_serial')"
+                                placeholder="Enter OR&CR/Serial number"
+                            />
+                            <x-input-error :messages="$errors->get('orcr_serial')" class="mt-2" />
                         </div>
 
                         <!-- Item Description -->
@@ -229,6 +271,12 @@
             const customItemTypeInput = document.getElementById('custom_item_type');
             const itemTypeSubtypeContainer = document.getElementById('item_type_subtype_container');
             const itemTypeSubtypeSelect = document.getElementById('item_type_subtype');
+            const itemTypeTagsContainer = document.getElementById('item_type_tags_container');
+            const itemTypeTagsCheckboxes = document.getElementById('item_type_tags_checkboxes');
+            const gramsContainer = document.getElementById('grams_container');
+            const gramsInput = document.getElementById('grams');
+            const orcrSerialContainer = document.getElementById('orcr_serial_container');
+            const orcrSerialInput = document.getElementById('orcr_serial');
             const maturityDateInput = document.getElementById('maturity_date');
             const expiryDateInput = document.getElementById('expiry_date');
             const loanAmountInput = document.getElementById('loan_amount');
@@ -238,6 +286,32 @@
             // Config values from backend
             const serviceCharge = {{ $serviceCharge }};
             
+            // Function to handle item type specific fields
+            function handleItemTypeSpecificFields(itemTypeName) {
+                const isJewelry = itemTypeName === 'Jewelry';
+                const isVehicles = itemTypeName === 'Vehicles' || itemTypeName === 'Cars';
+                
+                // Handle Grams field for Jewelry
+                if (isJewelry) {
+                    gramsContainer.classList.remove('hidden');
+                    gramsInput.required = true;
+                } else {
+                    gramsContainer.classList.add('hidden');
+                    gramsInput.required = false;
+                    gramsInput.value = '';
+                }
+                
+                // Handle OR&CR/Serial field for Vehicles
+                if (isVehicles) {
+                    orcrSerialContainer.classList.remove('hidden');
+                    orcrSerialInput.required = true;
+                } else {
+                    orcrSerialContainer.classList.add('hidden');
+                    orcrSerialInput.required = false;
+                    orcrSerialInput.value = '';
+                }
+            }
+            
             // Check if "Other" is selected on page load (for validation errors)
             const otherItemType = Array.from(itemTypeSelect.options).find(option => option.text === 'Other');
             if (otherItemType && itemTypeSelect.value === otherItemType.value) {
@@ -245,16 +319,25 @@
                 customItemTypeInput.required = true;
             }
 
-            // Check if item type with subtypes is selected on page load
+            // Check if item type with subtypes or tags is selected on page load
             const selectedOption = itemTypeSelect.options[itemTypeSelect.selectedIndex];
-            if (selectedOption && selectedOption.getAttribute('data-has-subtypes') === '1') {
-                updateSubtypeDropdown(selectedOption);
+            if (selectedOption) {
+                if (selectedOption.getAttribute('data-has-subtypes') === '1') {
+                    updateSubtypeDropdown(selectedOption);
+                }
+                if (selectedOption.getAttribute('data-has-tags') === '1') {
+                    updateTagsCheckboxes(selectedOption);
+                }
+                // Handle item type specific fields on page load
+                handleItemTypeSpecificFields(selectedOption.text);
             }
 
             itemTypeSelect.addEventListener('change', function() {
                 const selectedOption = this.options[this.selectedIndex];
-                const isOther = selectedOption.text === 'Other';
+                const itemTypeName = selectedOption.text;
+                const isOther = itemTypeName === 'Other';
                 const hasSubtypes = selectedOption.getAttribute('data-has-subtypes') === '1';
+                const hasTags = selectedOption.getAttribute('data-has-tags') === '1';
                 
                 // Handle "Other" item type
                 if (isOther) {
@@ -263,6 +346,8 @@
                     itemTypeSubtypeContainer.classList.add('hidden');
                     itemTypeSubtypeSelect.required = false;
                     itemTypeSubtypeSelect.innerHTML = '<option value="">Select a subtype</option>';
+                    itemTypeTagsContainer.classList.add('hidden');
+                    itemTypeTagsCheckboxes.innerHTML = '';
                 } else {
                     customItemTypeContainer.classList.add('hidden');
                     customItemTypeInput.required = false;
@@ -279,6 +364,18 @@
                     itemTypeSubtypeSelect.required = false;
                     itemTypeSubtypeSelect.innerHTML = '<option value="">Select a subtype</option>';
                 }
+                
+                // Handle tags
+                if (hasTags) {
+                    itemTypeTagsContainer.classList.remove('hidden');
+                    updateTagsCheckboxes(selectedOption);
+                } else {
+                    itemTypeTagsContainer.classList.add('hidden');
+                    itemTypeTagsCheckboxes.innerHTML = '';
+                }
+                
+                // Handle item type specific fields
+                handleItemTypeSpecificFields(itemTypeName);
             });
 
             function updateSubtypeDropdown(option) {
@@ -300,6 +397,38 @@
                 }
             }
 
+            function updateTagsCheckboxes(option) {
+                const tagsJson = option.getAttribute('data-tags');
+                if (tagsJson) {
+                    const tags = JSON.parse(tagsJson);
+                    const oldTags = {{ json_encode(old('item_type_tags', [])) }};
+                    itemTypeTagsCheckboxes.innerHTML = '';
+                    Object.entries(tags).forEach(([id, name]) => {
+                        const checkboxContainer = document.createElement('label');
+                        checkboxContainer.className = 'inline-flex items-center px-4 py-2 border-2 border-gray-300 rounded-lg hover:bg-gray-50 active:bg-gray-100 cursor-pointer touch-manipulation transition-colors';
+                        
+                        const checkbox = document.createElement('input');
+                        checkbox.type = 'checkbox';
+                        checkbox.name = 'item_type_tags[]';
+                        checkbox.value = id;
+                        checkbox.className = 'w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded';
+                        
+                        // Check if this was the old value
+                        if (oldTags && oldTags.includes(parseInt(id))) {
+                            checkbox.checked = true;
+                        }
+                        
+                        const label = document.createElement('span');
+                        label.className = 'ms-2 text-sm text-gray-700 font-medium';
+                        label.textContent = name;
+                        
+                        checkboxContainer.appendChild(checkbox);
+                        checkboxContainer.appendChild(label);
+                        itemTypeTagsCheckboxes.appendChild(checkboxContainer);
+                    });
+                }
+            }
+
             // Set minimum date for maturity date (today)
             const today = new Date().toISOString().split('T')[0];
             maturityDateInput.setAttribute('min', today);
@@ -315,39 +444,19 @@
                         expiryDateInput.value = maturityDate;
                     }
                 }
-                calculateAmounts();
             });
 
             // Calculate amounts function
             function calculateAmounts() {
                 const principal = parseFloat(loanAmountInput.value) || 0;
                 const interestRate = parseFloat(interestRateInput.value) || 0;
-                const maturityDate = maturityDateInput.value;
-                const selectedPeriod = document.querySelector('input[name="interest_rate_period"]:checked')?.value;
                 
-                let interest = 0;
+                // Calculate interest as percentage of principal (no time-based calculation)
+                const interest = principal > 0 && interestRate > 0 
+                    ? principal * (interestRate / 100) 
+                    : 0;
                 
-                if (principal > 0 && interestRate > 0 && maturityDate && selectedPeriod) {
-                    const today = new Date();
-                    const maturity = new Date(maturityDate);
-                    const timeDiff = maturity - today;
-                    const daysDiff = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
-                    
-                    if (daysDiff > 0) {
-                        if (selectedPeriod === 'per_month') {
-                            const months = daysDiff / 30; // Approximate months
-                            interest = principal * (interestRate / 100) * months;
-                        } else if (selectedPeriod === 'per_annum') {
-                            const years = daysDiff / 365;
-                            interest = principal * (interestRate / 100) * years;
-                        } else {
-                            // For "others", treat similar to per_month
-                            const months = daysDiff / 30;
-                            interest = principal * (interestRate / 100) * months;
-                        }
-                    }
-                }
-                
+                // Net proceeds = principal - (principal * interest) - service charge
                 const netProceeds = principal - interest - serviceCharge;
                 
                 // Update display
@@ -362,9 +471,17 @@
             loanAmountInput.addEventListener('change', calculateAmounts);
             interestRateInput.addEventListener('input', calculateAmounts);
             interestRateInput.addEventListener('change', calculateAmounts);
-            maturityDateInput.addEventListener('change', calculateAmounts);
-            interestRatePeriodInputs.forEach(input => {
-                input.addEventListener('change', calculateAmounts);
+            
+            // Handle grams input to ensure single decimal place (no rounding)
+            gramsInput.addEventListener('input', function() {
+                let value = this.value;
+                if (value && value.includes('.')) {
+                    const parts = value.split('.');
+                    if (parts[1] && parts[1].length > 1) {
+                        // Truncate to one decimal place (no rounding)
+                        this.value = parts[0] + '.' + parts[1].substring(0, 1);
+                    }
+                }
             });
             
             // Initial calculation if values exist

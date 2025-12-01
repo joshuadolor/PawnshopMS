@@ -39,7 +39,11 @@ Route::middleware('auth')->group(function () {
         // Item Type Management Routes
         Route::resource('item-types', ItemTypeController::class)->except(['show', 'edit', 'update']);
         Route::post('/item-types/{itemType}/subtypes', [ItemTypeController::class, 'storeSubtype'])->name('item-types.subtypes.store');
+        Route::put('/item-types/{itemType}/subtypes/{subtype}', [ItemTypeController::class, 'updateSubtype'])->name('item-types.subtypes.update');
         Route::delete('/item-types/{itemType}/subtypes/{subtype}', [ItemTypeController::class, 'destroySubtype'])->name('item-types.subtypes.destroy');
+        Route::post('/item-types/{itemType}/tags', [ItemTypeController::class, 'storeTag'])->name('item-types.tags.store');
+        Route::put('/item-types/{itemType}/tags/{tag}', [ItemTypeController::class, 'updateTag'])->name('item-types.tags.update');
+        Route::delete('/item-types/{itemType}/tags/{tag}', [ItemTypeController::class, 'destroyTag'])->name('item-types.tags.destroy');
         
         // Branch Management Routes
         Route::resource('branches', BranchController::class)->except(['show', 'edit', 'update']);
