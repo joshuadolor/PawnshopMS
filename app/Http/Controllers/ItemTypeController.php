@@ -14,7 +14,7 @@ class ItemTypeController extends Controller
      */
     public function index(): View
     {
-        $itemTypes = ItemType::orderBy('name', 'asc')->paginate(15);
+        $itemTypes = ItemType::orderBy('name', 'asc')->paginate(15)->where('name', '!=', 'Other');
 
         return view('item-types.index', [
             'itemTypes' => $itemTypes,

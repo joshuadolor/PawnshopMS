@@ -64,9 +64,7 @@
                         </table>
                     </div>
 
-                    <div class="mt-4">
-                        {{ $itemTypes->links() }}
-                    </div>
+                    
                 </div>
             </div>
         </div>

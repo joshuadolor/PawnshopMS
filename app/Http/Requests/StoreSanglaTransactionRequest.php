@@ -21,15 +21,39 @@ class StoreSanglaTransactionRequest extends FormRequest
      */
     public function rules(): array
     {
-        return [
+        $rules = [
             'first_name' => ['required', 'string', 'max:255'],
             'last_name' => ['required', 'string', 'max:255'],
+            'address' => ['required', 'string'],
             'loan_amount' => ['required', 'numeric', 'min:0'],
-            'effective_interest_rate' => ['required', 'numeric', 'min:0', 'max:100'],
             'interest_rate_period' => ['required', 'in:per_annum,per_month,others'],
-            'item_type' => ['required', 'string', 'max:255'],
+            'maturity_date' => ['required', 'date', 'after_or_equal:today'],
+            'expiry_date' => ['required', 'date', 'after_or_equal:maturity_date'],
+            'item_type' => ['required', 'exists:item_types,id'],
             'item_description' => ['required', 'string'],
         ];
+
+        // If "Other" is selected, require custom_item_type
+        if ($this->isOtherItemType()) {
+            $rules['custom_item_type'] = ['required', 'string', 'min:3', 'max:255'];
+        }
+
+        return $rules;
+    }
+
+    /**
+     * Check if "Other" item type is selected.
+     */
+    private function isOtherItemType(): bool
+    {
+        $itemTypeId = $this->input('item_type');
+        if (!$itemTypeId) {
+            return false;
+        }
+
+        $otherItemType = \App\Models\ItemType::where('name', 'Other')->first();
+        
+        return $otherItemType && $itemTypeId == $otherItemType->id;
     }
 }
 

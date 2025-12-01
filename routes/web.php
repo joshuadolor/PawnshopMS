@@ -1,8 +1,9 @@
 <?php
 
+use App\Http\Controllers\ConfigController;
 use App\Http\Controllers\ItemTypeController;
 use App\Http\Controllers\ProfileController;
-use App\Http\Controllers\TransactionController;
+use App\Http\Controllers\Transactions\Sangla\SanglaController;
 use App\Http\Controllers\UserController;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use Illuminate\Support\Facades\Route;
@@ -22,8 +23,8 @@ Route::middleware('auth')->group(function () {
 
     // Transaction Routes
     Route::prefix('transactions')->name('transactions.')->group(function () {
-        Route::get('/sangla/create', [TransactionController::class, 'createSangla'])->name('sangla.create');
-        Route::post('/sangla', [TransactionController::class, 'storeSangla'])->name('sangla.store');
+        Route::get('/sangla/create', [SanglaController::class, 'create'])->name('sangla.create');
+        Route::post('/sangla', [SanglaController::class, 'store'])->name('sangla.store');
     });
 
     // User Management Routes (Admin and Superadmin only)
@@ -35,6 +36,10 @@ Route::middleware('auth')->group(function () {
         
         // Item Type Management Routes
         Route::resource('item-types', ItemTypeController::class)->except(['show', 'edit', 'update']);
+        
+        // Configuration Management Routes
+        Route::get('/configs', [ConfigController::class, 'index'])->name('configs.index');
+        Route::put('/configs', [ConfigController::class, 'update'])->name('configs.update');
     });
 });
 

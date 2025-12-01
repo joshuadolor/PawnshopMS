@@ -22,6 +22,9 @@
                         <x-nav-link :href="route('item-types.index')" :active="request()->routeIs('item-types.*')">
                             Item Types
                         </x-nav-link>
+                        <x-nav-link :href="route('configs.index')" :active="request()->routeIs('configs.*')">
+                            Configuration
+                        </x-nav-link>
                     @endif
                 </div>
             </div>
@@ -84,6 +87,9 @@
                 </x-responsive-nav-link>
                 <x-responsive-nav-link :href="route('item-types.index')" :active="request()->routeIs('item-types.*')">
                     Item Types
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('configs.index')" :active="request()->routeIs('configs.*')">
+                    Configuration
                 </x-responsive-nav-link>
             @endif
         </div>
