@@ -33,6 +33,7 @@ Route::middleware('auth')->group(function () {
         Route::resource('users', UserController::class)->except(['show', 'edit', 'update']);
         Route::patch('/users/{user}/status', [UserController::class, 'updateStatus'])->name('users.update-status');
         Route::patch('/users/{user}/role', [UserController::class, 'updateRole'])->name('users.update-role');
+        Route::patch('/users/{user}/branches', [UserController::class, 'updateBranches'])->name('users.update-branches');
         Route::post('/users/{user}/reset-password', [UserController::class, 'resetPassword'])->name('users.reset-password');
         
         // Item Type Management Routes

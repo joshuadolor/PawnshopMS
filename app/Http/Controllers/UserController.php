@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreUserRequest;
+use App\Http\Requests\UpdateUserBranchesRequest;
 use App\Http\Requests\UpdateUserRoleRequest;
 use App\Http\Requests\UpdateUserStatusRequest;
+use App\Models\Branch;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -25,10 +27,12 @@ class UserController extends Controller
             $query->where('role', '!=', 'superadmin');
         }
 
-        $users = $query->orderBy('created_at', 'desc')->paginate(15);
+        $users = $query->with('branches')->orderBy('created_at', 'desc')->paginate(15);
+        $branches = Branch::orderBy('name', 'asc')->get();
 
         return view('users.index', [
             'users' => $users,
+            'branches' => $branches,
         ]);
     }
 
@@ -117,6 +121,22 @@ class UserController extends Controller
 
         return redirect()->route('users.index')
             ->with('status', "Password has been reset to default for {$user->name}.");
+    }
+
+    /**
+     * Update the specified user's branches.
+     */
+    public function updateBranches(UpdateUserBranchesRequest $request, User $user): RedirectResponse
+    {
+        // Prevent admin from modifying superadmin
+        if ($request->user()->isAdmin() && $user->isSuperAdmin()) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $user->branches()->sync($request->branches);
+
+        return redirect()->route('users.index')
+            ->with('status', "Branches have been updated for {$user->name}.");
     }
 
     /**

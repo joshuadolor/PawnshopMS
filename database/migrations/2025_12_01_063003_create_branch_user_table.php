@@ -11,12 +11,13 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('branches', function (Blueprint $table) {
+        Schema::create('branch_user', function (Blueprint $table) {
             $table->id();
-            $table->string('name')->unique();
-            $table->text('address')->nullable();
-            $table->string('contact_number')->nullable();
+            $table->foreignId('branch_id')->constrained()->onDelete('cascade');
+            $table->foreignId('user_id')->constrained()->onDelete('cascade');
             $table->timestamps();
+            
+            $table->unique(['branch_id', 'user_id']);
         });
     }
 
@@ -25,6 +26,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('branches');
+        Schema::dropIfExists('branch_user');
     }
 };

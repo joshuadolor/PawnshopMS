@@ -89,4 +89,20 @@ class User extends Authenticatable
     {
         return in_array($this->role, ['admin', 'superadmin']);
     }
+
+    /**
+     * Check if user is staff.
+     */
+    public function isStaff(): bool
+    {
+        return $this->role === 'staff';
+    }
+
+    /**
+     * The branches that belong to the user.
+     */
+    public function branches()
+    {
+        return $this->belongsToMany(Branch::class);
+    }
 }

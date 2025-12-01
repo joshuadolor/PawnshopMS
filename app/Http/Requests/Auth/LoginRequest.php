@@ -49,11 +49,21 @@ class LoginRequest extends FormRequest
             ]);
         }
 
+        $user = Auth::user();
+
         // Check if user is active
-        if (! Auth::user()->is_active) {
+        if (! $user->is_active) {
             Auth::logout();
             throw ValidationException::withMessages([
                 'username' => 'Your account is inactive. Please contact an administrator.',
+            ]);
+        }
+
+        // Check if staff user has at least one branch assigned
+        if ($user->isStaff() && $user->branches()->count() === 0) {
+            Auth::logout();
+            throw ValidationException::withMessages([
+                'username' => 'No branch assigned. Contact the admin',
             ]);
         }
 

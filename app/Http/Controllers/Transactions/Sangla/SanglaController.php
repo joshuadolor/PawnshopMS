@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Transactions\Sangla;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreSanglaTransactionRequest;
+use App\Models\Branch;
 use App\Models\Config;
 use App\Models\ItemType;
 use Illuminate\Http\RedirectResponse;
@@ -40,11 +41,26 @@ class SanglaController extends Controller
             $defaultMaturityDate = $today->copy()->addMonth()->format('Y-m-d');
         }
 
+        // Get user's branches
+        $user = auth()->user();
+        
+        // Admins and superadmins can access all branches
+        if ($user->isAdminOrSuperAdmin()) {
+            $userBranches = Branch::orderBy('name', 'asc')->get();
+            $showBranchSelection = $userBranches->count() > 1;
+        } else {
+            // Staff users only see their assigned branches
+            $userBranches = $user->branches()->orderBy('name', 'asc')->get();
+            $showBranchSelection = $userBranches->count() > 1;
+        }
+
         return view('transactions.sangla.create', [
             'itemTypes' => $itemTypes,
             'serviceCharge' => $serviceCharge,
             'interestPeriod' => $interestPeriod,
             'defaultMaturityDate' => $defaultMaturityDate,
+            'userBranches' => $userBranches,
+            'showBranchSelection' => $showBranchSelection,
         ]);
     }
 

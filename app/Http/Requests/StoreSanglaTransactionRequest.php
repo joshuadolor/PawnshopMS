@@ -21,6 +21,8 @@ class StoreSanglaTransactionRequest extends FormRequest
      */
     public function rules(): array
     {
+        $user = $this->user();
+        
         $rules = [
             'first_name' => ['required', 'string', 'max:255'],
             'last_name' => ['required', 'string', 'max:255'],
@@ -34,6 +36,35 @@ class StoreSanglaTransactionRequest extends FormRequest
             'item_type' => ['required', 'exists:item_types,id'],
             'item_description' => ['required', 'string'],
         ];
+
+        // Admins and superadmins can select any branch
+        if ($user->isAdminOrSuperAdmin()) {
+            $allBranchIds = \App\Models\Branch::pluck('id')->toArray();
+            $rules['branch_id'] = ['required', 'exists:branches,id', function ($attribute, $value, $fail) use ($allBranchIds) {
+                if (!in_array($value, $allBranchIds)) {
+                    $fail('The selected branch is invalid.');
+                }
+            }];
+        } else {
+            // Staff users can only select their assigned branches
+            $userBranchIds = $user->branches()->pluck('branches.id')->toArray();
+            
+            // Validate branch_id if user has multiple branches
+            if (count($userBranchIds) > 1) {
+                $rules['branch_id'] = ['required', 'exists:branches,id', function ($attribute, $value, $fail) use ($userBranchIds) {
+                    if (!in_array($value, $userBranchIds)) {
+                        $fail('The selected branch is invalid.');
+                    }
+                }];
+            } elseif (count($userBranchIds) === 1) {
+                // If user has only one branch, ensure it matches
+                $rules['branch_id'] = ['required', 'exists:branches,id', function ($attribute, $value, $fail) use ($userBranchIds) {
+                    if ($value != $userBranchIds[0]) {
+                        $fail('The selected branch is invalid.');
+                    }
+                }];
+            }
+        }
 
         // If "Other" is selected, require custom_item_type
         if ($this->isOtherItemType()) {

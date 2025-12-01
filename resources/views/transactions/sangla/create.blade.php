@@ -12,6 +12,27 @@
                     <form method="POST" action="{{ route('transactions.sangla.store') }}">
                         @csrf
 
+                        <!-- Branch Selection (only show if user has multiple branches) -->
+                        @if($showBranchSelection)
+                            <div class="mb-6">
+                                <x-input-label for="branch_id" value="Branch" />
+                                <select id="branch_id" name="branch_id" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500" required>
+                                    <option value="">Select a branch</option>
+                                    @foreach($userBranches as $branch)
+                                        <option value="{{ $branch->id }}" {{ old('branch_id') == $branch->id ? 'selected' : '' }}>
+                                            {{ $branch->name }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                                <x-input-error :messages="$errors->get('branch_id')" class="mt-2" />
+                            </div>
+                        @else
+                            <!-- Hidden input for single branch -->
+                            @if($userBranches->count() === 1)
+                                <input type="hidden" name="branch_id" value="{{ $userBranches->first()->id }}">
+                            @endif
+                        @endif
+
                         <!-- First Name -->
                         <div>
                             <x-input-label for="first_name" value="First Name" />

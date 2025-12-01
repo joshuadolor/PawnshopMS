@@ -55,6 +55,9 @@ class DatabaseSeeder extends Seeder
         // Seed Item Types
         $this->call(ItemTypeSeeder::class);
 
+        // Seed Branches
+        $this->call(BranchSeeder::class);
+
         // Seed Configurations
         $this->call(ConfigSeeder::class);
     }

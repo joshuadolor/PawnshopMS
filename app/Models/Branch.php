@@ -16,4 +16,12 @@ class Branch extends Model
         'address',
         'contact_number',
     ];
+
+    /**
+     * The users that belong to the branch.
+     */
+    public function users()
+    {
+        return $this->belongsToMany(User::class);
+    }
 }

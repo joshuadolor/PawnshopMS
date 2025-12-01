@@ -33,6 +33,7 @@
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Branches</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
@@ -53,6 +54,21 @@
                                                    ($user->role === 'admin' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800') }}">
                                                 {{ ucfirst($user->role) }}
                                             </span>
+                                        </td>
+                                        <td class="px-6 py-4">
+                                            <div class="text-sm text-gray-900">
+                                                @if($user->branches->count() > 0)
+                                                    @foreach($user->branches as $branch)
+                                                        <span class="inline-block px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded mr-1 mb-1">
+                                                            {{ $branch->name }}
+                                                        </span>
+                                                    @endforeach
+                                                @elseif($user->role === 'superadmin' || $user->role === 'admin')
+                                                    <span class="text-green-600 text-xs">All Branches</span>
+                                                @else
+                                                    <span class="text-red-600 text-xs">No branches</span>
+                                                @endif
+                                            </div>
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap">
                                             <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
@@ -77,6 +93,14 @@
                                                         onclick="openRoleDialog({{ $user->id }}, {{ json_encode($user->name) }}, {{ json_encode($user->role) }}, {{ json_encode(route('users.update-role', $user)) }})"
                                                         class="text-blue-600 hover:text-blue-900">
                                                         Change Role
+                                                    </button>
+                                                @endif
+                                                @if($user->isStaff())
+                                                    <button 
+                                                        type="button" 
+                                                        onclick="openBranchDialog({{ $user->id }}, {{ json_encode($user->name) }}, {{ json_encode($user->branches->pluck('id')->toArray()) }}, {{ json_encode(route('users.update-branches', $user)) }})"
+                                                        class="text-green-600 hover:text-green-900">
+                                                        Assign Branches
                                                     </button>
                                                 @endif
                                                 <button 
@@ -172,6 +196,49 @@
                     type="submit" 
                     class="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                     Change Role
+                </button>
+            </div>
+        </form>
+    </dialog>
+
+    <!-- Assign Branches Dialog -->
+    <dialog id="branchDialog" class="rounded-lg p-6 max-w-md w-full shadow-xl">
+        <form method="POST" id="branchForm">
+            @csrf
+            @method('PATCH')
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Assign Branches</h3>
+            <p class="text-sm text-gray-600 mb-4">
+                Assign branches for <span id="branchUserName" class="font-medium"></span>:
+            </p>
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Select Branches</label>
+                <div class="space-y-2 max-h-60 overflow-y-auto border border-gray-300 rounded-md p-3">
+                    @foreach($branches as $branch)
+                        <label class="inline-flex items-center w-full p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                            <input 
+                                type="checkbox" 
+                                name="branches[]" 
+                                value="{{ $branch->id }}" 
+                                class="branch-checkbox text-indigo-600 focus:ring-indigo-500"
+                            >
+                            <span class="ms-3 text-sm text-gray-700">{{ $branch->name }}</span>
+                        </label>
+                    @endforeach
+                </div>
+                <p id="branchError" class="mt-2 text-sm text-red-600 hidden">Please select at least one branch</p>
+            </div>
+            <div class="flex justify-end space-x-3">
+                <button 
+                    type="button" 
+                    onclick="closeBranchDialog()" 
+                    class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                    Cancel
+                </button>
+                <button 
+                    type="submit" 
+                    id="branchConfirmButton"
+                    class="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                    Assign Branches
                 </button>
             </div>
         </form>
@@ -282,6 +349,66 @@
             document.getElementById('roleDialog').close();
         }
 
+        // Branch Assignment Dialog
+        function openBranchDialog(userId, userName, currentBranches, routeUrl) {
+            const dialog = document.getElementById('branchDialog');
+            const form = document.getElementById('branchForm');
+            const userNameSpan = document.getElementById('branchUserName');
+            const checkboxes = document.querySelectorAll('.branch-checkbox');
+            
+            userNameSpan.textContent = userName;
+            form.action = routeUrl;
+            
+            // Reset all checkboxes
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = false;
+            });
+            
+            // Check current branches
+            if (currentBranches && currentBranches.length > 0) {
+                currentBranches.forEach(branchId => {
+                    const checkbox = document.querySelector(`input[name="branches[]"][value="${branchId}"]`);
+                    if (checkbox) {
+                        checkbox.checked = true;
+                    }
+                });
+            }
+            
+            dialog.showModal();
+        }
+
+        function closeBranchDialog() {
+            document.getElementById('branchDialog').close();
+        }
+
+        // Validate branch selection
+        document.addEventListener('DOMContentLoaded', function() {
+            const branchForm = document.getElementById('branchForm');
+            const branchConfirmButton = document.getElementById('branchConfirmButton');
+            const branchError = document.getElementById('branchError');
+            
+            if (branchForm) {
+                branchForm.addEventListener('submit', function(e) {
+                    const checked = document.querySelectorAll('.branch-checkbox:checked');
+                    if (checked.length === 0) {
+                        e.preventDefault();
+                        branchError.classList.remove('hidden');
+                        return false;
+                    }
+                });
+                
+                // Update error message on checkbox change
+                document.querySelectorAll('.branch-checkbox').forEach(checkbox => {
+                    checkbox.addEventListener('change', function() {
+                        const checked = document.querySelectorAll('.branch-checkbox:checked');
+                        if (checked.length > 0) {
+                            branchError.classList.add('hidden');
+                        }
+                    });
+                });
+            }
+        });
+
         // Reset Password Dialog
         function openResetPasswordDialog(userId, userName, routeUrl) {
             const dialog = document.getElementById('resetPasswordDialog');
@@ -370,7 +497,7 @@
         });
 
         // Close dialogs when clicking outside
-        ['statusDialog', 'roleDialog', 'resetPasswordDialog', 'deleteDialog'].forEach(dialogId => {
+        ['statusDialog', 'roleDialog', 'branchDialog', 'resetPasswordDialog', 'deleteDialog'].forEach(dialogId => {
             document.getElementById(dialogId).addEventListener('click', function(event) {
                 if (event.target === this) {
                     this.close();
