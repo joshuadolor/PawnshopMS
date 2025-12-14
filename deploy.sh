@@ -62,9 +62,16 @@ fi
 echo -e "${YELLOW}Waiting for container to be ready...${NC}"
 sleep 5
 
-# Generate application key if not set
+# Check and generate application key if not set
 echo -e "${YELLOW}Checking application key...${NC}"
-docker compose exec -T app php artisan key:generate --force 2>/dev/null || true
+APP_KEY_LINE=$(grep "^APP_KEY=" .env 2>/dev/null || echo "")
+if [ -z "$APP_KEY_LINE" ] || [ "$APP_KEY_LINE" = "APP_KEY=" ] || [ "$APP_KEY_LINE" = "APP_KEY=null" ]; then
+    echo -e "${YELLOW}APP_KEY not set. Generating application key...${NC}"
+    docker compose exec -T app php artisan key:generate --force 2>/dev/null || true
+    echo -e "${GREEN}Application key generated successfully.${NC}"
+else
+    echo -e "${GREEN}APP_KEY is already set. Skipping key generation.${NC}"
+fi
 
 # Run migrations
 echo -e "${YELLOW}Running database migrations...${NC}"
@@ -87,6 +94,15 @@ echo -e "${YELLOW}Optimizing Laravel...${NC}"
 docker compose exec -T app php artisan config:cache
 docker compose exec -T app php artisan route:cache
 docker compose exec -T app php artisan view:cache
+
+# Restore file permissions on host (prevent Docker from making files executable)
+echo -e "${YELLOW}Restoring file permissions...${NC}"
+find . -type d -exec chmod 755 {} \; 2>/dev/null || true
+find . -type f -exec chmod 644 {} \; 2>/dev/null || true
+# Make scripts executable
+find . -name "*.sh" -exec chmod +x {} \; 2>/dev/null || true
+# Restore specific Laravel directories
+chmod -R 775 storage bootstrap/cache 2>/dev/null || true
 
 # Get container status
 echo ""

@@ -14,9 +14,10 @@ if [ ! -d "node_modules" ] || [ -z "$(ls -A node_modules)" ]; then
     npm run build
 fi
 
-# Set proper permissions
+# Set proper permissions (directories 755, files 644)
 chown -R www-data:www-data /var/www/html
-chmod -R 755 /var/www/html
+find /var/www/html -type d -exec chmod 755 {} \;
+find /var/www/html -type f -exec chmod 644 {} \;
 chmod -R 775 /var/www/html/storage
 chmod -R 775 /var/www/html/bootstrap/cache
 
