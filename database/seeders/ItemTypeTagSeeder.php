@@ -24,6 +24,10 @@ class ItemTypeTagSeeder extends Seeder
                 '14K',
                 '16K',
                 '18K',
+                '20K',
+                '21K',
+                '22K',
+                '24K',
             ];
 
             foreach ($tags as $tag) {
