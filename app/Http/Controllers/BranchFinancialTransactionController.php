@@ -21,7 +21,7 @@ class BranchFinancialTransactionController extends Controller
     public function index(Request $request): View
     {
         $user = $request->user();
-        $query = BranchFinancialTransaction::with(['branch', 'user', 'voided.voidedBy']);
+        $query = BranchFinancialTransaction::with(['branch', 'user', 'voided.voidedBy', 'transaction.voided']);
         // Note: Voided transactions are shown in table but excluded from calculations
 
         // Default to today's transactions

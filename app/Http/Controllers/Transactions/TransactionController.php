@@ -5,7 +5,10 @@ namespace App\Http\Controllers\Transactions;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\VoidTransactionRequest;
 use App\Models\Branch;
+use App\Models\BranchFinancialTransaction;
+use App\Models\BranchBalance;
 use App\Models\Transaction;
+use App\Models\VoidedBranchFinancialTransaction;
 use App\Models\VoidedTransaction;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -87,7 +90,7 @@ class TransactionController extends Controller
                 ->with('error', 'This transaction is already voided.');
         }
 
-        // Create void record within a transaction
+        // Create void record and void associated financial transaction within a transaction
         DB::transaction(function () use ($transaction, $request) {
             VoidedTransaction::create([
                 'transaction_id' => $transaction->id,
@@ -95,6 +98,45 @@ class TransactionController extends Controller
                 'reason' => $request->reason,
                 'voided_at' => now(),
             ]);
+
+            // Find and void the associated financial transaction (type: transaction)
+            // First try to find by transaction_id (for records created after migration)
+            $financialTransaction = BranchFinancialTransaction::where('transaction_id', $transaction->id)
+                ->where('type', 'transaction')
+                ->whereDoesntHave('voided')
+                ->first();
+
+            // If not found by transaction_id, try to find by matching description, branch, amount, and date
+            // This handles records created before the transaction_id column was added
+            if (!$financialTransaction) {
+                $financialTransaction = BranchFinancialTransaction::where('type', 'transaction')
+                    ->where('description', 'Sangla transaction')
+                    ->where('branch_id', $transaction->branch_id)
+                    ->where('amount', $transaction->net_proceeds)
+                    ->whereDate('transaction_date', $transaction->created_at->toDateString())
+                    ->whereDoesntHave('voided')
+                    ->whereNull('transaction_id') // Only match records without transaction_id
+                    ->first();
+            }
+
+            if ($financialTransaction) {
+                // Update transaction_id if it was NULL (for old records)
+                if (!$financialTransaction->transaction_id) {
+                    $financialTransaction->update(['transaction_id' => $transaction->id]);
+                }
+
+                // Create void record for financial transaction
+                VoidedBranchFinancialTransaction::create([
+                    'branch_financial_transaction_id' => $financialTransaction->id,
+                    'voided_by' => $request->user()->id,
+                    'reason' => "Associated transaction #{$transaction->transaction_number} was voided: {$request->reason}",
+                    'voided_at' => now(),
+                ]);
+
+                // Reverse the transaction amount in the balance
+                // Since it's type 'transaction', it was negative, so we reverse by adding it back
+                BranchBalance::updateBalance($financialTransaction->branch_id, (float) $financialTransaction->amount);
+            }
         });
 
         return redirect()->back()

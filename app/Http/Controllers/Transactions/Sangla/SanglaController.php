@@ -177,6 +177,7 @@ class SanglaController extends Controller
                 $financialTransaction = BranchFinancialTransaction::create([
                     'branch_id' => $branchId,
                     'user_id' => $user->id,
+                    'transaction_id' => $transaction->id,
                     'type' => 'transaction',
                     'description' => 'Sangla transaction',
                     'amount' => $netProceeds,

@@ -250,12 +250,18 @@
                                     @if(auth()->user()->isAdminOrSuperAdmin())
                                         <td class="px-6 py-4 whitespace-nowrap text-right">
                                             @if(!$isVoided)
-                                                <button
-                                                    type="button"
-                                                    onclick="openVoidDialog({{ $transaction->id }})"
-                                                    class="text-red-600 hover:text-red-900 text-sm font-medium">
-                                                    Void
-                                                </button>
+                                                @php
+                                                    // Hide void button for type "transaction"
+                                                    $canVoid = !$transaction->isTransaction();
+                                                @endphp
+                                                @if($canVoid)
+                                                    <button
+                                                        type="button"
+                                                        onclick="openVoidDialog({{ $transaction->id }})"
+                                                        class="text-red-600 hover:text-red-900 text-sm font-medium">
+                                                        Void
+                                                    </button>
+                                                @endif
                                             @else
                                                 <div class="flex items-center gap-2">
                                                     <button
