@@ -649,6 +649,64 @@
             // Initial calculation if values exist
             calculateAmounts();
 
+            // Function to compress and resize image
+            function compressImage(file, maxWidth, maxHeight, quality) {
+                return new Promise(function(resolve, reject) {
+                    const reader = new FileReader();
+                    reader.onload = function(event) {
+                        const img = new Image();
+                        img.onload = function() {
+                            // Calculate new dimensions
+                            let width = img.width;
+                            let height = img.height;
+                            
+                            if (width > maxWidth || height > maxHeight) {
+                                if (width > height) {
+                                    if (width > maxWidth) {
+                                        height = (height * maxWidth) / width;
+                                        width = maxWidth;
+                                    }
+                                } else {
+                                    if (height > maxHeight) {
+                                        width = (width * maxHeight) / height;
+                                        height = maxHeight;
+                                    }
+                                }
+                            }
+                            
+                            // Create canvas and resize
+                            const canvas = document.createElement('canvas');
+                            canvas.width = width;
+                            canvas.height = height;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(img, 0, 0, width, height);
+                            
+                            // Convert to blob with compression
+                            canvas.toBlob(function(blob) {
+                                if (blob) {
+                                    // Create a new File object from the blob
+                                    const compressedFile = new File([blob], file.name, {
+                                        type: 'image/jpeg',
+                                        lastModified: Date.now()
+                                    });
+                                    resolve(compressedFile);
+                                } else {
+                                    reject(new Error('Failed to compress image'));
+                                }
+                            }, 'image/jpeg', quality);
+                        };
+                        img.onerror = function() {
+                            reject(new Error('Failed to load image'));
+                        };
+                        img.src = event.target.result;
+                    };
+                    reader.onerror = function() {
+                        reject(new Error('Failed to read file'));
+                    };
+                    reader.readAsDataURL(file);
+                });
+            }
+
             // Handle file selection for image capture components (only item_image for additional items)
             ['item_image'].forEach(function(fieldName) {
                 const input = document.getElementById(fieldName + '_input');
@@ -656,47 +714,77 @@
                     input.addEventListener('change', function(e) {
                         const file = e.target.files[0];
                         if (file) {
-                            // Validate file size (5MB = 5 * 1024 * 1024 bytes)
-                            const maxSize = 5 * 1024 * 1024; // 5MB in bytes
-                            if (file.size > maxSize) {
-                                alert('File size exceeds 5MB limit. Please choose a smaller image.');
-                                this.value = ''; // Clear the input
-                                
-                                // Hide preview if it exists
-                                const preview = document.getElementById(fieldName + '_preview');
-                                const previewContainer = document.getElementById(fieldName + '_preview_container');
-                                const removeBtn = document.getElementById(fieldName + '_remove_btn');
-                                
-                                if (preview) preview.src = '';
-                                if (previewContainer) previewContainer.classList.add('hidden');
-                                if (removeBtn) removeBtn.classList.add('hidden');
-                                
-                                return;
-                            }
-                            
-                            // Validate file type
-                            const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+                            // Validate file type first
+                            const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/heic', 'image/heif'];
                             if (!allowedTypes.includes(file.type)) {
                                 alert('Invalid file type. Please upload a JPEG or PNG image.');
                                 this.value = '';
                                 return;
                             }
                             
-                            const reader = new FileReader();
-                            reader.onload = function(event) {
-                                const preview = document.getElementById(fieldName + '_preview');
-                                const previewContainer = document.getElementById(fieldName + '_preview_container');
-                                const removeBtn = document.getElementById(fieldName + '_remove_btn');
-                                
-                                if (preview) preview.src = event.target.result;
-                                if (previewContainer) previewContainer.classList.remove('hidden');
-                                if (removeBtn) removeBtn.classList.remove('hidden');
-                            };
-                            reader.onerror = function() {
-                                alert('Error reading file. Please try again.');
-                                input.value = '';
-                            };
-                            reader.readAsDataURL(file);
+                            // Show loading indicator
+                            const previewContainer = document.getElementById(fieldName + '_preview_container');
+                            if (previewContainer) {
+                                previewContainer.innerHTML = '<div class="text-center p-4"><p class="text-sm text-gray-600">Compressing image...</p></div>';
+                                previewContainer.classList.remove('hidden');
+                            }
+                            
+                            // Compress image: max 1920x1920, quality 0.85
+                            compressImage(file, 1920, 1920, 0.85)
+                                .then(function(compressedFile) {
+                                    // Replace the original file with compressed version
+                                    const dataTransfer = new DataTransfer();
+                                    dataTransfer.items.add(compressedFile);
+                                    input.files = dataTransfer.files;
+                                    
+                                    // Validate compressed file size (5MB = 5 * 1024 * 1024 bytes)
+                                    const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+                                    if (compressedFile.size > maxSize) {
+                                        alert('Image is still too large after compression (' + (compressedFile.size / 1024 / 1024).toFixed(2) + 'MB). Please try a different image.');
+                                        input.value = '';
+                                        
+                                        // Hide preview
+                                        const preview = document.getElementById(fieldName + '_preview');
+                                        const previewContainer = document.getElementById(fieldName + '_preview_container');
+                                        const removeBtn = document.getElementById(fieldName + '_remove_btn');
+                                        
+                                        if (preview) preview.src = '';
+                                        if (previewContainer) previewContainer.classList.add('hidden');
+                                        if (removeBtn) removeBtn.classList.add('hidden');
+                                        
+                                        return;
+                                    }
+                                    
+                                    // Show preview
+                                    const reader = new FileReader();
+                                    reader.onload = function(event) {
+                                        const preview = document.getElementById(fieldName + '_preview');
+                                        const previewContainer = document.getElementById(fieldName + '_preview_container');
+                                        const removeBtn = document.getElementById(fieldName + '_remove_btn');
+                                        
+                                        if (previewContainer) {
+                                            previewContainer.innerHTML = '<img id="' + fieldName + '_preview" src="' + event.target.result + '" alt="Preview" class="w-full h-auto rounded-lg border-2 border-gray-300 object-cover max-h-64">';
+                                        }
+                                        if (preview) preview.src = event.target.result;
+                                        if (previewContainer) previewContainer.classList.remove('hidden');
+                                        if (removeBtn) removeBtn.classList.remove('hidden');
+                                    };
+                                    reader.readAsDataURL(compressedFile);
+                                })
+                                .catch(function(error) {
+                                    console.error('Error compressing image:', error);
+                                    alert('Error processing image. Please try again.');
+                                    input.value = '';
+                                    
+                                    // Hide preview
+                                    const preview = document.getElementById(fieldName + '_preview');
+                                    const previewContainer = document.getElementById(fieldName + '_preview_container');
+                                    const removeBtn = document.getElementById(fieldName + '_remove_btn');
+                                    
+                                    if (preview) preview.src = '';
+                                    if (previewContainer) previewContainer.classList.add('hidden');
+                                    if (removeBtn) removeBtn.classList.add('hidden');
+                                });
                         }
                     });
                 }
