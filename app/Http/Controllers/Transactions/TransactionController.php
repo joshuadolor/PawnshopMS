@@ -20,6 +20,7 @@ class TransactionController extends Controller
 
         // Staff users only see transactions for today
         if ($user->isStaff()) {
+            $query->where('branch_id', $user->branches()->first()->id);
             $query->whereDate('created_at', today());
         } else {
             // Admin and Superadmin can filter by date

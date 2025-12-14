@@ -276,7 +276,7 @@
                 <!-- Images Section -->
                 <div>
                     <h4 class="text-md font-semibold text-gray-900 mb-4">Images</h4>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="grid grid-cols-1 md:grid-cols-1 gap-6">
                         <!-- Item Image -->
                         <div>
                             <h5 class="text-sm font-medium text-gray-700 mb-2">Item Image</h5>
@@ -285,7 +285,7 @@
                                     id="modalItemImage" 
                                     src="" 
                                     alt="Item Image" 
-                                    class="w-full h-auto object-contain max-h-64"
+                                    class="w-auto h-full "
                                 />
                             </div>
                         </div>
