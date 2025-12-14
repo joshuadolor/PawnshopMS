@@ -41,6 +41,11 @@ class ImageProcessingService
      */
     public function processAndStore(UploadedFile $file, string $baseDirectory, ?string $branchName = null): string
     {
+        // Check if GD extension is loaded
+        if (!\extension_loaded('gd')) {
+            throw new \Exception('GD extension is not loaded. Please install php-gd extension.');
+        }
+
         $filePath = $file->getRealPath();
         
         // Validate file exists and is readable
@@ -176,16 +181,26 @@ class ImageProcessingService
             throw new \Exception('Image file is not readable: ' . $filePath);
         }
 
-        // Use if/else instead of match to ensure backslash works correctly
+        // Check if GD extension is loaded
+        if (!\extension_loaded('gd')) {
+            throw new \Exception('GD extension is not loaded. Please install php-gd extension on the server.');
+        }
+
+        // Check if GD functions are available
+        if (!\function_exists('imagecreatefromjpeg')) {
+            throw new \Exception('GD image functions are not available. Please install php-gd extension. Run: apt-get install php-gd (or yum install php-gd) and restart PHP-FPM/web server.');
+        }
+
+        // Use call_user_func to ensure functions are called from global namespace
         $resource = null;
         if ($mimeType === 'image/jpeg' || $mimeType === 'image/jpg') {
-            $resource = @\imagecreatefromjpeg($filePath);
+            $resource = @call_user_func('imagecreatefromjpeg', $filePath);
         } elseif ($mimeType === 'image/png') {
-            $resource = @\imagecreatefrompng($filePath);
+            $resource = @call_user_func('imagecreatefrompng', $filePath);
         } elseif ($mimeType === 'image/gif') {
-            $resource = @\imagecreatefromgif($filePath);
+            $resource = @call_user_func('imagecreatefromgif', $filePath);
         } elseif ($mimeType === 'image/webp') {
-            $resource = @\imagecreatefromwebp($filePath);
+            $resource = @call_user_func('imagecreatefromwebp', $filePath);
         }
 
         if ($resource === false || $resource === null) {
@@ -194,13 +209,13 @@ class ImageProcessingService
             if ($actualMimeType && $actualMimeType !== $mimeType) {
                 // Retry with actual MIME type
                 if ($actualMimeType === 'image/jpeg' || $actualMimeType === 'image/jpg') {
-                    $resource = @\imagecreatefromjpeg($filePath);
+                    $resource = @call_user_func('imagecreatefromjpeg', $filePath);
                 } elseif ($actualMimeType === 'image/png') {
-                    $resource = @\imagecreatefrompng($filePath);
+                    $resource = @call_user_func('imagecreatefrompng', $filePath);
                 } elseif ($actualMimeType === 'image/gif') {
-                    $resource = @\imagecreatefromgif($filePath);
+                    $resource = @call_user_func('imagecreatefromgif', $filePath);
                 } elseif ($actualMimeType === 'image/webp') {
-                    $resource = @\imagecreatefromwebp($filePath);
+                    $resource = @call_user_func('imagecreatefromwebp', $filePath);
                 }
             }
 

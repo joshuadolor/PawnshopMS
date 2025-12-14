@@ -81,4 +81,3 @@ sudo ufw reload
 - **Container shell**: `docker compose exec app bash`
 - **Check status**: `docker compose ps`
 - **Rebuild**: `docker compose up -d --build --force-recreate`
-
