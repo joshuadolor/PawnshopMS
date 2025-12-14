@@ -41,10 +41,29 @@ class ImageProcessingService
      */
     public function processAndStore(UploadedFile $file, string $baseDirectory, ?string $branchName = null): string
     {
+        $filePath = $file->getRealPath();
+        
+        // Validate file exists and is readable
+        if (!file_exists($filePath)) {
+            throw new \Exception('Uploaded file does not exist');
+        }
+
+        if (!is_readable($filePath)) {
+            throw new \Exception('Uploaded file is not readable');
+        }
+
         // Get image info
-        $imageInfo = getimagesize($file->getRealPath());
+        $imageInfo = @getimagesize($filePath);
         if (!$imageInfo) {
-            throw new \Exception('Invalid image file');
+            // Try to get more info about why it failed
+            $fileSize = filesize($filePath);
+            $mimeType = $file->getMimeType();
+            throw new \Exception(
+                "Invalid or corrupted image file. " .
+                "File size: {$fileSize} bytes, " .
+                "MIME type: {$mimeType}, " .
+                "File path: {$filePath}"
+            );
         }
 
         $originalWidth = $imageInfo[0];
@@ -66,22 +85,39 @@ class ImageProcessingService
             $newHeight = $originalHeight;
         }
 
+        // Validate dimensions
+        if ($newWidth <= 0 || $newHeight <= 0) {
+            throw new \Exception("Invalid image dimensions: {$newWidth}x{$newHeight}");
+        }
+
         // Create image resource based on MIME type
         $sourceImage = $this->createImageResource($file->getRealPath(), $mimeType);
 
         // Create new image with calculated dimensions
-        $newImage = imagecreatetruecolor($newWidth, $newHeight);
+        $newImage = @imagecreatetruecolor($newWidth, $newHeight);
+        if ($newImage === false) {
+            imagedestroy($sourceImage);
+            throw new \Exception("Failed to create new image resource with dimensions {$newWidth}x{$newHeight}");
+        }
 
         // Preserve transparency for PNG and GIF
         if ($mimeType === 'image/png' || $mimeType === 'image/gif') {
             imagealphablending($newImage, false);
             imagesavealpha($newImage, true);
             $transparent = imagecolorallocatealpha($newImage, 255, 255, 255, 127);
-            imagefilledrectangle($newImage, 0, 0, $newWidth, $newHeight, $transparent);
+            if ($transparent !== false) {
+                imagefilledrectangle($newImage, 0, 0, $newWidth, $newHeight, $transparent);
+            }
+        } else {
+            // For JPEG, fill with white background
+            $white = imagecolorallocate($newImage, 255, 255, 255);
+            if ($white !== false) {
+                imagefill($newImage, 0, 0, $white);
+            }
         }
 
         // Resize image
-        imagecopyresampled(
+        $resizeResult = @imagecopyresampled(
             $newImage,
             $sourceImage,
             0, 0, 0, 0,
@@ -90,6 +126,12 @@ class ImageProcessingService
             $originalWidth,
             $originalHeight
         );
+
+        if ($resizeResult === false) {
+            imagedestroy($sourceImage);
+            imagedestroy($newImage);
+            throw new \Exception("Failed to resize image");
+        }
 
         // Build directory path: baseDirectory/YYYY-MM-DD/{branch-name}/
         $date = now()->format('Y-m-d');
@@ -126,13 +168,49 @@ class ImageProcessingService
      */
     private function createImageResource(string $filePath, string $mimeType)
     {
-        return match ($mimeType) {
-            'image/jpeg' => imagecreatefromjpeg($filePath),
-            'image/png' => imagecreatefrompng($filePath),
-            'image/gif' => imagecreatefromgif($filePath),
-            'image/webp' => imagecreatefromwebp($filePath),
-            default => throw new \Exception('Unsupported image type: ' . $mimeType),
+        if (!file_exists($filePath)) {
+            throw new \Exception('Image file does not exist: ' . $filePath);
+        }
+
+        if (!is_readable($filePath)) {
+            throw new \Exception('Image file is not readable: ' . $filePath);
+        }
+
+        $resource = match ($mimeType) {
+            'image/jpeg', 'image/jpg' => @imagecreatefromjpeg($filePath),
+            'image/png' => @imagecreatefrompng($filePath),
+            'image/gif' => @imagecreatefromgif($filePath),
+            'image/webp' => @imagecreatefromwebp($filePath),
+            default => null,
         };
+
+        if ($resource === false || $resource === null) {
+            // Try to detect the actual image type from file content
+            $actualMimeType = mime_content_type($filePath);
+            if ($actualMimeType && $actualMimeType !== $mimeType) {
+                // Retry with actual MIME type
+                $resource = match ($actualMimeType) {
+                    'image/jpeg', 'image/jpg' => @imagecreatefromjpeg($filePath),
+                    'image/png' => @imagecreatefrompng($filePath),
+                    'image/gif' => @imagecreatefromgif($filePath),
+                    'image/webp' => @imagecreatefromwebp($filePath),
+                    default => null,
+                };
+            }
+
+            if ($resource === false || $resource === null) {
+                $error = error_get_last();
+                $errorMsg = $error ? $error['message'] : 'Unknown error';
+                throw new \Exception(
+                    "Failed to create image resource from file. " .
+                    "MIME type: {$mimeType}, " .
+                    "File size: " . filesize($filePath) . " bytes, " .
+                    "Error: {$errorMsg}"
+                );
+            }
+        }
+
+        return $resource;
     }
 
     /**
