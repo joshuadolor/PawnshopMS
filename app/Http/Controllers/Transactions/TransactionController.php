@@ -3,9 +3,13 @@
 namespace App\Http\Controllers\Transactions;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\VoidTransactionRequest;
 use App\Models\Branch;
 use App\Models\Transaction;
+use App\Models\VoidedTransaction;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class TransactionController extends Controller
@@ -16,7 +20,7 @@ class TransactionController extends Controller
     public function index(Request $request): View
     {
         $user = $request->user();
-        $query = Transaction::with(['branch', 'user', 'itemType', 'itemTypeSubtype', 'tags']);
+        $query = Transaction::with(['branch', 'user', 'itemType', 'itemTypeSubtype', 'tags', 'voided']);
 
         // Staff users only see transactions for today
         if ($user->isStaff()) {
@@ -70,5 +74,30 @@ class TransactionController extends Controller
                 'branch_id' => $request->branch_id ?? null,
             ],
         ]);
+    }
+
+    /**
+     * Void a transaction.
+     */
+    public function void(VoidTransactionRequest $request, Transaction $transaction): RedirectResponse
+    {
+        // Check if transaction is already voided
+        if ($transaction->isVoided()) {
+            return redirect()->back()
+                ->with('error', 'This transaction is already voided.');
+        }
+
+        // Create void record within a transaction
+        DB::transaction(function () use ($transaction, $request) {
+            VoidedTransaction::create([
+                'transaction_id' => $transaction->id,
+                'voided_by' => $request->user()->id,
+                'reason' => $request->reason,
+                'voided_at' => now(),
+            ]);
+        });
+
+        return redirect()->back()
+            ->with('success', "Transaction #{$transaction->transaction_number} has been voided.");
     }
 }

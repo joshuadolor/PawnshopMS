@@ -18,6 +18,9 @@
                     <x-nav-link :href="route('transactions.index')" :active="request()->routeIs('transactions.*')">
                         Transactions
                     </x-nav-link>
+                    <x-nav-link :href="route('branch-financial-transactions.index')" :active="request()->routeIs('branch-financial-transactions.*')">
+                        Financials
+                    </x-nav-link>
                     @if(Auth::user()->isAdminOrSuperAdmin())
                         <x-nav-link :href="route('users.index')" :active="request()->routeIs('users.*')">
                             Users
@@ -89,6 +92,9 @@
             </x-responsive-nav-link>
             <x-responsive-nav-link :href="route('transactions.index')" :active="request()->routeIs('transactions.*')">
                 Transactions
+            </x-responsive-nav-link>
+            <x-responsive-nav-link :href="route('branch-financial-transactions.index')" :active="request()->routeIs('branch-financial-transactions.*')">
+                Financials
             </x-responsive-nav-link>
             @if(Auth::user()->isAdminOrSuperAdmin())
                 <x-responsive-nav-link :href="route('users.index')" :active="request()->routeIs('users.*')">

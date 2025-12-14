@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Branch\BranchController;
+use App\Http\Controllers\BranchFinancialTransactionController;
 use App\Http\Controllers\Config\ConfigController;
 use App\Http\Controllers\ImageController;
 use App\Http\Controllers\ItemType\ItemTypeController;
@@ -32,9 +33,13 @@ Route::middleware('auth')->group(function () {
     // Transaction Routes
     Route::prefix('transactions')->name('transactions.')->group(function () {
         Route::get('/', [TransactionController::class, 'index'])->name('index');
+        Route::post('/{transaction}/void', [TransactionController::class, 'void'])->name('void');
         Route::get('/sangla/create', [SanglaController::class, 'create'])->name('sangla.create');
         Route::post('/sangla', [SanglaController::class, 'store'])->name('sangla.store');
     });
+
+    // Branch Financial Transactions Routes
+    Route::resource('branch-financial-transactions', BranchFinancialTransactionController::class)->only(['index', 'create', 'store']);
 
     // User Management Routes (Admin and Superadmin only)
     Route::middleware(EnsureUserIsAdmin::class)->group(function () {

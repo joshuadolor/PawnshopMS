@@ -24,4 +24,12 @@ class Branch extends Model
     {
         return $this->belongsToMany(User::class);
     }
+
+    /**
+     * The financial transactions for the branch.
+     */
+    public function financialTransactions()
+    {
+        return $this->hasMany(BranchFinancialTransaction::class);
+    }
 }

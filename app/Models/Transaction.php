@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Transaction extends Model
 {
@@ -73,6 +74,16 @@ class Transaction extends Model
     public function tags(): BelongsToMany
     {
         return $this->belongsToMany(ItemTypeTag::class, 'transaction_item_type_tags');
+    }
+
+    public function voided(): HasOne
+    {
+        return $this->hasOne(VoidedTransaction::class, 'transaction_id');
+    }
+
+    public function isVoided(): bool
+    {
+        return $this->voided !== null;
     }
 
     public function getPawnerNameAttribute(): string

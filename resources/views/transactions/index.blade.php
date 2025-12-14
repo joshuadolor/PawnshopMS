@@ -111,19 +111,24 @@
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pawner</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Loan Amount</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Branch</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">By</th>
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
                                 @forelse ($transactions as $transaction)
+                                    @php
+                                        $isVoided = $transaction->isVoided();
+                                    @endphp
                                     <tr 
-                                        class="hover:bg-gray-50 transition-colors cursor-pointer transaction-row"
+                                        class="hover:bg-gray-50 transition-colors cursor-pointer transaction-row {{ $isVoided ? 'opacity-40' : '' }}"
                                         data-item-image="{{ route('images.show', ['path' => $transaction->item_image_path]) }}"
                                         data-pawner-image="{{ route('images.show', ['path' => $transaction->pawner_id_image_path]) }}"
                                         data-pawn-ticket-image="{{ $transaction->pawn_ticket_image_path ? route('images.show', ['path' => $transaction->pawn_ticket_image_path]) : '' }}"
+                                        data-transaction-id="{{ $transaction->id }}"
                                         data-transaction-number="{{ $transaction->transaction_number }}"
+                                        data-is-voided="{{ $isVoided ? '1' : '0' }}"
                                         data-maturity-date="{{ $transaction->maturity_date ? $transaction->maturity_date->format('M d, Y') : '' }}"
                                         data-expiry-date="{{ $transaction->expiry_date ? $transaction->expiry_date->format('M d, Y') : '' }}"
                                         data-auction-sale-date="{{ $transaction->auction_sale_date ? $transaction->auction_sale_date->format('M d, Y') : '' }}"
@@ -285,7 +290,7 @@
                                     id="modalItemImage" 
                                     src="" 
                                     alt="Item Image" 
-                                    class="w-auto h-full "
+                                    class="w-auto h-full"
                                 />
                             </div>
                         </div>
@@ -298,7 +303,7 @@
                                     id="modalPawnerImage" 
                                     src="" 
                                     alt="Pawner ID Image" 
-                                    class="w-full h-auto object-contain max-h-64"
+                                    class="w-auto h-full"
                                 />
                             </div>
                         </div>
@@ -311,7 +316,7 @@
                                     id="modalPawnTicketImage" 
                                     src="" 
                                     alt="Pawn Ticket Image" 
-                                    class="w-full h-auto object-contain max-h-64"
+                                    class="w-auto h-full"
                                 />
                                 <div id="modalPawnTicketPlaceholder" class="hidden p-8 text-center text-gray-400">
                                     <svg class="mx-auto h-12 w-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -325,7 +330,14 @@
                 </div>
             </div>
             
-            <div class="px-6 py-4 bg-gray-50 rounded-b-lg flex justify-end sticky bottom-0">
+            <div class="px-6 py-4 bg-gray-50 rounded-b-lg flex justify-between items-center sticky bottom-0">
+                <button
+                    type="button"
+                    id="voidTransactionBtn"
+                    onclick="openVoidDialog()"
+                    class="px-6 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 hidden">
+                    Void Transaction
+                </button>
                 <button
                     type="button"
                     onclick="closeTransactionImagesModal()"
@@ -333,6 +345,50 @@
                     Close
                 </button>
             </div>
+        </div>
+    </dialog>
+
+    <!-- Void Transaction Dialog -->
+    <dialog id="voidTransactionModal" class="rounded-lg p-0 w-[90vw] max-w-md backdrop:bg-black/50">
+        <div class="bg-white rounded-lg">
+            <div class="p-6 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900">Void Transaction</h3>
+                <p class="mt-1 text-sm text-gray-500">Please provide a reason for voiding this transaction.</p>
+            </div>
+            
+            <form id="voidTransactionForm" method="POST" class="p-6">
+                @csrf
+                <div class="mb-4">
+                    <label for="void_reason" class="block text-sm font-medium text-gray-700 mb-2">
+                        Reason <span class="text-red-500">*</span>
+                    </label>
+                    <textarea 
+                        id="void_reason" 
+                        name="reason" 
+                        rows="4" 
+                        class="block w-full border-gray-300 rounded-md shadow-sm focus:border-red-500 focus:ring-red-500" 
+                        placeholder="Enter the reason for voiding this transaction..."
+                        required
+                        minlength="5"
+                        maxlength="500"
+                    ></textarea>
+                    <p class="mt-1 text-xs text-gray-500">Minimum 5 characters, maximum 500 characters</p>
+                </div>
+                
+                <div class="flex justify-end gap-3">
+                    <button
+                        type="button"
+                        onclick="closeVoidDialog()"
+                        class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+                        Cancel
+                    </button>
+                    <button
+                        type="submit"
+                        class="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                        Void Transaction
+                    </button>
+                </div>
+            </form>
         </div>
     </dialog>
 
@@ -349,7 +405,9 @@
                     const itemImageUrl = this.getAttribute('data-item-image');
                     const pawnerImageUrl = this.getAttribute('data-pawner-image');
                     const pawnTicketImageUrl = this.getAttribute('data-pawn-ticket-image');
+                    const transactionId = this.getAttribute('data-transaction-id');
                     const transactionNumber = this.getAttribute('data-transaction-number');
+                    const isVoided = this.getAttribute('data-is-voided') === '1';
                     const maturityDate = this.getAttribute('data-maturity-date');
                     const expiryDate = this.getAttribute('data-expiry-date');
                     const auctionSaleDate = this.getAttribute('data-auction-sale-date');
@@ -362,7 +420,9 @@
                         itemImageUrl,
                         pawnerImageUrl,
                         pawnTicketImageUrl,
+                        transactionId,
                         transactionNumber,
+                        isVoided,
                         maturityDate,
                         expiryDate,
                         auctionSaleDate,
@@ -375,11 +435,22 @@
             });
         });
 
+        let currentTransactionId = null;
+
         function showTransactionDetails(data) {
             const modal = document.getElementById('transactionImagesModal');
+            currentTransactionId = data.transactionId;
             
             // Set transaction number
             document.getElementById('modalTransactionNumber').textContent = data.transactionNumber;
+            
+            // Show/hide void button based on voided status
+            const voidBtn = document.getElementById('voidTransactionBtn');
+            if (data.isVoided === '1' || data.isVoided === true || data.isVoided === 1) {
+                voidBtn.classList.add('hidden');
+            } else {
+                voidBtn.classList.remove('hidden');
+            }
             
             // Set dates
             document.getElementById('modalMaturityDate').textContent = data.maturityDate || '-';
@@ -426,6 +497,40 @@
         document.getElementById('transactionImagesModal').addEventListener('click', function(event) {
             if (event.target === this) {
                 this.close();
+            }
+        });
+
+        // Void transaction functions
+        function openVoidDialog() {
+            if (!currentTransactionId) {
+                alert('Transaction ID not found');
+                return;
+            }
+            
+            const form = document.getElementById('voidTransactionForm');
+            form.action = `/transactions/${currentTransactionId}/void`;
+            document.getElementById('void_reason').value = '';
+            document.getElementById('voidTransactionModal').showModal();
+        }
+
+        function closeVoidDialog() {
+            document.getElementById('voidTransactionModal').close();
+        }
+
+        // Close void modal when clicking outside
+        document.getElementById('voidTransactionModal').addEventListener('click', function(event) {
+            if (event.target === this) {
+                this.close();
+            }
+        });
+
+        // Handle void form submission
+        document.getElementById('voidTransactionForm').addEventListener('submit', function(e) {
+            const reason = document.getElementById('void_reason').value.trim();
+            if (reason.length < 5) {
+                e.preventDefault();
+                alert('Please provide a reason with at least 5 characters.');
+                return false;
             }
         });
     </script>
