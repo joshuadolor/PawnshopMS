@@ -102,14 +102,18 @@
                         <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50">
                                 <tr>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Transaction #</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Pawn Ticket #
+                                        <br/> 
+                                        Transaction #
+                                    </th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pawner</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Loan Amount</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Branch</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">By</th>
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
@@ -118,10 +122,21 @@
                                         class="hover:bg-gray-50 transition-colors cursor-pointer transaction-row"
                                         data-item-image="{{ route('images.show', ['path' => $transaction->item_image_path]) }}"
                                         data-pawner-image="{{ route('images.show', ['path' => $transaction->pawner_id_image_path]) }}"
+                                        data-pawn-ticket-image="{{ $transaction->pawn_ticket_image_path ? route('images.show', ['path' => $transaction->pawn_ticket_image_path]) : '' }}"
                                         data-transaction-number="{{ $transaction->transaction_number }}"
+                                        data-maturity-date="{{ $transaction->maturity_date ? $transaction->maturity_date->format('M d, Y') : '' }}"
+                                        data-expiry-date="{{ $transaction->expiry_date ? $transaction->expiry_date->format('M d, Y') : '' }}"
+                                        data-auction-sale-date="{{ $transaction->auction_sale_date ? $transaction->auction_sale_date->format('M d, Y') : '' }}"
+                                        data-loan-amount="{{ number_format($transaction->loan_amount, 2) }}"
+                                        data-interest-rate="{{ number_format($transaction->interest_rate, 2) }}"
+                                        data-service-charge="{{ number_format($transaction->service_charge, 2) }}"
+                                        data-net-proceeds="{{ number_format($transaction->net_proceeds, 2) }}"
                                     >
                                         <td class="px-6 py-4 whitespace-nowrap">
-                                            <div class="text-sm font-medium text-gray-900">{{ $transaction->transaction_number }}</div>
+                                            <div class="text-sm font-medium text-gray-900">{{ $transaction->pawn_ticket_number }}</div>
+                                            <div class="text-xs text-gray-500">Pawn Ticket #</div>
+                                            <div class="text-sm mt-4 font-medium text-gray-900">{{ $transaction->transaction_number }}</div>
+                                            <div class="text-xs text-gray-500">Transaction #</div>
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap">
                                             <div class="text-sm text-gray-900">{{ $transaction->created_at->format('M d, Y') }}</div>
@@ -164,11 +179,7 @@
                                             <div class="text-sm text-gray-900">{{ $transaction->branch->name }}</div>
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap">
-                                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                                                {{ $transaction->status === 'active' ? 'bg-green-100 text-green-800' : 
-                                                   ($transaction->status === 'redeemed' ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800') }}">
-                                                {{ ucfirst($transaction->status) }}
-                                            </span>
+                                            <div class="text-sm text-gray-900">{{ $transaction->user->name }}</div>
                                         </td>
                                     </tr>
                                 @empty
@@ -195,13 +206,13 @@
         </div>
     </div>
 
-    <!-- Transaction Images Modal -->
-    <dialog id="transactionImagesModal" class="rounded-lg p-0 w-[90vw] max-w-4xl backdrop:bg-black/50">
-        <div class="bg-white rounded-lg">
-            <div class="p-6 border-b border-gray-200">
+    <!-- Transaction Details Modal -->
+    <dialog id="transactionImagesModal" class="rounded-lg p-0 w-[90vw] max-w-6xl backdrop:bg-black/50">
+        <div class="bg-white rounded-lg max-h-[90vh] overflow-y-auto">
+            <div class="p-6 border-b border-gray-200 sticky top-0 bg-white z-10">
                 <div class="flex justify-between items-center">
                     <h3 class="text-lg font-semibold text-gray-900">
-                        Transaction Images - <span id="modalTransactionNumber" class="text-indigo-600"></span>
+                        Transaction Details - <span id="modalTransactionNumber" class="text-indigo-600"></span>
                     </h3>
                     <button
                         type="button"
@@ -216,36 +227,105 @@
             </div>
             
             <div class="p-6">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <!-- Item Image -->
-                    <div>
-                        <h4 class="text-sm font-medium text-gray-700 mb-2">Item Image</h4>
-                        <div class="border-2 border-gray-200 rounded-lg overflow-hidden">
-                            <img 
-                                id="modalItemImage" 
-                                src="" 
-                                alt="Item Image" 
-                                class="w-full h-auto object-contain max-h-96"
-                            />
+                <!-- Transaction Details Section -->
+                <div class="mb-6">
+                    <h4 class="text-md font-semibold text-gray-900 mb-4">Transaction Information</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <p class="text-xs text-gray-500 uppercase tracking-wide">Maturity Date</p>
+                            <p id="modalMaturityDate" class="text-sm font-medium text-gray-900 mt-1">-</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-500 uppercase tracking-wide">Expiry Redemption Date</p>
+                            <p id="modalExpiryDate" class="text-sm font-medium text-gray-900 mt-1">-</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-500 uppercase tracking-wide">Auction Sale Date</p>
+                            <p id="modalAuctionSaleDate" class="text-sm font-medium text-gray-900 mt-1">-</p>
                         </div>
                     </div>
-                    
-                    <!-- Pawner ID Image -->
-                    <div>
-                        <h4 class="text-sm font-medium text-gray-700 mb-2">Pawner ID/Photo</h4>
-                        <div class="border-2 border-gray-200 rounded-lg overflow-hidden">
-                            <img 
-                                id="modalPawnerImage" 
-                                src="" 
-                                alt="Pawner ID Image" 
-                                class="w-full h-auto object-contain max-h-96"
-                            />
+                </div>
+
+                <!-- Transaction Summary Section -->
+                <div class="mb-6">
+                    <h4 class="text-md font-semibold text-gray-900 mb-4">Transaction Summary</h4>
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                <tr>
+                                    <td class="px-4 py-3 text-sm font-medium text-gray-900">Principal</td>
+                                    <td class="px-4 py-3 text-sm text-gray-900 text-right" id="modalPrincipal">₱0.00</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 text-sm font-medium text-gray-900">Interest</td>
+                                    <td class="px-4 py-3 text-sm text-gray-900 text-right" id="modalInterest">₱0.00</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 text-sm font-medium text-gray-900">Service Charge</td>
+                                    <td class="px-4 py-3 text-sm text-gray-900 text-right" id="modalServiceCharge">₱0.00</td>
+                                </tr>
+                                <tr class="bg-gray-50">
+                                    <td class="px-4 py-3 text-sm font-semibold text-gray-900">Net Proceeds</td>
+                                    <td class="px-4 py-3 text-sm font-semibold text-gray-900 text-right" id="modalNetProceeds">₱0.00</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Images Section -->
+                <div>
+                    <h4 class="text-md font-semibold text-gray-900 mb-4">Images</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <!-- Item Image -->
+                        <div>
+                            <h5 class="text-sm font-medium text-gray-700 mb-2">Item Image</h5>
+                            <div class="border-2 border-gray-200 rounded-lg overflow-hidden">
+                                <img 
+                                    id="modalItemImage" 
+                                    src="" 
+                                    alt="Item Image" 
+                                    class="w-full h-auto object-contain max-h-64"
+                                />
+                            </div>
+                        </div>
+                        
+                        <!-- Pawner ID Image -->
+                        <div>
+                            <h5 class="text-sm font-medium text-gray-700 mb-2">Pawner ID/Photo</h5>
+                            <div class="border-2 border-gray-200 rounded-lg overflow-hidden">
+                                <img 
+                                    id="modalPawnerImage" 
+                                    src="" 
+                                    alt="Pawner ID Image" 
+                                    class="w-full h-auto object-contain max-h-64"
+                                />
+                            </div>
+                        </div>
+                        
+                        <!-- Pawn Ticket Image -->
+                        <div>
+                            <h5 class="text-sm font-medium text-gray-700 mb-2">Pawn Ticket</h5>
+                            <div class="border-2 border-gray-200 rounded-lg overflow-hidden">
+                                <img 
+                                    id="modalPawnTicketImage" 
+                                    src="" 
+                                    alt="Pawn Ticket Image" 
+                                    class="w-full h-auto object-contain max-h-64"
+                                />
+                                <div id="modalPawnTicketPlaceholder" class="hidden p-8 text-center text-gray-400">
+                                    <svg class="mx-auto h-12 w-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                    </svg>
+                                    <p class="mt-2 text-sm">No image available</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
             
-            <div class="px-6 py-4 bg-gray-50 rounded-b-lg flex justify-end">
+            <div class="px-6 py-4 bg-gray-50 rounded-b-lg flex justify-end sticky bottom-0">
                 <button
                     type="button"
                     onclick="closeTransactionImagesModal()"
@@ -268,22 +348,72 @@
                     
                     const itemImageUrl = this.getAttribute('data-item-image');
                     const pawnerImageUrl = this.getAttribute('data-pawner-image');
+                    const pawnTicketImageUrl = this.getAttribute('data-pawn-ticket-image');
                     const transactionNumber = this.getAttribute('data-transaction-number');
+                    const maturityDate = this.getAttribute('data-maturity-date');
+                    const expiryDate = this.getAttribute('data-expiry-date');
+                    const auctionSaleDate = this.getAttribute('data-auction-sale-date');
+                    const loanAmount = this.getAttribute('data-loan-amount');
+                    const interestRate = this.getAttribute('data-interest-rate');
+                    const serviceCharge = this.getAttribute('data-service-charge');
+                    const netProceeds = this.getAttribute('data-net-proceeds');
                     
-                    showTransactionImages(itemImageUrl, pawnerImageUrl, transactionNumber);
+                    showTransactionDetails({
+                        itemImageUrl,
+                        pawnerImageUrl,
+                        pawnTicketImageUrl,
+                        transactionNumber,
+                        maturityDate,
+                        expiryDate,
+                        auctionSaleDate,
+                        loanAmount,
+                        interestRate,
+                        serviceCharge,
+                        netProceeds
+                    });
                 });
             });
         });
 
-        function showTransactionImages(itemImageUrl, pawnerImageUrl, transactionNumber) {
+        function showTransactionDetails(data) {
             const modal = document.getElementById('transactionImagesModal');
-            const modalItemImage = document.getElementById('modalItemImage');
-            const modalPawnerImage = document.getElementById('modalPawnerImage');
-            const modalTransactionNumber = document.getElementById('modalTransactionNumber');
             
-            modalItemImage.src = itemImageUrl;
-            modalPawnerImage.src = pawnerImageUrl;
-            modalTransactionNumber.textContent = transactionNumber;
+            // Set transaction number
+            document.getElementById('modalTransactionNumber').textContent = data.transactionNumber;
+            
+            // Set dates
+            document.getElementById('modalMaturityDate').textContent = data.maturityDate || '-';
+            document.getElementById('modalExpiryDate').textContent = data.expiryDate || '-';
+            document.getElementById('modalAuctionSaleDate').textContent = data.auctionSaleDate || '-';
+            
+            // Calculate and set transaction summary
+            const principal = parseFloat(data.loanAmount.replace(/,/g, '')) || 0;
+            const interestRate = parseFloat(data.interestRate) || 0;
+            const serviceCharge = parseFloat(data.serviceCharge.replace(/,/g, '')) || 0;
+            const interest = principal * (interestRate / 100);
+            const netProceeds = parseFloat(data.netProceeds.replace(/,/g, '')) || 0;
+            
+            document.getElementById('modalPrincipal').textContent = '₱' + principal.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+            document.getElementById('modalInterest').textContent = '₱' + interest.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+            document.getElementById('modalServiceCharge').textContent = '₱' + serviceCharge.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+            document.getElementById('modalNetProceeds').textContent = '₱' + netProceeds.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+            
+            // Set images
+            document.getElementById('modalItemImage').src = data.itemImageUrl;
+            document.getElementById('modalPawnerImage').src = data.pawnerImageUrl;
+            
+            // Handle pawn ticket image (may not exist)
+            const pawnTicketImage = document.getElementById('modalPawnTicketImage');
+            const pawnTicketPlaceholder = document.getElementById('modalPawnTicketPlaceholder');
+            
+            if (data.pawnTicketImageUrl && data.pawnTicketImageUrl.trim() !== '') {
+                pawnTicketImage.src = data.pawnTicketImageUrl;
+                pawnTicketImage.classList.remove('hidden');
+                pawnTicketPlaceholder.classList.add('hidden');
+            } else {
+                pawnTicketImage.classList.add('hidden');
+                pawnTicketPlaceholder.classList.remove('hidden');
+            }
             
             modal.showModal();
         }
