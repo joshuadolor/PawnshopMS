@@ -35,6 +35,8 @@ class SanglaController extends Controller
         // Get config values
         $serviceCharge = Config::getValue('sangla_service_charge', 0);
         $interestPeriod = Config::getValue('sangla_interest_period', 'per_month');
+        $daysBeforeRedemption = (int) Config::getValue('sangla_days_before_redemption', 90);
+        $daysBeforeAuctionSale = (int) Config::getValue('sangla_days_before_auction_sale', 85);
 
         // Calculate default maturity date based on interest period
         $today = now();
@@ -65,6 +67,8 @@ class SanglaController extends Controller
             'defaultMaturityDate' => $defaultMaturityDate,
             'userBranches' => $userBranches,
             'showBranchSelection' => $showBranchSelection,
+            'daysBeforeRedemption' => $daysBeforeRedemption,
+            'daysBeforeAuctionSale' => $daysBeforeAuctionSale,
         ]);
     }
 

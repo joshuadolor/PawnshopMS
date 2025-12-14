@@ -404,6 +404,9 @@
             
             // Config values from backend
             const serviceCharge = {{ $serviceCharge }};
+            const daysBeforeRedemption = {{ $daysBeforeRedemption }};
+            const daysBeforeAuctionSale = {{ $daysBeforeAuctionSale }};
+            const auctionSaleDateInput = document.getElementById('auction_sale_date');
             
             // Function to handle item type specific fields
             function handleItemTypeSpecificFields(itemTypeName) {
@@ -560,15 +563,62 @@
             const today = new Date().toISOString().split('T')[0];
             maturityDateInput.setAttribute('min', today);
             expiryDateInput.setAttribute('min', today);
+            if (auctionSaleDateInput) {
+                auctionSaleDateInput.setAttribute('min', today);
+            }
+            
+            // Calculate dates on page load if maturity date is set
+            if (maturityDateInput.value) {
+                calculateDatesFromMaturity();
+            }
+
+            // Function to calculate dates based on maturity date
+            function calculateDatesFromMaturity() {
+                const maturityDate = maturityDateInput.value;
+                if (maturityDate) {
+                    const maturity = new Date(maturityDate);
+                    
+                    // Calculate expiry redemption date: maturity date + days before redemption
+                    const expiryDate = new Date(maturity);
+                    expiryDate.setDate(expiryDate.getDate() + daysBeforeRedemption);
+                    const expiryDateStr = expiryDate.toISOString().split('T')[0];
+                    
+                    // Calculate auction sale date: expiry redemption date + days before auction sale
+                    const auctionDate = new Date(expiryDate);
+                    auctionDate.setDate(auctionDate.getDate() + daysBeforeAuctionSale);
+                    const auctionDateStr = auctionDate.toISOString().split('T')[0];
+                    
+                    // Update expiry date
+                    expiryDateInput.setAttribute('min', maturityDate);
+                    expiryDateInput.value = expiryDateStr;
+                    
+                    // Update auction sale date
+                    if (auctionSaleDateInput) {
+                        auctionSaleDateInput.setAttribute('min', expiryDateStr);
+                        auctionSaleDateInput.value = auctionDateStr;
+                    }
+                }
+            }
 
             // Update expiry date minimum when maturity date changes
             maturityDateInput.addEventListener('change', function() {
-                const maturityDate = this.value;
-                if (maturityDate) {
-                    expiryDateInput.setAttribute('min', maturityDate);
-                    // If expiry date is before maturity date, update it
-                    if (expiryDateInput.value && expiryDateInput.value < maturityDate) {
-                        expiryDateInput.value = maturityDate;
+                calculateDatesFromMaturity();
+            });
+
+            // Update auction sale date minimum when expiry date changes manually
+            expiryDateInput.addEventListener('change', function() {
+                const expiryDate = this.value;
+                if (expiryDate && auctionSaleDateInput) {
+                    // Calculate auction sale date: expiry redemption date + days before auction sale
+                    const expiry = new Date(expiryDate);
+                    const auctionDate = new Date(expiry);
+                    auctionDate.setDate(auctionDate.getDate() + daysBeforeAuctionSale);
+                    const auctionDateStr = auctionDate.toISOString().split('T')[0];
+                    
+                    auctionSaleDateInput.setAttribute('min', expiryDate);
+                    // Only auto-update if auction date is empty or before the new expiry date
+                    if (!auctionSaleDateInput.value || auctionSaleDateInput.value < expiryDate) {
+                        auctionSaleDateInput.value = auctionDateStr;
                     }
                 }
             });

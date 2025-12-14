@@ -30,6 +30,20 @@ class ConfigSeeder extends Seeder
                 'type' => 'text',
                 'description' => 'Default interest period (per_annum, per_month)',
             ],
+            [
+                'key' => 'sangla_days_before_redemption',
+                'value' => 90,
+                'label' => 'Days before Redemption',
+                'type' => 'number',
+                'description' => 'Days before redemption of Sangla transactions',
+            ],
+            [
+                'key' => 'sangla_days_before_auction_sale',
+                'value' => 85,
+                'label' => 'Days before Auction Sale',
+                'type' => 'number',
+                'description' => 'Days before auction sale of Item',
+            ],
         ];
 
         foreach ($configs as $config) {
