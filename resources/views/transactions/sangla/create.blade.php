@@ -1,7 +1,7 @@
 <x-app-layout>
     <x-slot name="header">
         <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-            Sangla - Process Transaction 1.1
+            Sangla - Process Transaction
         </h2>
     </x-slot>
 

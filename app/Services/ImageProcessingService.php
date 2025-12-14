@@ -44,19 +44,19 @@ class ImageProcessingService
         $filePath = $file->getRealPath();
         
         // Validate file exists and is readable
-        if (!file_exists($filePath)) {
+        if (!\file_exists($filePath)) {
             throw new \Exception('Uploaded file does not exist');
         }
 
-        if (!is_readable($filePath)) {
+        if (!\is_readable($filePath)) {
             throw new \Exception('Uploaded file is not readable');
         }
 
         // Get image info
-        $imageInfo = @getimagesize($filePath);
+        $imageInfo = @\getimagesize($filePath);
         if (!$imageInfo) {
             // Try to get more info about why it failed
-            $fileSize = filesize($filePath);
+            $fileSize = \filesize($filePath);
             $mimeType = $file->getMimeType();
             throw new \Exception(
                 "Invalid or corrupted image file. " .
@@ -94,30 +94,30 @@ class ImageProcessingService
         $sourceImage = $this->createImageResource($file->getRealPath(), $mimeType);
 
         // Create new image with calculated dimensions
-        $newImage = @imagecreatetruecolor($newWidth, $newHeight);
+        $newImage = @\imagecreatetruecolor($newWidth, $newHeight);
         if ($newImage === false) {
-            imagedestroy($sourceImage);
+            \imagedestroy($sourceImage);
             throw new \Exception("Failed to create new image resource with dimensions {$newWidth}x{$newHeight}");
         }
 
         // Preserve transparency for PNG and GIF
         if ($mimeType === 'image/png' || $mimeType === 'image/gif') {
-            imagealphablending($newImage, false);
-            imagesavealpha($newImage, true);
-            $transparent = imagecolorallocatealpha($newImage, 255, 255, 255, 127);
+            \imagealphablending($newImage, false);
+            \imagesavealpha($newImage, true);
+            $transparent = \imagecolorallocatealpha($newImage, 255, 255, 255, 127);
             if ($transparent !== false) {
-                imagefilledrectangle($newImage, 0, 0, $newWidth, $newHeight, $transparent);
+                \imagefilledrectangle($newImage, 0, 0, $newWidth, $newHeight, $transparent);
             }
         } else {
             // For JPEG, fill with white background
-            $white = imagecolorallocate($newImage, 255, 255, 255);
+            $white = \imagecolorallocate($newImage, 255, 255, 255);
             if ($white !== false) {
-                imagefill($newImage, 0, 0, $white);
+                \imagefill($newImage, 0, 0, $white);
             }
         }
 
         // Resize image
-        $resizeResult = @imagecopyresampled(
+        $resizeResult = @\imagecopyresampled(
             $newImage,
             $sourceImage,
             0, 0, 0, 0,
@@ -128,8 +128,8 @@ class ImageProcessingService
         );
 
         if ($resizeResult === false) {
-            imagedestroy($sourceImage);
-            imagedestroy($newImage);
+            \imagedestroy($sourceImage);
+            \imagedestroy($newImage);
             throw new \Exception("Failed to resize image");
         }
 
@@ -148,17 +148,17 @@ class ImageProcessingService
         $fullPath = storage_path('app/private/' . $path);
 
         // Ensure directory exists
-        $dir = dirname($fullPath);
-        if (!is_dir($dir)) {
-            mkdir($dir, 0755, true);
+        $dir = \dirname($fullPath);
+        if (!\is_dir($dir)) {
+            \mkdir($dir, 0755, true);
         }
 
         // Save as JPEG (always convert to JPEG for consistency and smaller file size)
-        imagejpeg($newImage, $fullPath, $this->getJpegQuality());
+        \imagejpeg($newImage, $fullPath, $this->getJpegQuality());
 
         // Clean up memory
-        imagedestroy($sourceImage);
-        imagedestroy($newImage);
+        \imagedestroy($sourceImage);
+        \imagedestroy($newImage);
 
         return $path;
     }
@@ -168,43 +168,43 @@ class ImageProcessingService
      */
     private function createImageResource(string $filePath, string $mimeType)
     {
-        if (!file_exists($filePath)) {
+        if (!\file_exists($filePath)) {
             throw new \Exception('Image file does not exist: ' . $filePath);
         }
 
-        if (!is_readable($filePath)) {
+        if (!\is_readable($filePath)) {
             throw new \Exception('Image file is not readable: ' . $filePath);
         }
 
         $resource = match ($mimeType) {
-            'image/jpeg', 'image/jpg' => @imagecreatefromjpeg($filePath),
-            'image/png' => @imagecreatefrompng($filePath),
-            'image/gif' => @imagecreatefromgif($filePath),
-            'image/webp' => @imagecreatefromwebp($filePath),
+            'image/jpeg', 'image/jpg' => @\imagecreatefromjpeg($filePath),
+            'image/png' => @\imagecreatefrompng($filePath),
+            'image/gif' => @\imagecreatefromgif($filePath),
+            'image/webp' => @\imagecreatefromwebp($filePath),
             default => null,
         };
 
         if ($resource === false || $resource === null) {
             // Try to detect the actual image type from file content
-            $actualMimeType = mime_content_type($filePath);
+            $actualMimeType = \mime_content_type($filePath);
             if ($actualMimeType && $actualMimeType !== $mimeType) {
                 // Retry with actual MIME type
                 $resource = match ($actualMimeType) {
-                    'image/jpeg', 'image/jpg' => @imagecreatefromjpeg($filePath),
-                    'image/png' => @imagecreatefrompng($filePath),
-                    'image/gif' => @imagecreatefromgif($filePath),
-                    'image/webp' => @imagecreatefromwebp($filePath),
+                    'image/jpeg', 'image/jpg' => @\imagecreatefromjpeg($filePath),
+                    'image/png' => @\imagecreatefrompng($filePath),
+                    'image/gif' => @\imagecreatefromgif($filePath),
+                    'image/webp' => @\imagecreatefromwebp($filePath),
                     default => null,
                 };
             }
 
             if ($resource === false || $resource === null) {
-                $error = error_get_last();
+                $error = \error_get_last();
                 $errorMsg = $error ? $error['message'] : 'Unknown error';
                 throw new \Exception(
                     "Failed to create image resource from file. " .
                     "MIME type: {$mimeType}, " .
-                    "File size: " . filesize($filePath) . " bytes, " .
+                    "File size: " . \filesize($filePath) . " bytes, " .
                     "Error: {$errorMsg}"
                 );
             }
