@@ -4,7 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class StoreBranchFinancialTransactionRequest extends FormRequest
+class VoidBranchFinancialTransactionRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
@@ -22,11 +22,7 @@ class StoreBranchFinancialTransactionRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'branch_id' => ['required', 'exists:branches,id'],
-            'type' => ['required', 'in:expense,replenish,transaction'],
-            'description' => ['required', 'string', 'min:3', 'max:500'],
-            'amount' => ['required', 'numeric', 'min:0.01', 'max:999999999.99'],
-            'transaction_date' => ['required', 'date', 'before_or_equal:today'],
+            'reason' => ['required', 'string', 'min:5', 'max:500'],
         ];
     }
 }

@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Transactions\Sangla\StoreSanglaTransactionRequest;
 use App\Services\ImageProcessingService;
 use App\Models\Branch;
+use App\Models\BranchBalance;
+use App\Models\BranchFinancialTransaction;
 use App\Models\Config;
 use App\Models\ItemType;
 use App\Models\Transaction;
@@ -168,6 +170,21 @@ class SanglaController extends Controller
                 if (!empty($tagIds)) {
                     $transaction->tags()->attach($tagIds);
                 }
+            }
+            
+            // Create financial transaction entry for net proceeds (type: transaction, negative for Sangla)
+            if ($netProceeds > 0) {
+                $financialTransaction = BranchFinancialTransaction::create([
+                    'branch_id' => $branchId,
+                    'user_id' => $user->id,
+                    'type' => 'transaction',
+                    'description' => 'Sangla transaction',
+                    'amount' => $netProceeds,
+                    'transaction_date' => now()->toDateString(),
+                ]);
+
+                // Update branch balance (negative for transaction type)
+                BranchBalance::updateBalance($branchId, -$netProceeds);
             }
             
             DB::commit();

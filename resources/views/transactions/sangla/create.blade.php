@@ -440,13 +440,21 @@
 
             // Check if item type with subtypes or tags is selected on page load
             const selectedOption = itemTypeSelect.options[itemTypeSelect.selectedIndex];
-            if (selectedOption) {
-                if (selectedOption.getAttribute('data-has-subtypes') === '1') {
+            if (selectedOption && selectedOption.value) {
+                const hasSubtypes = selectedOption.getAttribute('data-has-subtypes') === '1';
+                const hasTags = selectedOption.getAttribute('data-has-tags') === '1';
+                
+                if (hasSubtypes) {
+                    itemTypeSubtypeContainer.classList.remove('hidden');
+                    itemTypeSubtypeSelect.required = true;
                     updateSubtypeDropdown(selectedOption);
                 }
-                if (selectedOption.getAttribute('data-has-tags') === '1') {
+                
+                if (hasTags) {
+                    itemTypeTagsContainer.classList.remove('hidden');
                     updateTagsCheckboxes(selectedOption);
                 }
+                
                 // Handle item type specific fields on page load
                 handleItemTypeSpecificFields(selectedOption.text);
             }
@@ -520,7 +528,7 @@
                 const tagsJson = option.getAttribute('data-tags');
                 if (tagsJson) {
                     const tags = JSON.parse(tagsJson);
-                    const oldTags = {{ json_encode(old('item_type_tags', [])) }};
+                    const oldTags = @json(old('item_type_tags', []));
                     itemTypeTagsCheckboxes.innerHTML = '';
                     Object.entries(tags).forEach(([id, name]) => {
                         const checkboxContainer = document.createElement('label');

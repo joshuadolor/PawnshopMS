@@ -32,4 +32,21 @@ class Branch extends Model
     {
         return $this->hasMany(BranchFinancialTransaction::class);
     }
+
+    /**
+     * The balance for the branch.
+     */
+    public function balance()
+    {
+        return $this->hasOne(BranchBalance::class);
+    }
+
+    /**
+     * Get the current balance for the branch.
+     */
+    public function getCurrentBalance(): float
+    {
+        $balance = $this->balance;
+        return $balance ? (float) $balance->balance : 0.0;
+    }
 }

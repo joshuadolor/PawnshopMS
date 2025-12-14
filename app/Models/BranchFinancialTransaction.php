@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class BranchFinancialTransaction extends Model
 {
@@ -39,5 +40,20 @@ class BranchFinancialTransaction extends Model
     public function isReplenish(): bool
     {
         return $this->type === 'replenish';
+    }
+
+    public function isTransaction(): bool
+    {
+        return $this->type === 'transaction';
+    }
+
+    public function voided(): HasOne
+    {
+        return $this->hasOne(VoidedBranchFinancialTransaction::class, 'branch_financial_transaction_id');
+    }
+
+    public function isVoided(): bool
+    {
+        return $this->voided !== null;
     }
 }

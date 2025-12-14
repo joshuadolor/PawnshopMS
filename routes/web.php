@@ -40,6 +40,7 @@ Route::middleware('auth')->group(function () {
 
     // Branch Financial Transactions Routes
     Route::resource('branch-financial-transactions', BranchFinancialTransactionController::class)->only(['index', 'create', 'store']);
+    Route::post('/branch-financial-transactions/{branchFinancialTransaction}/void', [BranchFinancialTransactionController::class, 'void'])->name('branch-financial-transactions.void');
 
     // User Management Routes (Admin and Superadmin only)
     Route::middleware(EnsureUserIsAdmin::class)->group(function () {
