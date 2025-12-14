@@ -28,8 +28,21 @@ class StoreSanglaTransactionRequest extends FormRequest
             'last_name' => ['required', 'string', 'max:100'],
             'address' => ['required', 'string'],
             'appraised_value' => ['required', 'numeric', 'min:0'],
-            'loan_amount' => ['required', 'numeric','decimal:1', 'min:0'],
-            'interest_rate' => ['required', 'numeric','decimal:1', 'min:0', 'max:100'],
+            'loan_amount' => [
+                'required',
+                'numeric',
+                'min:0',
+                function ($attribute, $value, $fail) {
+                    if (!preg_match('/^\d+(\.\d{1})?$/', (string) $value)) {
+                        $fail('The '.$attribute.' may have at most 1 decimal place.');
+                    }
+                },
+            ],
+            'interest_rate' => ['required', 'numeric', 'min:0', 'max:100', function ($attribute, $value, $fail) {
+                if (!preg_match('/^\d+(\.\d{1})?$/', (string) $value)) {
+                    $fail('The '.$attribute.' may have at most 1 decimal place.');
+                }
+            }],
             'interest_rate_period' => ['required', 'in:per_annum,per_month,others'],
             'maturity_date' => ['required', 'date', 'after_or_equal:today'],
             'expiry_date' => ['required', 'date', 'after_or_equal:maturity_date'],

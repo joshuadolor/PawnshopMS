@@ -58,8 +58,10 @@ return [
             'prefix_indexes' => true,
             'strict' => true,
             'engine' => null,
+            'timezone' => env('DB_TIMEZONE', '+08:00'), // Philippines timezone (UTC+8)
             'options' => extension_loaded('pdo_mysql') ? array_filter([
                 PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+                PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone='+08:00'", // Set MySQL timezone to Philippines
             ]) : [],
         ],
 
@@ -78,8 +80,10 @@ return [
             'prefix_indexes' => true,
             'strict' => true,
             'engine' => null,
+            'timezone' => env('DB_TIMEZONE', '+08:00'), // Philippines timezone (UTC+8)
             'options' => extension_loaded('pdo_mysql') ? array_filter([
                 PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+                PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone='+08:00'", // Set MariaDB timezone to Philippines
             ]) : [],
         ],
 

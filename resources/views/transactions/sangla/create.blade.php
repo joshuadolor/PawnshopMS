@@ -9,6 +9,18 @@
         <div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-6 text-gray-900">
+                    @if (session('success'))
+                        <div class="mb-4 p-4 bg-green-50 border border-green-200 rounded-md">
+                            <p class="text-sm text-green-800 font-medium">{{ session('success') }}</p>
+                        </div>
+                    @endif
+
+                    @if (session('error'))
+                        <div class="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
+                            <p class="text-sm text-red-800 font-medium">{{ session('error') }}</p>
+                        </div>
+                    @endif
+
                     <form method="POST" action="{{ route('transactions.sangla.store') }}" enctype="multipart/form-data">
                         @csrf
 
@@ -279,6 +291,42 @@
     </div>
 
     <script>
+        // Image capture functions - use event delegation to avoid timing issues
+        document.addEventListener('DOMContentLoaded', function() {
+            // Handle image capture button clicks using event delegation
+            document.addEventListener('click', function(e) {
+                if (e.target.closest('.image-capture-btn')) {
+                    const btn = e.target.closest('.image-capture-btn');
+                    const action = btn.getAttribute('data-action');
+                    const fieldName = btn.getAttribute('data-field');
+                    
+                    if (action === 'camera') {
+                        const input = document.getElementById(fieldName + '_input');
+                        if (input) {
+                            input.setAttribute('capture', 'environment');
+                            input.click();
+                        }
+                    } else if (action === 'select') {
+                        const input = document.getElementById(fieldName + '_input');
+                        if (input) {
+                            input.removeAttribute('capture');
+                            input.click();
+                        }
+                    } else if (action === 'remove') {
+                        const input = document.getElementById(fieldName + '_input');
+                        const preview = document.getElementById(fieldName + '_preview');
+                        const previewContainer = document.getElementById(fieldName + '_preview_container');
+                        const removeBtn = document.getElementById(fieldName + '_remove_btn');
+                        
+                        if (input) input.value = '';
+                        if (preview) preview.src = '';
+                        if (previewContainer) previewContainer.classList.add('hidden');
+                        if (removeBtn) removeBtn.classList.add('hidden');
+                    }
+                }
+            });
+        });
+
         document.addEventListener('DOMContentLoaded', function() {
             const itemTypeSelect = document.getElementById('item_type');
             const customItemTypeContainer = document.getElementById('custom_item_type_container');
@@ -396,7 +444,7 @@
                 const subtypesJson = option.getAttribute('data-subtypes');
                 if (subtypesJson) {
                     const subtypes = JSON.parse(subtypesJson);
-                    const oldSubtype = {{ old('item_type_subtype', 'null') }};
+                    const oldSubtype = @json(old('item_type_subtype'));
                     itemTypeSubtypeSelect.innerHTML = '<option value="">Select a subtype</option>';
                     Object.entries(subtypes).forEach(([id, name]) => {
                         const optionElement = document.createElement('option');
@@ -500,41 +548,8 @@
             
             // Initial calculation if values exist
             calculateAmounts();
-        });
 
-        // Image capture functions (global)
-        function openCamera(fieldName) {
-            const input = document.getElementById(fieldName + '_input');
-            if (input) {
-                // Set capture attribute to use camera
-                input.setAttribute('capture', 'environment');
-                input.click();
-            }
-        }
-
-        function selectImage(fieldName) {
-            const input = document.getElementById(fieldName + '_input');
-            if (input) {
-                // Remove capture attribute to allow file selection
-                input.removeAttribute('capture');
-                input.click();
-            }
-        }
-
-        function removeImage(fieldName) {
-            const input = document.getElementById(fieldName + '_input');
-            const preview = document.getElementById(fieldName + '_preview');
-            const previewContainer = document.getElementById(fieldName + '_preview_container');
-            const removeBtn = document.getElementById(fieldName + '_remove_btn');
-            
-            if (input) input.value = '';
-            if (preview) preview.src = '';
-            if (previewContainer) previewContainer.classList.add('hidden');
-            if (removeBtn) removeBtn.classList.add('hidden');
-        }
-
-        // Handle file selection for image capture components
-        document.addEventListener('DOMContentLoaded', function() {
+            // Handle file selection for image capture components
             ['item_image', 'pawner_id_image'].forEach(function(fieldName) {
                 const input = document.getElementById(fieldName + '_input');
                 if (input) {

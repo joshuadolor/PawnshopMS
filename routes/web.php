@@ -5,6 +5,7 @@ use App\Http\Controllers\Config\ConfigController;
 use App\Http\Controllers\ItemType\ItemTypeController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Transactions\Sangla\SanglaController;
+use App\Http\Controllers\Transactions\TransactionController;
 use App\Http\Controllers\User\UserController;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use Illuminate\Support\Facades\Route;
@@ -24,6 +25,7 @@ Route::middleware('auth')->group(function () {
 
     // Transaction Routes
     Route::prefix('transactions')->name('transactions.')->group(function () {
+        Route::get('/', [TransactionController::class, 'index'])->name('index');
         Route::get('/sangla/create', [SanglaController::class, 'create'])->name('sangla.create');
         Route::post('/sangla', [SanglaController::class, 'store'])->name('sangla.store');
     });
