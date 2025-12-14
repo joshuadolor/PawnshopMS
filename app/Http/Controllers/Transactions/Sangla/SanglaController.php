@@ -12,6 +12,7 @@ use App\Models\Config;
 use App\Models\ItemType;
 use App\Models\Transaction;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
@@ -245,6 +246,234 @@ class SanglaController extends Controller
         $sequenceFormatted = str_pad($sequence, 6, '0', STR_PAD_LEFT);
         
         return "{$prefix}-{$date}-{$sequenceFormatted}";
+    }
+
+    /**
+     * Show the form for adding an additional item to an existing transaction.
+     */
+    public function additionalItem(Request $request): View|RedirectResponse
+    {
+        $pawnTicketNumber = $request->query('pawn_ticket_number');
+        
+        if (!$pawnTicketNumber) {
+            return redirect()->route('transactions.sangla.create')
+                ->with('error', 'Pawn ticket number is required.');
+        }
+
+        // Find the first transaction with this pawn ticket number
+        $firstTransaction = Transaction::where('pawn_ticket_number', $pawnTicketNumber)
+            ->where('type', 'sangla')
+            ->orderBy('created_at', 'asc')
+            ->first();
+
+        if (!$firstTransaction) {
+            return redirect()->route('transactions.sangla.create')
+                ->with('error', 'No transaction found with the provided pawn ticket number.');
+        }
+
+        // Get item types for the form
+        $itemTypes = ItemType::with(['subtypes', 'tags'])
+            ->orderByRaw("CASE WHEN name = 'Jewelry' THEN 0 ELSE 1 END")
+            ->orderBy('name', 'asc')
+            ->get();
+
+        // Get config values (no service charge for additional items)
+        $serviceCharge = 0; // No service charge for additional items
+        $interestPeriod = Config::getValue('sangla_interest_period', 'per_month');
+        $daysBeforeRedemption = (int) Config::getValue('sangla_days_before_redemption', 90);
+        $daysBeforeAuctionSale = (int) Config::getValue('sangla_days_before_auction_sale', 85);
+
+        // Calculate default maturity date based on interest period
+        $today = now();
+        if ($interestPeriod === 'per_annum') {
+            $defaultMaturityDate = $today->copy()->addYear()->format('Y-m-d');
+        } else {
+            $defaultMaturityDate = $today->copy()->addMonth()->format('Y-m-d');
+        }
+
+        // Get user's branches
+        $user = auth()->user();
+        
+        if ($user->isAdminOrSuperAdmin()) {
+            $userBranches = Branch::orderBy('name', 'asc')->get();
+            $showBranchSelection = $userBranches->count() > 1;
+        } else {
+            $userBranches = $user->branches()->orderBy('name', 'asc')->get();
+            $showBranchSelection = $userBranches->count() > 1;
+        }
+
+        return view('transactions.sangla.additional-item', [
+            'firstTransaction' => $firstTransaction,
+            'pawnTicketNumber' => $pawnTicketNumber,
+            'itemTypes' => $itemTypes,
+            'serviceCharge' => $serviceCharge,
+            'interestPeriod' => $interestPeriod,
+            'defaultMaturityDate' => $defaultMaturityDate,
+            'userBranches' => $userBranches,
+            'showBranchSelection' => $showBranchSelection,
+            'daysBeforeRedemption' => $daysBeforeRedemption,
+            'daysBeforeAuctionSale' => $daysBeforeAuctionSale,
+        ]);
+    }
+
+    /**
+     * Store an additional item for an existing transaction.
+     */
+    public function storeAdditionalItem(StoreSanglaTransactionRequest $request): RedirectResponse
+    {
+        $pawnTicketNumber = $request->input('pawn_ticket_number');
+        
+        if (!$pawnTicketNumber) {
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'Pawn ticket number is required.');
+        }
+
+        // Find the first transaction with this pawn ticket number
+        $firstTransaction = Transaction::where('pawn_ticket_number', $pawnTicketNumber)
+            ->where('type', 'sangla')
+            ->orderBy('created_at', 'asc')
+            ->first();
+
+        if (!$firstTransaction) {
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'No transaction found with the provided pawn ticket number.');
+        }
+
+        // For additional items, use the same data from first transaction but with new item details
+        // No service charge for additional items
+        $serviceCharge = 0;
+        
+        $itemImagePath = null;
+        $pawnerIdImagePath = null;
+        $pawnTicketImagePath = null;
+        $newPawnerIdImageUploaded = false;
+        
+        try {
+            $validated = $request->validated();
+            $user = $request->user();
+            
+            // Calculate net proceeds: principal - (principal * interest) - NO service charge
+            $principal = (float) $validated['loan_amount'];
+            $interestRate = (float) $validated['interest_rate'];
+            $interest = $principal * ($interestRate / 100);
+            $netProceeds = $principal - $interest; // No service charge
+            
+            // Generate unique transaction number
+            $transactionNumber = $this->generateTransactionNumber();
+            
+            // Use the same branch as the first transaction
+            $branch = $firstTransaction->branch;
+            $branchId = $branch->id;
+            $branchName = $branch->name;
+            
+            // Store images (with resizing and compression, organized by date and branch name)
+            $itemImagePath = $this->imageService->processAndStore(
+                $request->file('item_image'),
+                'transactions/items',
+                $branchName
+            );
+            
+            // Use pawner ID image from first transaction if not provided
+            if ($request->hasFile('pawner_id_image')) {
+                $pawnerIdImagePath = $this->imageService->processAndStore(
+                    $request->file('pawner_id_image'),
+                    'transactions/pawners',
+                    $branchName
+                );
+                $newPawnerIdImageUploaded = true;
+            } else {
+                // Use the same pawner ID image from first transaction
+                $pawnerIdImagePath = $firstTransaction->pawner_id_image_path;
+            }
+            
+            // Use the same pawn ticket image from first transaction
+            $pawnTicketImagePath = $firstTransaction->pawn_ticket_image_path;
+            
+            DB::beginTransaction();
+            
+            // Create transaction with same pawner info but new item details
+            $transactionData = [
+                'transaction_number' => $transactionNumber,
+                'branch_id' => $branchId,
+                'user_id' => $user->id,
+                'type' => 'sangla',
+                'first_name' => $firstTransaction->first_name, // From first transaction
+                'last_name' => $firstTransaction->last_name, // From first transaction
+                'address' => $firstTransaction->address, // From first transaction
+                'appraised_value' => $validated['appraised_value'],
+                'loan_amount' => $principal,
+                'interest_rate' => $interestRate,
+                'interest_rate_period' => $validated['interest_rate_period'],
+                'maturity_date' => $firstTransaction->maturity_date, // From first transaction
+                'expiry_date' => $firstTransaction->expiry_date, // From first transaction
+                'pawn_ticket_number' => $pawnTicketNumber, // Same pawn ticket number
+                'pawn_ticket_image_path' => $pawnTicketImagePath, // Same image
+                'auction_sale_date' => $firstTransaction->auction_sale_date, // From first transaction
+                'item_type_id' => $validated['item_type'],
+                'item_type_subtype_id' => $validated['item_type_subtype'] ?? null,
+                'custom_item_type' => $validated['custom_item_type'] ?? null,
+                'item_description' => $validated['item_description'],
+                'item_image_path' => $itemImagePath,
+                'pawner_id_image_path' => $pawnerIdImagePath,
+                'grams' => $validated['grams'] ?? null,
+                'orcr_serial' => $validated['orcr_serial'] ?? null,
+                'service_charge' => $serviceCharge, // No service charge
+                'net_proceeds' => max(0, $netProceeds),
+                'status' => 'active',
+            ];
+            
+            $transaction = Transaction::create($transactionData);
+            
+            // Attach tags if provided
+            if ($request->has('item_type_tags') && is_array($request->input('item_type_tags'))) {
+                $tagIds = array_filter($request->input('item_type_tags'), function($id) {
+                    return !empty($id);
+                });
+                if (!empty($tagIds)) {
+                    $transaction->tags()->attach($tagIds);
+                }
+            }
+            
+            // Create financial transaction entry for net proceeds (type: transaction, negative for Sangla)
+            // No service charge, so net proceeds = principal - interest
+            if ($netProceeds > 0) {
+                $financialTransaction = BranchFinancialTransaction::create([
+                    'branch_id' => $branchId,
+                    'user_id' => $user->id,
+                    'transaction_id' => $transaction->id,
+                    'type' => 'transaction',
+                    'description' => 'Sangla transaction (additional item)',
+                    'amount' => $netProceeds,
+                    'transaction_date' => now()->toDateString(),
+                ]);
+
+                // Update branch balance (negative for transaction type)
+                BranchBalance::updateBalance($branchId, -$netProceeds);
+            }
+            
+            DB::commit();
+            
+            return redirect()->route('transactions.index')
+                ->with('success', "Additional item for transaction #{$transactionNumber} created successfully.");
+                
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            // Delete uploaded images if transaction creation failed
+            // Only delete if we created new images (not if we used existing ones)
+            if (isset($itemImagePath)) {
+                Storage::disk('local')->delete($itemImagePath);
+            }
+            if (isset($pawnerIdImagePath) && isset($newPawnerIdImageUploaded) && $newPawnerIdImageUploaded) {
+                Storage::disk('local')->delete($pawnerIdImagePath);
+            }
+            
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'Failed to create additional item: ' . $e->getMessage());
+        }
     }
 }
 

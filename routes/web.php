@@ -36,6 +36,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/{transaction}/void', [TransactionController::class, 'void'])->name('void');
         Route::get('/sangla/create', [SanglaController::class, 'create'])->name('sangla.create');
         Route::post('/sangla', [SanglaController::class, 'store'])->name('sangla.store');
+        Route::get('/sangla/additional-item', [SanglaController::class, 'additionalItem'])->name('sangla.additional-item');
+        Route::post('/sangla/additional-item', [SanglaController::class, 'storeAdditionalItem'])->name('sangla.store-additional-item');
     });
 
     // Branch Financial Transactions Routes

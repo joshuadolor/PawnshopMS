@@ -48,13 +48,19 @@ class StoreSanglaTransactionRequest extends FormRequest
             'expiry_date' => ['required', 'date', 'after_or_equal:maturity_date'],
             'pawn_ticket_number' => ['required', 'string', 'max:100'],
             'pawn_ticket_image' => [
-                'required',
-                'image',
-                'mimes:jpeg,jpg,png',
-                'max:5120', // 5MB max
                 function ($attribute, $value, $fail) {
+                    // Only required for first item, not for additional items
+                    if (!$this->isAdditionalItem() && !$value) {
+                        $fail('The pawn ticket image is required.');
+                    }
                     if ($value && $value->getSize() > 5 * 1024 * 1024) {
                         $fail('The pawn ticket image must not be larger than 5MB.');
+                    }
+                },
+                function ($attribute, $value, $fail) {
+                    // Only validate image type and mimes if a file is provided
+                    if ($value && !in_array($value->getMimeType(), ['image/jpeg', 'image/jpg', 'image/png'])) {
+                        $fail('The pawn ticket image must be a JPEG or PNG image.');
                     }
                 },
             ],
@@ -73,11 +79,11 @@ class StoreSanglaTransactionRequest extends FormRequest
                 },
             ],
             'pawner_id_image' => [
-                'required',
-                'image',
-                'mimes:jpeg,jpg,png',
-                'max:5120', // 5MB max
                 function ($attribute, $value, $fail) {
+                    // Only required for first item, not for additional items
+                    if (!$this->isAdditionalItem() && !$value) {
+                        $fail('The pawner ID image is required.');
+                    }
                     if ($value && $value->getSize() > 5 * 1024 * 1024) {
                         $fail('The pawner ID image must not be larger than 5MB.');
                     }
@@ -260,6 +266,14 @@ class StoreSanglaTransactionRequest extends FormRequest
         $itemType = \App\Models\ItemType::find($itemTypeId);
         
         return $itemType && in_array($itemType->name, ['Vehicles', 'Cars']);
+    }
+
+    /**
+     * Check if this is an additional item request.
+     */
+    private function isAdditionalItem(): bool
+    {
+        return $this->route()->getName() === 'transactions.sangla.store-additional-item';
     }
 }
 

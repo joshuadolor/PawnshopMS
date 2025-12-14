@@ -1,7 +1,7 @@
 <x-app-layout>
     <x-slot name="header">
         <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-            Sangla - Process Transaction
+            Additional Item - Sangla Transaction
         </h2>
     </x-slot>
 
@@ -45,72 +45,38 @@
                         </div>
                     @endif
 
-                    <!-- Additional Item Button -->
-                    <div class="mb-6 flex justify-end">
-                        <button
-                            type="button"
-                            onclick="openAdditionalItemDialog()"
-                            class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-700 focus:bg-indigo-700 active:bg-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150">
-                            Additional Item
-                        </button>
+                    <div class="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
+                        <p class="text-sm text-blue-800">
+                            <strong>Pawn Ticket Number:</strong> {{ $pawnTicketNumber }}
+                        </p>
+                        <p class="text-sm text-blue-700 mt-1">
+                            Adding an additional item to an existing transaction. Pawner information and pawn ticket details are readonly.
+                        </p>
                     </div>
 
-                    <form method="POST" action="{{ route('transactions.sangla.store') }}" enctype="multipart/form-data">
+                    <form method="POST" action="{{ route('transactions.sangla.store-additional-item') }}" enctype="multipart/form-data">
                         @csrf
+                        <input type="hidden" name="pawn_ticket_number" value="{{ $pawnTicketNumber }}">
+                        <input type="hidden" name="branch_id" value="{{ $firstTransaction->branch_id }}">
 
-                        <!-- Pawn Ticket No. -->
-                        <div class="mb-6">
-                            <x-input-label for="pawn_ticket_number" value="Pawn Ticket No." />
-                            <x-text-input 
-                                id="pawn_ticket_number" 
-                                name="pawn_ticket_number" 
-                                type="text" 
-                                class="mt-1 block w-full" 
-                                :value="old('pawn_ticket_number')" 
-                                required 
-                            />
-                            <x-input-error :messages="$errors->get('pawn_ticket_number')" class="mt-2" />
-                        </div>
-
-                        <!-- Branch Selection (only show if user has multiple branches) -->
-                        @if($showBranchSelection)
-                            <div class="mb-6">
-                                <x-input-label for="branch_id" value="Branch" />
-                                <select id="branch_id" name="branch_id" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500" required>
-                                    <option value="">Select a branch</option>
-                                    @foreach($userBranches as $branch)
-                                        <option value="{{ $branch->id }}" {{ old('branch_id') == $branch->id ? 'selected' : '' }}>
-                                            {{ $branch->name }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                                <x-input-error :messages="$errors->get('branch_id')" class="mt-2" />
-                            </div>
-                        @else
-                            <!-- Hidden input for single branch -->
-                            @if($userBranches->count() === 1)
-                                <input type="hidden" name="branch_id" value="{{ $userBranches->first()->id }}">
-                            @endif
-                        @endif
-
-                        <!-- First Name -->
+                        <!-- First Name (Readonly) -->
                         <div>
                             <x-input-label for="first_name" value="First Name" />
-                            <x-text-input id="first_name" name="first_name" type="text" class="mt-1 block w-full" :value="old('first_name')" required autofocus />
+                            <x-text-input id="first_name" name="first_name" type="text" class="mt-1 block w-full bg-gray-100" :value="old('first_name', $firstTransaction->first_name)" readonly />
                             <x-input-error :messages="$errors->get('first_name')" class="mt-2" />
                         </div>
 
-                        <!-- Last Name -->
+                        <!-- Last Name (Readonly) -->
                         <div class="mt-4">
                             <x-input-label for="last_name" value="Last Name" />
-                            <x-text-input id="last_name" name="last_name" type="text" class="mt-1 block w-full" :value="old('last_name')" required />
+                            <x-text-input id="last_name" name="last_name" type="text" class="mt-1 block w-full bg-gray-100" :value="old('last_name', $firstTransaction->last_name)" readonly />
                             <x-input-error :messages="$errors->get('last_name')" class="mt-2" />
                         </div>
 
-                        <!-- Address -->
+                        <!-- Address (Readonly) -->
                         <div class="mt-4">
                             <x-input-label for="address" value="Address" />
-                            <textarea id="address" name="address" rows="3" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500" required>{{ old('address') }}</textarea>
+                            <textarea id="address" name="address" rows="3" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm bg-gray-100" readonly>{{ old('address', $firstTransaction->address) }}</textarea>
                             <x-input-error :messages="$errors->get('address')" class="mt-2" />
                         </div>
 
@@ -158,44 +124,50 @@
                             <x-input-error :messages="$errors->get('interest_rate_period')" class="mt-2" />
                         </div>
 
-                        <!-- Maturity Date -->
+                        <!-- Maturity Date (Readonly) -->
                         <div class="mt-4">
                             <x-input-label for="maturity_date" value="Maturity Date" />
                             <x-text-input 
                                 id="maturity_date" 
                                 name="maturity_date" 
                                 type="date" 
-                                class="mt-1 block w-full" 
-                                :value="old('maturity_date', $defaultMaturityDate)" 
+                                class="mt-1 block w-full bg-gray-100" 
+                                :value="old('maturity_date', $firstTransaction->maturity_date->format('Y-m-d'))" 
+                                readonly 
                                 required 
                             />
+                            <p class="mt-1 text-sm text-gray-500">Maturity date is readonly for additional items.</p>
                             <x-input-error :messages="$errors->get('maturity_date')" class="mt-2" />
                         </div>
 
-                        <!-- Expiry Date of Redemption -->
+                        <!-- Expiry Date of Redemption (Readonly) -->
                         <div class="mt-4">
                             <x-input-label for="expiry_date" value="Expiry Date of Redemption" />
                             <x-text-input 
                                 id="expiry_date" 
                                 name="expiry_date" 
                                 type="date" 
-                                class="mt-1 block w-full" 
-                                :value="old('expiry_date')" 
+                                class="mt-1 block w-full bg-gray-100" 
+                                :value="old('expiry_date', $firstTransaction->expiry_date->format('Y-m-d'))" 
+                                readonly 
                                 required 
                             />
+                            <p class="mt-1 text-sm text-gray-500">Expiry date is readonly for additional items.</p>
                             <x-input-error :messages="$errors->get('expiry_date')" class="mt-2" />
                         </div>
 
-                        <!-- Auction Sale Date -->
+                        <!-- Auction Sale Date (Readonly) -->
                         <div class="mt-4">
                             <x-input-label for="auction_sale_date" value="Auction Sale Date" />
                             <x-text-input 
                                 id="auction_sale_date" 
                                 name="auction_sale_date" 
                                 type="date" 
-                                class="mt-1 block w-full" 
-                                :value="old('auction_sale_date')" 
+                                class="mt-1 block w-full bg-gray-100" 
+                                :value="old('auction_sale_date', $firstTransaction->auction_sale_date ? $firstTransaction->auction_sale_date->format('Y-m-d') : '')" 
+                                readonly 
                             />
+                            <p class="mt-1 text-sm text-gray-500">Auction sale date is readonly for additional items.</p>
                             <x-input-error :messages="$errors->get('auction_sale_date')" class="mt-2" />
                         </div>
 
@@ -221,7 +193,7 @@
                                         </tr>
                                         <tr>
                                             <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">Service Charge</td>
-                                            <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 text-right" id="service_charge_amount">₱{{ number_format($serviceCharge, 2) }}</td>
+                                            <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500 text-right" id="service_charge_amount">₱0.00 <span class="text-xs">(Already deducted on first item)</span></td>
                                         </tr>
                                         <tr class="bg-gray-50 font-semibold">
                                             <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">Net Proceeds</td>
@@ -331,19 +303,45 @@
                             :value="old('item_image')" 
                         />
 
-                        <!-- Pawner ID/Photo -->
-                        <x-image-capture 
-                            name="pawner_id_image" 
-                            label="Pawner ID/Photo" 
-                            :value="old('pawner_id_image')" 
-                        />
+                        <!-- Pawner ID/Photo (Readonly - Show existing image) -->
+                        <div class="mt-4">
+                            <x-input-label value="Pawner ID/Photo" />
+                            @if($firstTransaction->pawner_id_image_path)
+                                <div class="mt-2">
+                                    <img src="{{ route('images.show', $firstTransaction->pawner_id_image_path) }}" alt="Pawner ID Image" class="max-w-xs rounded-md border border-gray-300">
+                                    <p class="mt-1 text-sm text-gray-500">Using the same pawner ID image from the first transaction.</p>
+                                </div>
+                            @else
+                                <p class="mt-1 text-sm text-gray-500">No pawner ID image available.</p>
+                            @endif
+                        </div>
 
-                        <!-- Pawn Ticket Image -->
-                        <x-image-capture 
-                            name="pawn_ticket_image" 
-                            label="Pawn Ticket Image" 
-                            :value="old('pawn_ticket_image')" 
-                        />
+                        <!-- Pawn Ticket No. (Readonly) -->
+                        <div class="mt-4">
+                            <x-input-label for="pawn_ticket_number" value="Pawn Ticket No." />
+                            <x-text-input 
+                                id="pawn_ticket_number" 
+                                name="pawn_ticket_number_display" 
+                                type="text" 
+                                class="mt-1 block w-full bg-gray-100" 
+                                :value="$pawnTicketNumber" 
+                                readonly 
+                            />
+                            <p class="mt-1 text-sm text-gray-500">Pawn ticket number is readonly for additional items.</p>
+                        </div>
+
+                        <!-- Pawn Ticket Image (Readonly - Show existing image) -->
+                        <div class="mt-4">
+                            <x-input-label value="Pawn Ticket Image" />
+                            @if($firstTransaction->pawn_ticket_image_path)
+                                <div class="mt-2">
+                                    <img src="{{ route('images.show', $firstTransaction->pawn_ticket_image_path) }}" alt="Pawn Ticket Image" class="max-w-xs rounded-md border border-gray-300">
+                                    <p class="mt-1 text-sm text-gray-500">Using the same pawn ticket image from the first transaction.</p>
+                                </div>
+                            @else
+                                <p class="mt-1 text-sm text-gray-500">No pawn ticket image available.</p>
+                            @endif
+                        </div>
 
                         <div class="flex items-center justify-end mt-6 gap-4">
                             <a href="{{ route('dashboard') }}" class="text-gray-600 hover:text-gray-900 font-medium">
@@ -358,8 +356,10 @@
     </div>
 
     <script>
-        // Image capture functions - use event delegation to avoid timing issues
         document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOMContentLoaded fired for additional item form');
+            
+            // Image capture functions - use event delegation to avoid timing issues
             // Handle image capture button clicks using event delegation
             document.addEventListener('click', function(e) {
                 if (e.target.closest('.image-capture-btn')) {
@@ -367,17 +367,23 @@
                     const action = btn.getAttribute('data-action');
                     const fieldName = btn.getAttribute('data-field');
                     
+                    console.log('Image capture button clicked:', { action, fieldName });
+                    
                     if (action === 'camera') {
                         const input = document.getElementById(fieldName + '_input');
+                        console.log('Camera action - input found:', !!input);
                         if (input) {
                             input.setAttribute('capture', 'environment');
                             input.click();
                         }
                     } else if (action === 'select') {
                         const input = document.getElementById(fieldName + '_input');
+                        console.log('Select action - input found:', !!input);
                         if (input) {
                             input.removeAttribute('capture');
                             input.click();
+                        } else {
+                            console.error('Input element not found for field:', fieldName);
                         }
                     } else if (action === 'remove') {
                         const input = document.getElementById(fieldName + '_input');
@@ -392,9 +398,7 @@
                     }
                 }
             });
-        });
-
-        document.addEventListener('DOMContentLoaded', function() {
+            
             const itemTypeSelect = document.getElementById('item_type');
             const customItemTypeContainer = document.getElementById('custom_item_type_container');
             const customItemTypeInput = document.getElementById('custom_item_type');
@@ -413,10 +417,18 @@
             const interestRatePeriodInputs = document.querySelectorAll('input[name="interest_rate_period"]');
             
             // Config values from backend
-            const serviceCharge = {{ $serviceCharge }};
-            const daysBeforeRedemption = {{ $daysBeforeRedemption }};
-            const daysBeforeAuctionSale = {{ $daysBeforeAuctionSale }};
+            const serviceCharge = @json($serviceCharge ?? 0);
+            const daysBeforeRedemption = @json($daysBeforeRedemption ?? 90);
+            const daysBeforeAuctionSale = @json($daysBeforeAuctionSale ?? 85);
             const auctionSaleDateInput = document.getElementById('auction_sale_date');
+            
+            console.log('Elements found:', {
+                loanAmountInput: !!loanAmountInput,
+                interestRateInput: !!interestRateInput,
+                principalAmount: !!document.getElementById('principal_amount'),
+                interestAmount: !!document.getElementById('interest_amount'),
+                netProceedsAmount: !!document.getElementById('net_proceeds_amount')
+            });
             
             // Function to handle item type specific fields
             function handleItemTypeSpecificFields(itemTypeName) {
@@ -569,72 +581,16 @@
                 }
             }
 
-            // Set minimum date for maturity date (today)
-            const today = new Date().toISOString().split('T')[0];
-            maturityDateInput.setAttribute('min', today);
-            expiryDateInput.setAttribute('min', today);
-            if (auctionSaleDateInput) {
-                auctionSaleDateInput.setAttribute('min', today);
-            }
-            
-            // Calculate dates on page load if maturity date is set
-            if (maturityDateInput.value) {
-                calculateDatesFromMaturity();
-            }
-
-            // Function to calculate dates based on maturity date
-            function calculateDatesFromMaturity() {
-                const maturityDate = maturityDateInput.value;
-                if (maturityDate) {
-                    const maturity = new Date(maturityDate);
-                    
-                    // Calculate expiry redemption date: maturity date + days before redemption
-                    const expiryDate = new Date(maturity);
-                    expiryDate.setDate(expiryDate.getDate() + daysBeforeRedemption);
-                    const expiryDateStr = expiryDate.toISOString().split('T')[0];
-                    
-                    // Calculate auction sale date: expiry redemption date + days before auction sale
-                    const auctionDate = new Date(expiryDate);
-                    auctionDate.setDate(auctionDate.getDate() + daysBeforeAuctionSale);
-                    const auctionDateStr = auctionDate.toISOString().split('T')[0];
-                    
-                    // Update expiry date
-                    expiryDateInput.setAttribute('min', maturityDate);
-                    expiryDateInput.value = expiryDateStr;
-                    
-                    // Update auction sale date
-                    if (auctionSaleDateInput) {
-                        auctionSaleDateInput.setAttribute('min', expiryDateStr);
-                        auctionSaleDateInput.value = auctionDateStr;
-                    }
-                }
-            }
-
-            // Update expiry date minimum when maturity date changes
-            maturityDateInput.addEventListener('change', function() {
-                calculateDatesFromMaturity();
-            });
-
-            // Update auction sale date minimum when expiry date changes manually
-            expiryDateInput.addEventListener('change', function() {
-                const expiryDate = this.value;
-                if (expiryDate && auctionSaleDateInput) {
-                    // Calculate auction sale date: expiry redemption date + days before auction sale
-                    const expiry = new Date(expiryDate);
-                    const auctionDate = new Date(expiry);
-                    auctionDate.setDate(auctionDate.getDate() + daysBeforeAuctionSale);
-                    const auctionDateStr = auctionDate.toISOString().split('T')[0];
-                    
-                    auctionSaleDateInput.setAttribute('min', expiryDate);
-                    // Only auto-update if auction date is empty or before the new expiry date
-                    if (!auctionSaleDateInput.value || auctionSaleDateInput.value < expiryDate) {
-                        auctionSaleDateInput.value = auctionDateStr;
-                    }
-                }
-            });
+            // Dates are readonly for additional items, so no date calculation is needed
+            // The dates are already populated from the first transaction
 
             // Calculate amounts function
             function calculateAmounts() {
+                if (!loanAmountInput || !interestRateInput) {
+                    console.error('Input elements not found');
+                    return;
+                }
+                
                 const principal = parseFloat(loanAmountInput.value) || 0;
                 const interestRate = parseFloat(interestRateInput.value) || 0;
                 
@@ -643,39 +599,58 @@
                     ? principal * (interestRate / 100) 
                     : 0;
                 
-                // Net proceeds = principal - (principal * interest) - service charge
-                const netProceeds = principal - interest - serviceCharge;
+                // Net proceeds = principal - (principal * interest) - NO service charge for additional items
+                const netProceeds = principal - interest;
                 
                 // Update display
-                document.getElementById('principal_amount').textContent = '₱' + principal.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-                document.getElementById('interest_amount').textContent = '₱' + interest.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-                document.getElementById('service_charge_amount').textContent = '₱' + serviceCharge.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-                document.getElementById('net_proceeds_amount').textContent = '₱' + Math.max(0, netProceeds).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                const principalAmountEl = document.getElementById('principal_amount');
+                const interestAmountEl = document.getElementById('interest_amount');
+                const serviceChargeAmountEl = document.getElementById('service_charge_amount');
+                const netProceedsAmountEl = document.getElementById('net_proceeds_amount');
+                
+                if (principalAmountEl) {
+                    principalAmountEl.textContent = '₱' + principal.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                }
+                if (interestAmountEl) {
+                    interestAmountEl.textContent = '₱' + interest.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                }
+                if (serviceChargeAmountEl) {
+                    serviceChargeAmountEl.innerHTML = '₱0.00 <span class="text-xs">(Already deducted on first item)</span>';
+                }
+                if (netProceedsAmountEl) {
+                    netProceedsAmountEl.textContent = '₱' + Math.max(0, netProceeds).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                }
             }
 
             // Add event listeners for calculation
-            loanAmountInput.addEventListener('input', calculateAmounts);
-            loanAmountInput.addEventListener('change', calculateAmounts);
-            interestRateInput.addEventListener('input', calculateAmounts);
-            interestRateInput.addEventListener('change', calculateAmounts);
+            if (loanAmountInput) {
+                loanAmountInput.addEventListener('input', calculateAmounts);
+                loanAmountInput.addEventListener('change', calculateAmounts);
+            }
+            if (interestRateInput) {
+                interestRateInput.addEventListener('input', calculateAmounts);
+                interestRateInput.addEventListener('change', calculateAmounts);
+            }
             
             // Handle grams input to ensure single decimal place (no rounding)
-            gramsInput.addEventListener('input', function() {
-                let value = this.value;
-                if (value && value.includes('.')) {
-                    const parts = value.split('.');
-                    if (parts[1] && parts[1].length > 1) {
-                        // Truncate to one decimal place (no rounding)
-                        this.value = parts[0] + '.' + parts[1].substring(0, 1);
+            if (gramsInput) {
+                gramsInput.addEventListener('input', function() {
+                    let value = this.value;
+                    if (value && value.includes('.')) {
+                        const parts = value.split('.');
+                        if (parts[1] && parts[1].length > 1) {
+                            // Truncate to one decimal place (no rounding)
+                            this.value = parts[0] + '.' + parts[1].substring(0, 1);
+                        }
                     }
-                }
-            });
+                });
+            }
             
             // Initial calculation if values exist
             calculateAmounts();
 
-            // Handle file selection for image capture components
-            ['item_image', 'pawner_id_image', 'pawn_ticket_image'].forEach(function(fieldName) {
+            // Handle file selection for image capture components (only item_image for additional items)
+            ['item_image'].forEach(function(fieldName) {
                 const input = document.getElementById(fieldName + '_input');
                 if (input) {
                     input.addEventListener('change', function(e) {
@@ -728,14 +703,14 @@
             });
             
             // Add form submission validation
-            const form = document.querySelector('form[action*="sangla.store"]');
+            const form = document.querySelector('form[action*="sangla"]');
             if (form) {
                 form.addEventListener('submit', function(e) {
                     let hasError = false;
                     const errorMessages = [];
                     
-                    // Check all image inputs
-                    ['item_image', 'pawner_id_image', 'pawn_ticket_image'].forEach(function(fieldName) {
+                    // Check all image inputs (only item_image for additional items)
+                    ['item_image'].forEach(function(fieldName) {
                         const input = document.getElementById(fieldName + '_input');
                         if (input && input.files.length > 0) {
                             const file = input.files[0];
@@ -762,84 +737,7 @@
                 });
             }
         });
-
-        // Additional Item Dialog
-        function openAdditionalItemDialog() {
-            document.getElementById('additionalItemModal').showModal();
-        }
-
-        function closeAdditionalItemDialog() {
-            document.getElementById('additionalItemModal').close();
-            document.getElementById('pawn_ticket_number_search').value = '';
-        }
-
-        function searchPawnTicket() {
-            const pawnTicketNumber = document.getElementById('pawn_ticket_number_search').value.trim();
-            if (!pawnTicketNumber) {
-                alert('Please enter a pawn ticket number.');
-                return;
-            }
-
-            // Redirect to additional item page with pawn ticket number
-            window.location.href = '{{ route("transactions.sangla.additional-item") }}?pawn_ticket_number=' + encodeURIComponent(pawnTicketNumber);
-        }
-
-        // Close modal when clicking outside
-        document.getElementById('additionalItemModal')?.addEventListener('click', function(event) {
-            if (event.target === this) {
-                this.close();
-            }
-        });
-
-        // Allow Enter key to submit
-        document.getElementById('pawn_ticket_number_search')?.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                searchPawnTicket();
-            }
-        });
     </script>
 
-    <!-- Additional Item Dialog -->
-    <dialog id="additionalItemModal" class="rounded-lg p-0 w-[90vw] max-w-md backdrop:bg-black/50">
-        <div class="bg-white rounded-lg">
-            <div class="p-6 border-b border-gray-200">
-                <h3 class="text-lg font-semibold text-gray-900">Add Additional Item</h3>
-                <p class="mt-1 text-sm text-gray-500">Enter the pawn ticket number to add an additional item to an existing transaction.</p>
-            </div>
-            
-            <div class="p-6">
-                <div class="mb-4">
-                    <label for="pawn_ticket_number_search" class="block text-sm font-medium text-gray-700 mb-2">
-                        Pawn Ticket Number
-                    </label>
-                    <input
-                        type="text"
-                        id="pawn_ticket_number_search"
-                        name="pawn_ticket_number_search"
-                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                        placeholder="Enter pawn ticket number"
-                        required
-                        autofocus
-                    />
-                </div>
-                
-                <div class="flex justify-end gap-3">
-                    <button
-                        type="button"
-                        onclick="closeAdditionalItemDialog()"
-                        class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
-                        Cancel
-                    </button>
-                    <button
-                        type="button"
-                        onclick="searchPawnTicket()"
-                        class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                        Continue
-                    </button>
-                </div>
-            </div>
-        </div>
-    </dialog>
 </x-app-layout>
 

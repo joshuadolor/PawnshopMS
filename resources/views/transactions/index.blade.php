@@ -178,7 +178,13 @@
                                             </span>
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap">
+                                            <div class="text-xs text-gray-500">Principal:</div>
                                             <div class="text-sm font-medium text-gray-900">₱{{ number_format($transaction->loan_amount, 2) }}</div>
+
+                                            @if($transaction->type === 'sangla')
+                                                <div class="mt-2 text-xs text-gray-500">Net Proceeds:</div>
+                                                <div class="text-sm text-red-700 font-medium">₱{{ number_format($transaction->net_proceeds, 2) }}</div>
+                                            @endif
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap">
                                             <div class="text-sm text-gray-900">{{ $transaction->branch->name }}</div>
