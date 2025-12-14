@@ -1,7 +1,7 @@
 <x-app-layout>
     <x-slot name="header">
         <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-            Sangla - Process Transaction 1.1
+            Sangla - Process Transaction 1.2
         </h2>
     </x-slot>
 
@@ -778,8 +778,8 @@
                             previewContainer.classList.remove('hidden');
                         }
                         
-                        // Compress image: max 1920x1920, quality 0.85
-                        compressImage(file, 1920, 1920, 0.85)
+                            // Compress image: max 1280x1280, quality 0.75 (more aggressive compression)
+                            compressImage(file, 1280, 1280, 0.75)
                             .then(function(compressedFile) {
                                 console.log('Compression complete:', {
                                     original: (file.size / 1024 / 1024).toFixed(2) + 'MB',
