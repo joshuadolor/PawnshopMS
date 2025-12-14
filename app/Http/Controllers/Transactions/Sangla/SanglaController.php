@@ -4,18 +4,22 @@ namespace App\Http\Controllers\Transactions\Sangla;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Transactions\Sangla\StoreSanglaTransactionRequest;
+use App\Services\ImageProcessingService;
 use App\Models\Branch;
 use App\Models\Config;
 use App\Models\ItemType;
 use App\Models\Transaction;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
 class SanglaController extends Controller
 {
+    public function __construct(
+        private ImageProcessingService $imageService
+    ) {
+    }
     /**
      * Show the form for creating a new Sangla transaction.
      */
@@ -70,72 +74,54 @@ class SanglaController extends Controller
         $itemImagePath = null;
         $pawnerIdImagePath = null;
         
-        Log::info('=== TRANSACTION STORE METHOD CALLED ===');
-        Log::info('Request data:', $request->all());
-        
         try {
-            Log::info('Step 1: Starting validation');
             $validated = $request->validated();
-            Log::info('Step 2: Validation passed', ['validated' => $validated]);
-            
             $user = $request->user();
-            Log::info('Step 3: User retrieved', ['user_id' => $user->id, 'user_name' => $user->name]);
             
             // Get service charge from config
             $serviceCharge = Config::getValue('sangla_service_charge', 0);
-            Log::info('Step 4: Service charge retrieved', ['service_charge' => $serviceCharge]);
             
             // Calculate net proceeds: principal - (principal * interest) - service charge
             $principal = (float) $validated['loan_amount'];
             $interestRate = (float) $validated['interest_rate'];
             $interest = $principal * ($interestRate / 100);
             $netProceeds = $principal - $interest - $serviceCharge;
-            Log::info('Step 5: Calculated amounts', [
-                'principal' => $principal,
-                'interest_rate' => $interestRate,
-                'interest' => $interest,
-                'net_proceeds' => $netProceeds
-            ]);
             
             // Generate unique transaction number
             $transactionNumber = $this->generateTransactionNumber();
-            Log::info('Step 6: Transaction number generated', ['transaction_number' => $transactionNumber]);
             
-            // Get branch ID
+            // Get branch ID and name
+            $branch = null;
             if (isset($validated['branch_id'])) {
-                $branchId = $validated['branch_id'];
-                Log::info('Step 7: Branch ID from validated data', ['branch_id' => $branchId]);
+                $branch = Branch::find($validated['branch_id']);
             } else {
-                $userBranch = $user->branches()->first();
-                if (!$userBranch) {
-                    Log::error('Step 7: No branch assigned to user');
-                    return redirect()->back()
-                        ->withInput()
-                        ->with('error', 'No branch assigned. Please contact an administrator.');
-                }
-                $branchId = $userBranch->id;
-                Log::info('Step 7: Branch ID from user branches', ['branch_id' => $branchId]);
+                $branch = $user->branches()->first();
             }
             
-            // Store images
-            Log::info('Step 8: Storing images');
-            $itemImagePath = $request->file('item_image')->store('transactions/items', 'public');
-            $pawnerIdImagePath = $request->file('pawner_id_image')->store('transactions/pawners', 'public');
-            Log::info('Step 9: Images stored', [
-                'item_image_path' => $itemImagePath,
-                'pawner_id_image_path' => $pawnerIdImagePath
-            ]);
+            if (!$branch) {
+                return redirect()->back()
+                    ->withInput()
+                    ->with('error', 'No branch assigned. Please contact an administrator.');
+            }
             
-            Log::info('Step 10: Starting database transaction');
+            $branchId = $branch->id;
+            $branchName = $branch->name;
+            
+            // Store images (with resizing and compression, organized by date and branch name)
+            $itemImagePath = $this->imageService->processAndStore(
+                $request->file('item_image'),
+                'transactions/items',
+                $branchName
+            );
+            $pawnerIdImagePath = $this->imageService->processAndStore(
+                $request->file('pawner_id_image'),
+                'transactions/pawners',
+                $branchName
+            );
+            
             DB::beginTransaction();
             
             // Create transaction
-            Log::info('Step 11: Creating transaction record', [
-                'transaction_number' => $transactionNumber,
-                'branch_id' => $branchId,
-                'user_id' => $user->id
-            ]);
-            
             $transactionData = [
                 'transaction_number' => $transactionNumber,
                 'branch_id' => $branchId,
@@ -163,10 +149,7 @@ class SanglaController extends Controller
                 'status' => 'active',
             ];
             
-            Log::info('Step 12: Transaction data prepared', $transactionData);
-            
             $transaction = Transaction::create($transactionData);
-            Log::info('Step 13: Transaction created successfully', ['transaction_id' => $transaction->id]);
             
             // Attach tags if provided
             if ($request->has('item_type_tags') && is_array($request->input('item_type_tags'))) {
@@ -174,20 +157,11 @@ class SanglaController extends Controller
                     return !empty($id);
                 });
                 if (!empty($tagIds)) {
-                    Log::info('Step 14: Attaching tags', ['tag_ids' => $tagIds]);
                     $transaction->tags()->attach($tagIds);
-                    Log::info('Step 15: Tags attached successfully');
                 }
             }
             
-            Log::info('Step 16: Committing database transaction');
             DB::commit();
-            Log::info('Step 17: Database transaction committed successfully');
-            
-            Log::info('=== TRANSACTION CREATED SUCCESSFULLY ===', [
-                'transaction_id' => $transaction->id,
-                'transaction_number' => $transactionNumber
-            ]);
             
             return redirect()->route('transactions.index')
                 ->with('success', "Sangla transaction #{$transactionNumber} created successfully.");
@@ -197,17 +171,11 @@ class SanglaController extends Controller
             
             // Delete uploaded images if transaction creation failed
             if (isset($itemImagePath)) {
-                Storage::disk('public')->delete($itemImagePath);
+                Storage::disk('local')->delete($itemImagePath);
             }
             if (isset($pawnerIdImagePath)) {
-                Storage::disk('public')->delete($pawnerIdImagePath);
+                Storage::disk('local')->delete($pawnerIdImagePath);
             }
-            
-            // Log the error for debugging
-            Log::error('Transaction creation failed: ' . $e->getMessage(), [
-                'exception' => $e,
-                'trace' => $e->getTraceAsString(),
-            ]);
             
             return redirect()->back()
                 ->withInput()

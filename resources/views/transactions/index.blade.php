@@ -116,8 +116,8 @@
                                 @forelse ($transactions as $transaction)
                                     <tr 
                                         class="hover:bg-gray-50 transition-colors cursor-pointer transaction-row"
-                                        data-item-image="{{ asset('storage/' . $transaction->item_image_path) }}"
-                                        data-pawner-image="{{ asset('storage/' . $transaction->pawner_id_image_path) }}"
+                                        data-item-image="{{ route('images.show', ['path' => $transaction->item_image_path]) }}"
+                                        data-pawner-image="{{ route('images.show', ['path' => $transaction->pawner_id_image_path]) }}"
                                         data-transaction-number="{{ $transaction->transaction_number }}"
                                     >
                                         <td class="px-6 py-4 whitespace-nowrap">

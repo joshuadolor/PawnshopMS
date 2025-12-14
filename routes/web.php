@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Branch\BranchController;
 use App\Http\Controllers\Config\ConfigController;
+use App\Http\Controllers\ImageController;
 use App\Http\Controllers\ItemType\ItemTypeController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Transactions\Sangla\SanglaController;
@@ -22,6 +23,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+
+    // Image serving route (authenticated)
+    Route::get('/images/{path}', [ImageController::class, 'show'])
+        ->where('path', '.*')
+        ->name('images.show');
 
     // Transaction Routes
     Route::prefix('transactions')->name('transactions.')->group(function () {

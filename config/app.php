@@ -123,4 +123,20 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Image Processing Configuration
+    |--------------------------------------------------------------------------
+    |
+    | These options control how images are processed and stored.
+    | You can override these values in your .env file.
+    |
+    */
+
+    'image' => [
+        'max_width' => env('IMAGE_MAX_WIDTH', 1024),
+        'max_height' => env('IMAGE_MAX_HEIGHT', 1024),
+        'jpeg_quality' => env('IMAGE_JPEG_QUALITY', 80),
+    ],
+
 ];
