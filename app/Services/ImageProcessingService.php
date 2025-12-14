@@ -176,26 +176,32 @@ class ImageProcessingService
             throw new \Exception('Image file is not readable: ' . $filePath);
         }
 
-        $resource = match ($mimeType) {
-            'image/jpeg', 'image/jpg' => @\imagecreatefromjpeg($filePath),
-            'image/png' => @\imagecreatefrompng($filePath),
-            'image/gif' => @\imagecreatefromgif($filePath),
-            'image/webp' => @\imagecreatefromwebp($filePath),
-            default => null,
-        };
+        // Use if/else instead of match to ensure backslash works correctly
+        $resource = null;
+        if ($mimeType === 'image/jpeg' || $mimeType === 'image/jpg') {
+            $resource = @\imagecreatefromjpeg($filePath);
+        } elseif ($mimeType === 'image/png') {
+            $resource = @\imagecreatefrompng($filePath);
+        } elseif ($mimeType === 'image/gif') {
+            $resource = @\imagecreatefromgif($filePath);
+        } elseif ($mimeType === 'image/webp') {
+            $resource = @\imagecreatefromwebp($filePath);
+        }
 
         if ($resource === false || $resource === null) {
             // Try to detect the actual image type from file content
             $actualMimeType = \mime_content_type($filePath);
             if ($actualMimeType && $actualMimeType !== $mimeType) {
                 // Retry with actual MIME type
-                $resource = match ($actualMimeType) {
-                    'image/jpeg', 'image/jpg' => @\imagecreatefromjpeg($filePath),
-                    'image/png' => @\imagecreatefrompng($filePath),
-                    'image/gif' => @\imagecreatefromgif($filePath),
-                    'image/webp' => @\imagecreatefromwebp($filePath),
-                    default => null,
-                };
+                if ($actualMimeType === 'image/jpeg' || $actualMimeType === 'image/jpg') {
+                    $resource = @\imagecreatefromjpeg($filePath);
+                } elseif ($actualMimeType === 'image/png') {
+                    $resource = @\imagecreatefrompng($filePath);
+                } elseif ($actualMimeType === 'image/gif') {
+                    $resource = @\imagecreatefromgif($filePath);
+                } elseif ($actualMimeType === 'image/webp') {
+                    $resource = @\imagecreatefromwebp($filePath);
+                }
             }
 
             if ($resource === false || $resource === null) {
