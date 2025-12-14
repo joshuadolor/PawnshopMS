@@ -46,10 +46,43 @@ class StoreSanglaTransactionRequest extends FormRequest
             'interest_rate_period' => ['required', 'in:per_annum,per_month,others'],
             'maturity_date' => ['required', 'date', 'after_or_equal:today'],
             'expiry_date' => ['required', 'date', 'after_or_equal:maturity_date'],
+            'pawn_ticket_number' => ['required', 'string', 'max:100'],
+            'pawn_ticket_image' => [
+                'required',
+                'image',
+                'mimes:jpeg,jpg,png',
+                'max:5120', // 5MB max
+                function ($attribute, $value, $fail) {
+                    if ($value && $value->getSize() > 5 * 1024 * 1024) {
+                        $fail('The pawn ticket image must not be larger than 5MB.');
+                    }
+                },
+            ],
+            'auction_sale_date' => ['nullable', 'date', 'after_or_equal:expiry_date'],
             'item_type' => ['required', 'exists:item_types,id'],
             'item_description' => ['required', 'string'],
-            'item_image' => ['required', 'image', 'mimes:jpeg,jpg,png', 'max:5120'], // 5MB max
-            'pawner_id_image' => ['required', 'image', 'mimes:jpeg,jpg,png', 'max:5120'], // 5MB max
+            'item_image' => [
+                'required',
+                'image',
+                'mimes:jpeg,jpg,png',
+                'max:5120', // 5MB max
+                function ($attribute, $value, $fail) {
+                    if ($value && $value->getSize() > 5 * 1024 * 1024) {
+                        $fail('The item image must not be larger than 5MB.');
+                    }
+                },
+            ],
+            'pawner_id_image' => [
+                'required',
+                'image',
+                'mimes:jpeg,jpg,png',
+                'max:5120', // 5MB max
+                function ($attribute, $value, $fail) {
+                    if ($value && $value->getSize() > 5 * 1024 * 1024) {
+                        $fail('The pawner ID image must not be larger than 5MB.');
+                    }
+                },
+            ],
         ];
 
         // Admins and superadmins can select any branch

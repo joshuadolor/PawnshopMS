@@ -21,6 +21,30 @@
                         </div>
                     @endif
 
+                    @if ($errors->any())
+                        <div class="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
+                            <div class="flex">
+                                <div class="flex-shrink-0">
+                                    <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                                    </svg>
+                                </div>
+                                <div class="ml-3">
+                                    <h3 class="text-sm font-medium text-red-800">
+                                        There were {{ $errors->count() }} error(s) with your submission:
+                                    </h3>
+                                    <div class="mt-2 text-sm text-red-700">
+                                        <ul class="list-disc list-inside space-y-1">
+                                            @foreach ($errors->all() as $error)
+                                                <li>{{ $error }}</li>
+                                            @endforeach
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    @endif
+
                     <form method="POST" action="{{ route('transactions.sangla.store') }}" enctype="multipart/form-data">
                         @csrf
 
@@ -138,6 +162,18 @@
                             <x-input-error :messages="$errors->get('expiry_date')" class="mt-2" />
                         </div>
 
+                        <!-- Auction Sale Date -->
+                        <div class="mt-4">
+                            <x-input-label for="auction_sale_date" value="Auction Sale Date" />
+                            <x-text-input 
+                                id="auction_sale_date" 
+                                name="auction_sale_date" 
+                                type="date" 
+                                class="mt-1 block w-full" 
+                                :value="old('auction_sale_date')" 
+                            />
+                            <x-input-error :messages="$errors->get('auction_sale_date')" class="mt-2" />
+                        </div>
 
                         <!-- Calculation Table -->
                         <div class="mt-4">
@@ -276,6 +312,27 @@
                             name="pawner_id_image" 
                             label="Pawner ID/Photo" 
                             :value="old('pawner_id_image')" 
+                        />
+
+                        <!-- Pawn Ticket No. -->
+                        <div class="mt-4">
+                            <x-input-label for="pawn_ticket_number" value="Pawn Ticket No." />
+                            <x-text-input 
+                                id="pawn_ticket_number" 
+                                name="pawn_ticket_number" 
+                                type="text" 
+                                class="mt-1 block w-full" 
+                                :value="old('pawn_ticket_number')" 
+                                required 
+                            />
+                            <x-input-error :messages="$errors->get('pawn_ticket_number')" class="mt-2" />
+                        </div>
+
+                        <!-- Pawn Ticket Image -->
+                        <x-image-capture 
+                            name="pawn_ticket_image" 
+                            label="Pawn Ticket Image" 
+                            :value="old('pawn_ticket_image')" 
                         />
 
                         <div class="flex items-center justify-end mt-6 gap-4">
@@ -550,12 +607,38 @@
             calculateAmounts();
 
             // Handle file selection for image capture components
-            ['item_image', 'pawner_id_image'].forEach(function(fieldName) {
+            ['item_image', 'pawner_id_image', 'pawn_ticket_image'].forEach(function(fieldName) {
                 const input = document.getElementById(fieldName + '_input');
                 if (input) {
                     input.addEventListener('change', function(e) {
                         const file = e.target.files[0];
                         if (file) {
+                            // Validate file size (5MB = 5 * 1024 * 1024 bytes)
+                            const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+                            if (file.size > maxSize) {
+                                alert('File size exceeds 5MB limit. Please choose a smaller image.');
+                                this.value = ''; // Clear the input
+                                
+                                // Hide preview if it exists
+                                const preview = document.getElementById(fieldName + '_preview');
+                                const previewContainer = document.getElementById(fieldName + '_preview_container');
+                                const removeBtn = document.getElementById(fieldName + '_remove_btn');
+                                
+                                if (preview) preview.src = '';
+                                if (previewContainer) previewContainer.classList.add('hidden');
+                                if (removeBtn) removeBtn.classList.add('hidden');
+                                
+                                return;
+                            }
+                            
+                            // Validate file type
+                            const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+                            if (!allowedTypes.includes(file.type)) {
+                                alert('Invalid file type. Please upload a JPEG or PNG image.');
+                                this.value = '';
+                                return;
+                            }
+                            
                             const reader = new FileReader();
                             reader.onload = function(event) {
                                 const preview = document.getElementById(fieldName + '_preview');
@@ -566,11 +649,50 @@
                                 if (previewContainer) previewContainer.classList.remove('hidden');
                                 if (removeBtn) removeBtn.classList.remove('hidden');
                             };
+                            reader.onerror = function() {
+                                alert('Error reading file. Please try again.');
+                                input.value = '';
+                            };
                             reader.readAsDataURL(file);
                         }
                     });
                 }
             });
+            
+            // Add form submission validation
+            const form = document.querySelector('form[action*="sangla.store"]');
+            if (form) {
+                form.addEventListener('submit', function(e) {
+                    let hasError = false;
+                    const errorMessages = [];
+                    
+                    // Check all image inputs
+                    ['item_image', 'pawner_id_image', 'pawn_ticket_image'].forEach(function(fieldName) {
+                        const input = document.getElementById(fieldName + '_input');
+                        if (input && input.files.length > 0) {
+                            const file = input.files[0];
+                            const maxSize = 5 * 1024 * 1024; // 5MB
+                            
+                            if (file.size > maxSize) {
+                                hasError = true;
+                                errorMessages.push(fieldName.replace(/_/g, ' ') + ' exceeds 5MB limit');
+                            }
+                            
+                            const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+                            if (!allowedTypes.includes(file.type)) {
+                                hasError = true;
+                                errorMessages.push(fieldName.replace(/_/g, ' ') + ' must be a JPEG or PNG image');
+                            }
+                        }
+                    });
+                    
+                    if (hasError) {
+                        e.preventDefault();
+                        alert('Please fix the following errors:\n\n' + errorMessages.join('\n'));
+                        return false;
+                    }
+                });
+            }
         });
     </script>
 </x-app-layout>

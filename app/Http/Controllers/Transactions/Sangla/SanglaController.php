@@ -73,6 +73,7 @@ class SanglaController extends Controller
     {
         $itemImagePath = null;
         $pawnerIdImagePath = null;
+        $pawnTicketImagePath = null;
         
         try {
             $validated = $request->validated();
@@ -118,6 +119,11 @@ class SanglaController extends Controller
                 'transactions/pawners',
                 $branchName
             );
+            $pawnTicketImagePath = $this->imageService->processAndStore(
+                $request->file('pawn_ticket_image'),
+                'transactions/pawn-tickets',
+                $branchName
+            );
             
             DB::beginTransaction();
             
@@ -136,6 +142,9 @@ class SanglaController extends Controller
                 'interest_rate_period' => $validated['interest_rate_period'],
                 'maturity_date' => $validated['maturity_date'],
                 'expiry_date' => $validated['expiry_date'],
+                'pawn_ticket_number' => $validated['pawn_ticket_number'],
+                'pawn_ticket_image_path' => $pawnTicketImagePath,
+                'auction_sale_date' => $validated['auction_sale_date'] ?? null,
                 'item_type_id' => $validated['item_type'],
                 'item_type_subtype_id' => $validated['item_type_subtype'] ?? null,
                 'custom_item_type' => $validated['custom_item_type'] ?? null,
@@ -176,6 +185,9 @@ class SanglaController extends Controller
             if (isset($pawnerIdImagePath)) {
                 Storage::disk('local')->delete($pawnerIdImagePath);
             }
+            if (isset($pawnTicketImagePath)) {
+                Storage::disk('local')->delete($pawnTicketImagePath);
+            }
             
             return redirect()->back()
                 ->withInput()
@@ -185,11 +197,11 @@ class SanglaController extends Controller
     
     /**
      * Generate a unique transaction number.
-     * Format: SANGLA-YYYYMMDD-XXXXXX (where XXXXXX is a 6-digit sequential number)
+     * Format: SNGL-YYYYMMDD-XXXXXX (where XXXXXX is a 6-digit sequential number)
      */
     private function generateTransactionNumber(): string
     {
-        $prefix = 'SANGLA';
+        $prefix = 'SNGL';
         $date = now()->format('Ymd');
         
         // Get the last transaction number for today

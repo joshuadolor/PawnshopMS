@@ -2,6 +2,7 @@
 
 <div class="mt-4">
     <x-input-label :for="$name" :value="$label" />
+    <p class="mt-1 text-xs text-gray-500">Maximum file size: 5MB (JPEG or PNG only)</p>
     
     <div class="mt-2">
         <!-- Hidden file input -->
