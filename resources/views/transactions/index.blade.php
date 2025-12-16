@@ -128,6 +128,7 @@
                                         data-pawn-ticket-image="{{ $transaction->pawn_ticket_image_path ? route('images.show', ['path' => $transaction->pawn_ticket_image_path]) : '' }}"
                                         data-transaction-id="{{ $transaction->id }}"
                                         data-transaction-number="{{ $transaction->transaction_number }}"
+                                        data-transaction-date="{{ $transaction->created_at->format('M d, Y') }} {{ $transaction->created_at->format('h:i A') }}"
                                         data-is-voided="{{ $isVoided ? '1' : '0' }}"
                                         data-maturity-date="{{ $transaction->maturity_date ? $transaction->maturity_date->format('M d, Y') : '' }}"
                                         data-expiry-date="{{ $transaction->expiry_date ? $transaction->expiry_date->format('M d, Y') : '' }}"
@@ -241,6 +242,12 @@
                 <!-- Transaction Details Section -->
                 <div class="mb-6">
                     <h4 class="text-md font-semibold text-gray-900 mb-4">Transaction Information</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <div>
+                            <p class="text-xs text-gray-500 uppercase tracking-wide">Transaction Date</p>
+                            <p id="modalTransactionDate" class="text-sm font-medium text-gray-900 mt-1">-</p>
+                        </div>
+                    </div>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
                             <p class="text-xs text-gray-500 uppercase tracking-wide">Maturity Date</p>
@@ -263,6 +270,7 @@
                     <div class="bg-gray-50 rounded-lg p-4">
                         <table class="min-w-full divide-y divide-gray-200">
                             <tbody class="bg-white divide-y divide-gray-200">
+                                
                                 <tr>
                                     <td class="px-4 py-3 text-sm font-medium text-gray-900">Principal</td>
                                     <td class="px-4 py-3 text-sm text-gray-900 text-right" id="modalPrincipal">₱0.00</td>
@@ -413,6 +421,7 @@
                     const pawnTicketImageUrl = this.getAttribute('data-pawn-ticket-image');
                     const transactionId = this.getAttribute('data-transaction-id');
                     const transactionNumber = this.getAttribute('data-transaction-number');
+                    const transactionDate = this.getAttribute('data-transaction-date');
                     const isVoided = this.getAttribute('data-is-voided') === '1';
                     const maturityDate = this.getAttribute('data-maturity-date');
                     const expiryDate = this.getAttribute('data-expiry-date');
@@ -428,6 +437,7 @@
                         pawnTicketImageUrl,
                         transactionId,
                         transactionNumber,
+                        transactionDate,
                         isVoided,
                         maturityDate,
                         expiryDate,
@@ -449,6 +459,9 @@
             
             // Set transaction number
             document.getElementById('modalTransactionNumber').textContent = data.transactionNumber;
+            
+            // Set transaction date
+            document.getElementById('modalTransactionDate').textContent = data.transactionDate || '-';
             
             // Show/hide void button based on voided status
             const voidBtn = document.getElementById('voidTransactionBtn');

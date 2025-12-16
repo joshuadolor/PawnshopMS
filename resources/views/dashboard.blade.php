@@ -118,6 +118,8 @@
                 // Navigate to process transaction form based on transaction type
                 if (currentTransactionType === 'Sangla') {
                     window.location.href = '{{ route("transactions.sangla.create") }}';
+                } else if (currentTransactionType === 'Renew') {
+                    window.location.href = '{{ route("transactions.renewal.search") }}';
                 } else {
                     // TODO: Add other transaction types
                     console.log(`Process mode for ${currentTransactionType} - to be implemented`);

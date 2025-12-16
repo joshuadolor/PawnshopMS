@@ -8,6 +8,7 @@ use App\Http\Controllers\ItemType\ItemTypeController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Transactions\Sangla\SanglaController;
 use App\Http\Controllers\Transactions\TransactionController;
+use App\Http\Controllers\Transactions\RenewalController;
 use App\Http\Controllers\User\UserController;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use Illuminate\Support\Facades\Route;
@@ -38,6 +39,11 @@ Route::middleware('auth')->group(function () {
         Route::post('/sangla', [SanglaController::class, 'store'])->name('sangla.store');
         Route::get('/sangla/additional-item', [SanglaController::class, 'additionalItem'])->name('sangla.additional-item');
         Route::post('/sangla/additional-item', [SanglaController::class, 'storeAdditionalItem'])->name('sangla.store-additional-item');
+        
+        // Renewal Routes
+        Route::get('/renewal/search', [RenewalController::class, 'search'])->name('renewal.search');
+        Route::post('/renewal/find', [RenewalController::class, 'find'])->name('renewal.find');
+        Route::post('/renewal', [RenewalController::class, 'store'])->name('renewal.store');
     });
 
     // Branch Financial Transactions Routes
