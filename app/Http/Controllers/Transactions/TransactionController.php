@@ -14,6 +14,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
+use Illuminate\Support\Str;
 
 class TransactionController extends Controller
 {
@@ -61,6 +62,32 @@ class TransactionController extends Controller
 
         $transactions = $query->orderBy('created_at', 'desc')->paginate(20);
 
+        // Group renewal financial transactions (type: transaction, money IN)
+        // by pawn ticket number so we can show them as child rows under
+        // their parent Sangla transactions in the transactions table.
+        $renewalsByPawnTicket = collect();
+
+        $pawnTicketNumbers = $transactions->pluck('pawn_ticket_number')->filter()->unique()->values();
+
+        if ($pawnTicketNumbers->isNotEmpty()) {
+            // Build the exact descriptions we use when creating renewal financial rows
+            $descriptions = $pawnTicketNumbers
+                ->map(fn (string $pt) => "Renewal interest payment - Pawn Ticket #{$pt}")
+                ->all();
+
+            $renewalFinancialRows = BranchFinancialTransaction::with(['branch', 'user'])
+                ->where('type', 'transaction')
+                ->whereDoesntHave('voided')
+                ->whereIn('description', $descriptions)
+                ->orderBy('transaction_date')
+                ->get();
+
+            // Map to pawn_ticket_number extracted from description
+            $renewalsByPawnTicket = $renewalFinancialRows->groupBy(function (BranchFinancialTransaction $row) {
+                return Str::after($row->description, 'Renewal interest payment - Pawn Ticket #');
+            });
+        }
+
         // Get branches for filter (admin/superadmin only)
         $branches = null;
         if ($user->isAdminOrSuperAdmin()) {
@@ -70,6 +97,7 @@ class TransactionController extends Controller
         return view('transactions.index', [
             'transactions' => $transactions,
             'branches' => $branches,
+            'renewalsByPawnTicket' => $renewalsByPawnTicket,
             'filters' => [
                 'date' => $request->date ?? null,
                 'today_only' => $request->boolean('today_only', false),

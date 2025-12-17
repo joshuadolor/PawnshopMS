@@ -53,6 +53,41 @@ class BranchFinancialTransaction extends Model
         return $this->type === 'transaction';
     }
 
+    /**
+     * Determine if this "transaction" type row represents a Sangla (money OUT).
+     *
+     * Currently we identify Sangla-related financial rows by their description.
+     * - "Sangla transaction"
+     * - "Sangla transaction (additional item)"
+     */
+    public function isSanglaTransactionEntry(): bool
+    {
+        if (!$this->isTransaction()) {
+            return false;
+        }
+
+        $description = (string) $this->description;
+
+        return str_starts_with($description, 'Sangla transaction');
+    }
+
+    /**
+     * Determine if this "transaction" type row represents a Renewal (money IN).
+     *
+     * We identify renewal rows by the description starting with
+     * "Renewal interest payment".
+     */
+    public function isRenewalTransactionEntry(): bool
+    {
+        if (!$this->isTransaction()) {
+            return false;
+        }
+
+        $description = (string) $this->description;
+
+        return str_starts_with($description, 'Renewal interest payment');
+    }
+
     public function voided(): HasOne
     {
         return $this->hasOne(VoidedBranchFinancialTransaction::class, 'branch_financial_transaction_id');

@@ -123,11 +123,12 @@ class RenewalController extends Controller
                 ]);
             });
 
-            // Create financial transaction for the renewal interest payment (positive amount - money coming in)
+            // Create financial transaction for the renewal interest payment
+            // Type: "transaction" (same family as Sangla), but this one is an ADD (money coming in)
             BranchFinancialTransaction::create([
                 'branch_id' => $branchId,
                 'user_id' => $request->user()->id,
-                'type' => 'replenish', // Renewal payment is money coming in
+                'type' => 'transaction',
                 'description' => "Renewal interest payment - Pawn Ticket #{$pawnTicketNumber}",
                 'amount' => $interestAmount, // Positive amount (money coming in)
                 'transaction_date' => now()->toDateString(),

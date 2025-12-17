@@ -117,6 +117,11 @@
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
+                                @php
+                                    // Track which pawn tickets we've already rendered renewals for,
+                                    // so we only show child rows once per pawn ticket number.
+                                    $renderedRenewalsForPawnTickets = [];
+                                @endphp
                                 @forelse ($transactions as $transaction)
                                     @php
                                         $isVoided = $transaction->isVoided();
@@ -194,6 +199,96 @@
                                             <div class="text-sm text-gray-900">{{ $transaction->user->name }}</div>
                                         </td>
                                     </tr>
+
+                                    @php
+                                        $pawnTicketNumber = $transaction->pawn_ticket_number;
+                                        $canRenderRenewals = $pawnTicketNumber && !in_array($pawnTicketNumber, $renderedRenewalsForPawnTickets, true);
+                                        $renewals = $canRenderRenewals && isset($renewalsByPawnTicket) 
+                                            ? ($renewalsByPawnTicket[$pawnTicketNumber] ?? collect())
+                                            : collect();
+                                    @endphp
+
+                                    @if($renewals->isNotEmpty())
+                                        @php
+                                            $renderedRenewalsForPawnTickets[] = $pawnTicketNumber;
+                                        @endphp
+
+                                        @foreach($renewals as $renewal)
+                                            <tr class="bg-yellow-50 text-xs">
+                                                <!-- Pawn Ticket / Transaction -->
+                                                <td class="px-10 py-2 whitespace-nowrap">
+                                                    <div class="text-xs font-semibold text-yellow-900">
+                                                        Renewal
+                                                    </div>
+                                                    <div class="text-[11px] text-gray-600">
+                                                        Pawn Ticket #{{ $transaction->pawn_ticket_number }}
+                                                    </div>
+                                                </td>
+
+                                                <!-- Date -->
+                                                <td class="px-6 py-2 whitespace-nowrap">
+                                                    <div class="text-xs text-gray-900">
+                                                        {{ $renewal->transaction_date->format('M d, Y') }}
+                                                    </div>
+                                                    <div class="text-[11px] text-gray-500">
+                                                        {{ $renewal->created_at->format('h:i A') }}
+                                                    </div>
+                                                </td>
+
+                                                <!-- Pawner -->
+                                                <td class="px-6 py-2">
+                                                    <div class="text-xs font-medium text-gray-900">
+                                                        {{ $transaction->pawner_name }}
+                                                    </div>
+                                                    <div class="text-[11px] text-gray-500">
+                                                        {{ \Illuminate\Support\Str::limit($transaction->address, 30) }}
+                                                    </div>
+                                                </td>
+
+                                                <!-- Item -->
+                                                <td class="px-6 py-2">
+                                                    <div class="text-xs font-medium text-gray-900">
+                                                        Renewal of {{ $transaction->itemType->name }}
+                                                        @if($transaction->itemTypeSubtype)
+                                                            <span class="text-gray-500">- {{ $transaction->itemTypeSubtype->name }}</span>
+                                                        @endif
+                                                    </div>
+                                                    <div class="text-[11px] text-gray-500 mt-1">
+                                                        Interest payment to extend maturity and expiry dates.
+                                                    </div>
+                                                </td>
+
+                                                <!-- Type -->
+                                                <td class="px-6 py-2 whitespace-nowrap">
+                                                    <span class="px-2 inline-flex text-[11px] leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                                                        Renew
+                                                    </span>
+                                                </td>
+
+                                                <!-- Amount -->
+                                                <td class="px-6 py-2 whitespace-nowrap">
+                                                    <div class="text-[11px] text-gray-500">Interest Paid:</div>
+                                                    <div class="text-xs font-medium text-green-700">
+                                                        +₱{{ number_format($renewal->amount, 2) }}
+                                                    </div>
+                                                </td>
+
+                                                <!-- Branch -->
+                                                <td class="px-6 py-2 whitespace-nowrap">
+                                                    <div class="text-xs text-gray-900">
+                                                        {{ $renewal->branch->name ?? $transaction->branch->name }}
+                                                    </div>
+                                                </td>
+
+                                                <!-- By -->
+                                                <td class="px-6 py-2 whitespace-nowrap">
+                                                    <div class="text-xs text-gray-900">
+                                                        {{ $renewal->user->name ?? $transaction->user->name }}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        @endforeach
+                                    @endif
                                 @empty
                                     <tr>
                                         <td colspan="8" class="px-6 py-4 text-center text-sm text-gray-500">

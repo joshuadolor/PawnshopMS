@@ -115,10 +115,29 @@ class BranchFinancialTransactionController extends Controller
 
         $totalReplenish = (clone $summaryQuery)->where('type', 'replenish')->sum('amount');
         $totalExpense = (clone $summaryQuery)->where('type', 'expense')->sum('amount');
-        $totalTransaction = (clone $summaryQuery)->where('type', 'transaction')->sum('amount');
+
+        // For "transaction" type, we need to distinguish between:
+        // - Sangla (money OUT)
+        // - Renewal (money IN)
+        $transactionEntries = (clone $summaryQuery)->where('type', 'transaction')->get();
+
+        $totalTransactionOut = $transactionEntries
+            ->filter(fn (BranchFinancialTransaction $t) => $t->isSanglaTransactionEntry())
+            ->sum('amount');
+
+        $totalTransactionIn = $transactionEntries
+            ->filter(fn (BranchFinancialTransaction $t) => $t->isRenewalTransactionEntry())
+            ->sum('amount');
+
+        // Optional aggregate of all "transaction" amounts (regardless of direction)
+        $totalTransaction = $totalTransactionOut + $totalTransactionIn;
         
-        // Transactions are negative (Sangla) or positive (Renew), so subtract from balance
-        $netBalance = $totalReplenish - $totalExpense - $totalTransaction;
+        // Net balance:
+        //   + replenish
+        //   + renewal (transaction IN)
+        //   - expense
+        //   - sangla (transaction OUT)
+        $netBalance = $totalReplenish + $totalTransactionIn - $totalExpense - $totalTransactionOut;
 
         return view('branch-financial-transactions.index', [
             'transactions' => $transactions,

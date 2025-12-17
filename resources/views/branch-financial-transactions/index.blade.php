@@ -240,8 +240,23 @@
                                         <div class="text-sm text-gray-900">{{ $transaction->description }}</div>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
-                                        <div class="text-sm font-semibold {{ $transaction->isReplenish() ? 'text-green-600' : ($transaction->isTransaction() ? 'text-blue-600' : 'text-red-600') }}">
-                                            {{ $transaction->isReplenish() ? '+' : '-' }}₱{{ number_format($transaction->amount, 2) }}
+                                        @php
+                                            // Determine sign based on money direction
+                                            // + for Replenish and Renewal (transaction IN)
+                                            // - for Expense and Sangla (transaction OUT)
+                                            $isIncoming = $transaction->isReplenish() || $transaction->isRenewalTransactionEntry();
+                                            $sign = $isIncoming ? '+' : '-';
+
+                                            if ($transaction->isReplenish()) {
+                                                $amountClass = 'text-green-600';
+                                            } elseif ($transaction->isTransaction()) {
+                                                $amountClass = 'text-blue-600';
+                                            } else {
+                                                $amountClass = 'text-red-600';
+                                            }
+                                        @endphp
+                                        <div class="text-sm font-semibold {{ $amountClass }}">
+                                            {{ $sign }}₱{{ number_format($transaction->amount, 2) }}
                                         </div>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">

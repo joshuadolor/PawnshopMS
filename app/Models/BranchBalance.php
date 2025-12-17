@@ -25,7 +25,9 @@ class BranchBalance extends Model
      * Update balance for a branch.
      * 
      * @param int $branchId
-     * @param float $amount Positive for replenish, negative for expense/transaction
+     * @param float $amount Signed amount to apply to the balance:
+     *                      - Positive for money coming IN (replenish, renewal, etc.)
+     *                      - Negative for money going OUT (expense, sangla, etc.)
      * @return void
      */
     public static function updateBalance(int $branchId, float $amount): void
@@ -54,9 +56,20 @@ class BranchBalance extends Model
         
         $totalReplenish = $transactions->where('type', 'replenish')->sum('amount');
         $totalExpense = $transactions->where('type', 'expense')->sum('amount');
-        $totalTransaction = $transactions->where('type', 'transaction')->sum('amount');
+        $transactionEntries = $transactions->where('type', 'transaction');
+
+        // For "transaction" type:
+        // - Sangla entries are money OUT (minus)
+        // - Renewal entries are money IN (plus)
+        $totalTransactionOut = $transactionEntries
+            ->filter(fn (BranchFinancialTransaction $t) => $t->isSanglaTransactionEntry())
+            ->sum('amount');
+
+        $totalTransactionIn = $transactionEntries
+            ->filter(fn (BranchFinancialTransaction $t) => $t->isRenewalTransactionEntry())
+            ->sum('amount');
         
-        $balance = $totalReplenish - $totalExpense - $totalTransaction;
+        $balance = $totalReplenish + $totalTransactionIn - $totalExpense - $totalTransactionOut;
         
         self::updateOrCreate(
             ['branch_id' => $branchId],
