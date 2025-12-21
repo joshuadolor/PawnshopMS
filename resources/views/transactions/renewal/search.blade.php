@@ -92,43 +92,192 @@
     </dialog>
 
     <!-- HTML5 QR Code Scanner Library -->
-    <script src="{{ asset('js/html5-qrcode.min.js') }}"></script>
+    <script>
+        // Track library loading state
+        window.qrScannerLibraryLoaded = false;
+        window.qrScannerLibraryError = null;
+        window.qrScannerLibraryPath = '/js/html5-qrcode.min.js';
+    </script>
+    <script 
+        src="/js/html5-qrcode.min.js" 
+        onload="
+            console.log('QR Scanner library script loaded');
+            // Give it a moment to initialize
+            setTimeout(function() {
+                if (typeof Html5Qrcode !== 'undefined' || (window.__Html5QrcodeLibrary__ && window.__Html5QrcodeLibrary__.Html5Qrcode)) {
+                    window.qrScannerLibraryLoaded = true;
+                    console.log('QR Scanner library initialized successfully');
+                } else {
+                    console.warn('QR Scanner library script loaded but Html5Qrcode not found');
+                }
+            }, 100);
+        " 
+        onerror="
+            window.qrScannerLibraryError = 'Failed to load script file';
+            console.error('Failed to load QR Scanner library from: ' + window.qrScannerLibraryPath);
+        "
+    ></script>
     
     <script>
         let html5QrCode = null;
         let qrScannerActive = false;
 
+        // Get Html5Qrcode from library
+        function getHtml5Qrcode() {
+            // Try global first
+            if (typeof Html5Qrcode !== 'undefined') {
+                return Html5Qrcode;
+            }
+            // Try window object
+            if (window.__Html5QrcodeLibrary__ && window.__Html5QrcodeLibrary__.Html5Qrcode) {
+                return window.__Html5QrcodeLibrary__.Html5Qrcode;
+            }
+            return null;
+        }
+
+        // Wait for library to load
+        function waitForLibrary(callback, maxAttempts = 30) {
+            let attempts = 0;
+            const checkLibrary = () => {
+                const Html5QrcodeClass = getHtml5Qrcode();
+                if (Html5QrcodeClass) {
+                    // Set global for easier access
+                    if (typeof Html5Qrcode === 'undefined') {
+                        window.Html5Qrcode = Html5QrcodeClass;
+                    }
+                    callback();
+                } else if (attempts < maxAttempts) {
+                    attempts++;
+                    setTimeout(checkLibrary, 200);
+                } else {
+                    let errorMsg = 'QR Scanner library failed to load.\n\n';
+                    errorMsg += 'Please check:\n';
+                    errorMsg += '1. The file exists at: ' + (window.qrScannerLibraryPath || 'js/html5-qrcode.min.js') + '\n';
+                    errorMsg += '2. Your browser console for errors\n';
+                    errorMsg += '3. Try refreshing the page\n\n';
+                    
+                    if (window.qrScannerLibraryError) {
+                        errorMsg += 'Error: ' + window.qrScannerLibraryError;
+                    } else {
+                        errorMsg += 'Library script loaded but Html5Qrcode class not found.';
+                    }
+                    
+                    alert(errorMsg);
+                    console.error('Html5Qrcode library not found after', maxAttempts, 'attempts');
+                    console.error('window.__Html5QrcodeLibrary__:', window.__Html5QrcodeLibrary__);
+                    console.error('window.qrScannerLibraryLoaded:', window.qrScannerLibraryLoaded);
+                    console.error('window.qrScannerLibraryError:', window.qrScannerLibraryError);
+                    console.error('typeof Html5Qrcode:', typeof Html5Qrcode);
+                }
+            };
+            checkLibrary();
+        }
+
         function startQRScanner() {
+            // Check if library is loaded
+            const Html5QrcodeClass = getHtml5Qrcode();
+            if (!Html5QrcodeClass) {
+                waitForLibrary(() => {
+                    startQRScanner();
+                });
+                return;
+            }
+
             const modal = document.getElementById('qrScannerModal');
+            const qrReaderElement = document.getElementById('qr-reader');
+            
+            if (!modal) {
+                alert('QR Scanner modal not found');
+                return;
+            }
+
+            if (!qrReaderElement) {
+                alert('QR Reader element not found');
+                return;
+            }
+
+            // Clear previous content
+            qrReaderElement.innerHTML = '';
+            
             modal.showModal();
             
             // Initialize scanner
-            html5QrCode = new Html5Qrcode("qr-reader");
-            qrScannerActive = true;
-            
-            html5QrCode.start(
-                { facingMode: "environment" }, // Use back camera
-                {
-                    fps: 10,
-                    qrbox: { width: 250, height: 250 }
-                },
-                (decodedText, decodedResult) => {
-                    // Successfully scanned
-                    if (qrScannerActive) {
-                        stopQRScanner();
-                        document.getElementById('pawn_ticket_number').value = decodedText;
-                        // Optionally auto-submit the form
-                        // document.getElementById('renewalSearchForm').submit();
-                    }
-                },
-                (errorMessage) => {
-                    // Error handling - ignore for now
+            try {
+                const Html5QrcodeClass = getHtml5Qrcode();
+                if (!Html5QrcodeClass) {
+                    alert('QR Scanner library not loaded. Please refresh the page.');
+                    stopQRScanner();
+                    return;
                 }
-            ).catch((err) => {
-                console.error("Unable to start scanning", err);
-                alert('Unable to access camera. Please make sure you have granted camera permissions.');
+                
+                html5QrCode = new Html5QrcodeClass("qr-reader");
+                qrScannerActive = true;
+                
+                html5QrCode.start(
+                    { facingMode: "environment" }, // Use back camera
+                    {
+                        fps: 10,
+                        qrbox: function(viewfinderWidth, viewfinderHeight) {
+                            // Make QR box responsive (70% of smaller dimension)
+                            let minEdgePercentage = 0.7;
+                            let minEdgeSize = Math.min(viewfinderWidth, viewfinderHeight);
+                            let qrboxSize = Math.floor(minEdgeSize * minEdgePercentage);
+                            return {
+                                width: qrboxSize,
+                                height: qrboxSize
+                            };
+                        },
+                        aspectRatio: 1.0
+                    },
+                    (decodedText, decodedResult) => {
+                        // Successfully scanned
+                        if (qrScannerActive) {
+                            console.log('QR Code scanned:', decodedText);
+                            stopQRScanner();
+                            const inputField = document.getElementById('pawn_ticket_number');
+                            const form = document.getElementById('renewalSearchForm');
+                            
+                            if (inputField) {
+                                inputField.value = decodedText;
+                            }
+                            
+                            // Auto-submit the form
+                            if (form) {
+                                form.submit();
+                            } else if (inputField) {
+                                // Fallback: trigger form submission manually
+                                inputField.form?.submit();
+                            }
+                        }
+                    },
+                    (errorMessage) => {
+                        // Error handling - ignore scanning errors (they're frequent during scanning)
+                        // console.log('Scan error:', errorMessage);
+                    }
+                ).catch((err) => {
+                    console.error("Unable to start scanning", err);
+                    let errorMsg = 'Unable to access camera. ';
+                    
+                    if (err.name === 'NotAllowedError') {
+                        errorMsg += 'Please grant camera permissions and try again.';
+                    } else if (err.name === 'NotFoundError') {
+                        errorMsg += 'No camera found on this device.';
+                    } else if (err.name === 'NotReadableError') {
+                        errorMsg += 'Camera is already in use by another application.';
+                    } else if (err.name === 'OverconstrainedError') {
+                        errorMsg += 'Camera constraints could not be satisfied.';
+                    } else {
+                        errorMsg += 'Error: ' + (err.message || err.toString());
+                    }
+                    
+                    alert(errorMsg);
+                    stopQRScanner();
+                });
+            } catch (err) {
+                console.error("Error initializing QR scanner", err);
+                alert('Error initializing QR scanner: ' + err.message);
                 stopQRScanner();
-            });
+            }
         }
 
         function stopQRScanner() {
@@ -138,21 +287,56 @@
                     qrScannerActive = false;
                 }).catch((err) => {
                     console.error("Error stopping scanner", err);
+                    qrScannerActive = false;
                 });
             }
-            document.getElementById('qrScannerModal').close();
+            
+            const modal = document.getElementById('qrScannerModal');
+            if (modal) {
+                modal.close();
+            }
         }
 
-        // Close modal when clicking outside
-        document.getElementById('qrScannerModal').addEventListener('click', function(e) {
-            if (e.target === this) {
-                stopQRScanner();
-            }
-        });
+        // Initialize event listeners when DOM is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            const modal = document.getElementById('qrScannerModal');
+            if (modal) {
+                // Close modal when clicking outside
+                modal.addEventListener('click', function(e) {
+                    if (e.target === this) {
+                        stopQRScanner();
+                    }
+                });
 
-        // Stop scanner when modal is closed
-        document.getElementById('qrScannerModal').addEventListener('close', function() {
-            stopQRScanner();
+                // Stop scanner when modal is closed
+                modal.addEventListener('close', function() {
+                    stopQRScanner();
+                });
+            }
+            
+            // Check if library is available after page load
+            setTimeout(() => {
+                const Html5QrcodeClass = getHtml5Qrcode();
+                if (!Html5QrcodeClass) {
+                    console.warn('QR Scanner library not found on page load. It may load when you click the scan button.');
+                    // Try to verify the file is accessible
+                    if (window.qrScannerLibraryPath) {
+                        fetch(window.qrScannerLibraryPath, { method: 'HEAD' })
+                            .then(response => {
+                                if (response.ok) {
+                                    console.log('QR Scanner library file is accessible');
+                                } else {
+                                    console.error('QR Scanner library file returned status:', response.status);
+                                }
+                            })
+                            .catch(err => {
+                                console.error('Error checking QR Scanner library file:', err);
+                            });
+                    }
+                } else {
+                    console.log('QR Scanner library is ready');
+                }
+            }, 1000);
         });
     </script>
 </x-app-layout>

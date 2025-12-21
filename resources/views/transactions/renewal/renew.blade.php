@@ -105,6 +105,24 @@
                         </div>
                     </div>
 
+                    <!-- Pawner ID Verification -->
+                    @if($transaction->pawner_id_image_path)
+                        <div class="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                            <h3 class="text-lg font-medium text-gray-900 mb-3">Pawner ID Verification</h3>
+                            <p class="text-sm text-gray-600 mb-3">Please verify that the person renewing this transaction matches the ID shown below:</p>
+                            <div class="border-2 border-gray-300 rounded-lg overflow-hidden bg-white">
+                                <img 
+                                    src="{{ route('images.show', ['path' => $transaction->pawner_id_image_path]) }}" 
+                                    alt="Pawner ID Image" 
+                                    class="w-full h-auto max-w-md mx-auto"
+                                    onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'400\' height=\'300\'%3E%3Crect fill=\'%23e5e7eb\' width=\'400\' height=\'300\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'%239ca3af\' font-size=\'14\'%3EImage not available%3C/text%3E%3C/svg%3E'"
+                                />
+                            </div>
+                            <p class="text-xs text-gray-500 mt-2 text-center">Pawner: <strong>{{ $transaction->first_name }} {{ $transaction->last_name }}</strong></p>
+                            <p class="text-xs text-gray-500 mt-2 text-center">Address: <strong>{{ $transaction->address }}</strong></p>
+                        </div>
+                    @endif
+
                     <!-- Display Latest Transaction Details -->
                     <div class="mb-6">
                         <h3 class="text-lg font-medium text-gray-900 mb-4">Transaction Details</h3>

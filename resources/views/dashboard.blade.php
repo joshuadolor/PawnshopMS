@@ -14,7 +14,7 @@
                     onclick="openTransactionDialog('Sangla')"
                     class="w-full px-6 py-6 bg-white border-2 border-blue-500 hover:bg-blue-50 active:bg-blue-100 text-blue-600 font-semibold text-lg rounded-lg shadow-sm transition-all duration-200 touch-manipulation flex flex-col items-center justify-center gap-2"
                 >
-                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <svg class="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                     </svg>
                     <span>Sangla</span>
@@ -24,7 +24,7 @@
                     onclick="openTransactionDialog('Tubos')"
                     class="w-full px-6 py-6 bg-white border-2 border-green-500 hover:bg-green-50 active:bg-green-100 text-green-600 font-semibold text-lg rounded-lg shadow-sm transition-all duration-200 touch-manipulation flex flex-col items-center justify-center gap-2"
                 >
-                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <svg class="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                     </svg>
                     <span>Tubos</span>
@@ -34,7 +34,7 @@
                     onclick="openTransactionDialog('Renew')"
                     class="w-full px-6 py-6 bg-white border-2 border-yellow-500 hover:bg-yellow-50 active:bg-yellow-100 text-yellow-600 font-semibold text-lg rounded-lg shadow-sm transition-all duration-200 touch-manipulation flex flex-col items-center justify-center gap-2"
                 >
-                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <svg class="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
                     </svg>
                     <span>Renew</span>
@@ -44,7 +44,7 @@
                     onclick="openTransactionDialog('Partial')"
                     class="w-full px-6 py-6 bg-white border-2 border-purple-500 hover:bg-purple-50 active:bg-purple-100 text-purple-600 font-semibold text-lg rounded-lg shadow-sm transition-all duration-200 touch-manipulation flex flex-col items-center justify-center gap-2"
                 >
-                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <svg class="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
                     </svg>
                     <span>Partial</span>

@@ -1356,37 +1356,71 @@
         function showQRCode(pawnTicketNumber) {
             const modal = document.getElementById('qrCodeModal');
             const qrCodeContainer = document.getElementById('qrCodeContainer');
+            const pawnTicketElement = document.getElementById('qrCodePawnTicket');
+            
+            if (!modal || !qrCodeContainer || !pawnTicketElement) {
+                alert('QR Code modal elements not found');
+                return;
+            }
             
             // Clear previous QR code
             qrCodeContainer.innerHTML = '';
+            pawnTicketElement.textContent = pawnTicketNumber;
             
             // Generate QR code using qrcode.js library
             if (typeof QRCode !== 'undefined') {
-                new QRCode(qrCodeContainer, {
-                    text: pawnTicketNumber,
-                    width: 256,
-                    height: 256,
-                    colorDark: '#000000',
-                    colorLight: '#ffffff',
-                    correctLevel: QRCode.CorrectLevel.H
-                });
+                try {
+                    new QRCode(qrCodeContainer, {
+                        text: pawnTicketNumber,
+                        width: 256,
+                        height: 256,
+                        colorDark: '#000000',
+                        colorLight: '#ffffff',
+                        correctLevel: QRCode.CorrectLevel.H
+                    });
+                } catch (err) {
+                    console.error('Error generating QR code:', err);
+                    // Fallback to API
+                    generateQRCodeFallback(qrCodeContainer, pawnTicketNumber);
+                }
             } else {
                 // Fallback: use QR code API
-                const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(pawnTicketNumber)}`;
-                const img = document.createElement('img');
-                img.src = qrCodeUrl;
-                img.alt = 'QR Code';
-                img.className = 'mx-auto';
-                qrCodeContainer.appendChild(img);
+                generateQRCodeFallback(qrCodeContainer, pawnTicketNumber);
             }
             
-            document.getElementById('qrCodePawnTicket').textContent = pawnTicketNumber;
             modal.showModal();
         }
 
-        function closeQRCodeModal() {
-            document.getElementById('qrCodeModal').close();
+        function generateQRCodeFallback(container, text) {
+            const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(text)}`;
+            const img = document.createElement('img');
+            img.src = qrCodeUrl;
+            img.alt = 'QR Code';
+            img.className = 'mx-auto';
+            img.onerror = function() {
+                container.innerHTML = '<p class="text-red-600">Failed to generate QR code</p>';
+            };
+            container.appendChild(img);
         }
+
+        function closeQRCodeModal() {
+            const modal = document.getElementById('qrCodeModal');
+            if (modal) {
+                modal.close();
+            }
+        }
+
+        // Close QR code modal when clicking outside
+        document.addEventListener('DOMContentLoaded', function() {
+            const qrModal = document.getElementById('qrCodeModal');
+            if (qrModal) {
+                qrModal.addEventListener('click', function(e) {
+                    if (e.target === this) {
+                        closeQRCodeModal();
+                    }
+                });
+            }
+        });
     </script>
 
     <!-- QR Code Modal -->
@@ -1415,6 +1449,6 @@
     </dialog>
 
     <!-- QR Code Library -->
-    <script src="{{ asset('js/qrcode.min.js') }}"></script>
+    <script src="/js/qrcode.min.js"></script>
 </x-app-layout>
 
