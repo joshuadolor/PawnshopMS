@@ -5,6 +5,7 @@ use App\Http\Controllers\BranchFinancialTransactionController;
 use App\Http\Controllers\Config\ConfigController;
 use App\Http\Controllers\ImageController;
 use App\Http\Controllers\ItemType\ItemTypeController;
+use App\Http\Controllers\ItemsController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Transactions\Sangla\SanglaController;
 use App\Http\Controllers\Transactions\TransactionController;
@@ -85,6 +86,9 @@ Route::middleware('auth')->group(function () {
             'update' => 'config.additional-charge-configs.update',
             'destroy' => 'config.additional-charge-configs.destroy',
         ]);
+        
+        // Items Management Routes
+        Route::get('/items', [ItemsController::class, 'index'])->name('items.index');
     });
 });
 

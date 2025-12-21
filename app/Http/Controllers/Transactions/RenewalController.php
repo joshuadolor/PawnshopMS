@@ -35,7 +35,7 @@ class RenewalController extends Controller
 
         $pawnTicketNumber = $request->input('pawn_ticket_number');
 
-        // Find all transactions with this pawn ticket number (including additional items)
+        // Find all Sangla transactions with this pawn ticket number (including additional items)
         $allTransactions = Transaction::where('pawn_ticket_number', $pawnTicketNumber)
             ->where('type', 'sangla')
             ->whereDoesntHave('voided')
@@ -48,13 +48,23 @@ class RenewalController extends Controller
                 ->with('error', 'No active transaction found with the provided pawn ticket number.');
         }
 
-        // Use the oldest transaction for calculations (one pawn ticket = one computation)
+        // Use the oldest Sangla transaction for calculations (one pawn ticket = one computation)
         // The oldest transaction has the actual loan amount (additional items have loan_amount = 0)
         $oldestTransaction = $allTransactions->first();
         $branchId = $oldestTransaction->branch_id;
 
-        // Get the latest transaction for date calculations (most current dates)
-        $latestTransaction = $allTransactions->last();
+        // Get the latest transaction (Sangla OR Renewal) for date calculations (most current dates)
+        // This ensures we use the dates from the most recent renewal if one exists
+        $latestTransactionForDates = Transaction::where('pawn_ticket_number', $pawnTicketNumber)
+            ->whereIn('type', ['sangla', 'renew'])
+            ->whereDoesntHave('voided')
+            ->orderBy('created_at', 'desc')
+            ->first();
+
+        // If no renewal exists, use the latest Sangla transaction
+        if (!$latestTransactionForDates) {
+            $latestTransactionForDates = $allTransactions->last();
+        }
 
         // Calculate interest from the oldest transaction only
         $totalInterest = (float) $oldestTransaction->loan_amount * ((float) $oldestTransaction->interest_rate / 100);
@@ -64,10 +74,10 @@ class RenewalController extends Controller
         $totalServiceCharge = $serviceCharge; // Only one service charge
 
         // Calculate additional charges
-        // Use the latest transaction's dates (most current state)
+        // Use the latest transaction's dates (most current state - could be from a renewal)
         $today = Carbon::today();
-        $expiryRedemptionDate = $latestTransaction->expiry_date ? Carbon::parse($latestTransaction->expiry_date) : null;
-        $maturityDate = $latestTransaction->maturity_date ? Carbon::parse($latestTransaction->maturity_date) : null;
+        $expiryRedemptionDate = $latestTransactionForDates->expiry_date ? Carbon::parse($latestTransactionForDates->expiry_date) : null;
+        $maturityDate = $latestTransactionForDates->maturity_date ? Carbon::parse($latestTransactionForDates->maturity_date) : null;
         $daysExceeded = 0;
         $additionalChargeType = null;
         $additionalChargeAmount = 0;

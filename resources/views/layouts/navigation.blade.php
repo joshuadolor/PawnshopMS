@@ -22,6 +22,9 @@
                         Financials
                     </x-nav-link>
                     @if(Auth::user()->isAdminOrSuperAdmin())
+                        <x-nav-link :href="route('items.index')" :active="request()->routeIs('items.*')">
+                            Items
+                        </x-nav-link>
                         <x-nav-link :href="route('users.index')" :active="request()->routeIs('users.*')">
                             Users
                         </x-nav-link>
@@ -97,6 +100,9 @@
                 Financials
             </x-responsive-nav-link>
             @if(Auth::user()->isAdminOrSuperAdmin())
+                <x-responsive-nav-link :href="route('items.index')" :active="request()->routeIs('items.*')">
+                    Items
+                </x-responsive-nav-link>
                 <x-responsive-nav-link :href="route('users.index')" :active="request()->routeIs('users.*')">
                     User Management
                 </x-responsive-nav-link>

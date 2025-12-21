@@ -14,7 +14,7 @@ class EnsureUserIsAdmin
     public function handle(Request $request, Closure $next): Response
     {
         if (! $request->user() || ! $request->user()->isAdminOrSuperAdmin()) {
-            abort(403, 'Unauthorized access.');
+            return redirect()->route('dashboard');
         }
 
         return $next($request);

@@ -81,6 +81,21 @@
                                 @endif
                             @endif
 
+                            <!-- Hide Voided Transactions Checkbox -->
+                            <div class="flex items-end">
+                                <div class="flex items-center">
+                                    <input 
+                                        id="hide_voided" 
+                                        type="checkbox" 
+                                        class="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                        checked
+                                    >
+                                    <label for="hide_voided" class="ml-2 text-sm text-gray-700">
+                                        Hide Voided Transactions
+                                    </label>
+                                </div>
+                            </div>
+
                             <!-- Apply/Reset Buttons -->
                             <div class="flex items-end gap-2">
                                 <button
@@ -138,7 +153,7 @@
                                         // Merge and deduplicate renewals
                                         $renewalTransactions = $renewalsFromPage->concat($renewalsFromCollection)
                                             ->unique('id')
-                                            ->sortByDesc('created_at');
+                                            ->sortBy('created_at');
                                         
                                         // Get first transaction for pawner info (for header)
                                         $firstTransaction = $sanglaTransactions->first() ?? $pawnTicketTransactions->first();
@@ -219,9 +234,17 @@
                                                     </div>
                                                     <span class="text-sm text-gray-600">{{ $firstTransaction->pawner_name }}</span>
                                                     <div class="text-xs text-gray-500">
-                                                        {{ $sanglaTransactions->count() }} Item(s) 
-                                                        @if($renewalTransactions->count() > 0)
-                                                            • {{ $renewalTransactions->count() }} Renewal(s)
+                                                        @php
+                                                            $nonVoidedSanglaCount = $sanglaTransactions->filter(function($tx) {
+                                                                return !$tx->isVoided();
+                                                            })->count();
+                                                            $nonVoidedRenewalCount = $renewalTransactions->filter(function($tx) {
+                                                                return !$tx->isVoided();
+                                                            })->count();
+                                                        @endphp
+                                                        {{ $nonVoidedSanglaCount }} Item(s) 
+                                                        @if($nonVoidedRenewalCount > 0)
+                                                            • {{ $nonVoidedRenewalCount }} Renewal(s)
                                                         @endif
                                                     </div>
                                                 </div>
@@ -1259,6 +1282,54 @@
                 this.close();
             }
         });
+
+        // Handle hide/show voided transactions checkbox
+        const hideVoidedCheckbox = document.getElementById('hide_voided');
+        if (hideVoidedCheckbox) {
+            // Function to toggle voided transactions visibility
+            function toggleVoidedTransactions() {
+                const hideVoided = hideVoidedCheckbox.checked;
+                
+                // Hide/show all voided transaction rows
+                const voidedRows = document.querySelectorAll('[data-is-voided="1"]');
+                voidedRows.forEach(row => {
+                    if (hideVoided) {
+                        row.style.display = 'none';
+                    } else {
+                        row.style.display = '';
+                    }
+                });
+                
+                // Handle pawn ticket header rows - hide if all child transactions are voided
+                const allPawnTicketRows = document.querySelectorAll('.pawn-ticket-row');
+                allPawnTicketRows.forEach(pawnTicketRow => {
+                    if (hideVoided) {
+                        const tbody = pawnTicketRow.closest('tbody');
+                        if (tbody) {
+                            // Get all transaction rows in this tbody (excluding the pawn ticket row itself)
+                            const allChildRows = Array.from(tbody.querySelectorAll('.transaction-row'));
+                            const hasNonVoidedChild = allChildRows.some(row => {
+                                return row.getAttribute('data-is-voided') !== '1';
+                            });
+                            // Hide pawn ticket row if all children are voided
+                            if (!hasNonVoidedChild && allChildRows.length > 0) {
+                                pawnTicketRow.style.display = 'none';
+                            } else {
+                                pawnTicketRow.style.display = '';
+                            }
+                        }
+                    } else {
+                        pawnTicketRow.style.display = '';
+                    }
+                });
+            }
+            
+            // Initial toggle on page load
+            toggleVoidedTransactions();
+            
+            // Toggle on checkbox change
+            hideVoidedCheckbox.addEventListener('change', toggleVoidedTransactions);
+        }
 
         // Handle void form submission
         document.getElementById('voidTransactionForm').addEventListener('submit', function(e) {

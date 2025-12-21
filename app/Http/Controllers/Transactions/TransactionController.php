@@ -40,14 +40,15 @@ class TransactionController extends Controller
             }
         }
 
-        // Search by item description
+        // Search by item description, names, transaction number, or pawn ticket number
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('item_description', 'like', "%{$search}%")
                   ->orWhere('first_name', 'like', "%{$search}%")
                   ->orWhere('last_name', 'like', "%{$search}%")
-                  ->orWhere('transaction_number', 'like', "%{$search}%");
+                  ->orWhere('transaction_number', 'like', "%{$search}%")
+                  ->orWhere('pawn_ticket_number', 'like', "%{$search}%");
             });
         }
 
@@ -93,7 +94,8 @@ class TransactionController extends Controller
                     $q->where('item_description', 'like', "%{$search}%")
                       ->orWhere('first_name', 'like', "%{$search}%")
                       ->orWhere('last_name', 'like', "%{$search}%")
-                      ->orWhere('transaction_number', 'like', "%{$search}%");
+                      ->orWhere('transaction_number', 'like', "%{$search}%")
+                      ->orWhere('pawn_ticket_number', 'like', "%{$search}%");
                 });
             }
 
