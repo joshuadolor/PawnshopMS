@@ -11,6 +11,7 @@ use App\Models\BranchBalance;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 use Carbon\Carbon;
 
@@ -87,32 +88,50 @@ class RenewalController extends Controller
         // Calculate additional charges
         // Use the latest transaction's dates (most current state - could be from a renewal)
         $today = Carbon::today();
-        $expiryRedemptionDate = $latestTransactionForDates->expiry_date ? Carbon::parse($latestTransactionForDates->expiry_date) : null;
-        $maturityDate = $latestTransactionForDates->maturity_date ? Carbon::parse($latestTransactionForDates->maturity_date) : null;
+        $expiryRedemptionDate = $latestTransactionForDates->expiry_date;
+        $maturityDate = $latestTransactionForDates->maturity_date;
         $daysExceeded = 0;
         $additionalChargeType = null;
         $additionalChargeAmount = 0;
         $additionalChargeConfig = null;
 
-        // First, check if expiry redemption date is exceeded
+        // Debug: Log the dates being compared
+        Log::info('Renewal Additional Charge Calculation', [
+            'pawn_ticket' => $pawnTicketNumber,
+            'today' => $today->format('Y-m-d'),
+            'maturity_date' => $maturityDate ? $maturityDate->format('Y-m-d') : null,
+            'expiry_date' => $expiryRedemptionDate ? $expiryRedemptionDate->format('Y-m-d') : null,
+            'loan_amount' => $oldestTransaction->loan_amount,
+        ]);
+
+        // First, check if expiry redemption date is exceeded (today > expiry date)
         if ($expiryRedemptionDate && $today->gt($expiryRedemptionDate)) {
             // Expiry redemption date is exceeded - use EC (Exceeded Charge)
             // Count days exceeded from expiry redemption date to today
-            $daysExceeded = abs($expiryRedemptionDate->diffInDays($today, false));
+            $daysExceeded = $expiryRedemptionDate->diffInDays($today);
             $additionalChargeType = 'EC';
+            Log::info('EC Charge Applied', ['days_exceeded' => $daysExceeded]);
         } elseif ($maturityDate && $today->gt($maturityDate)) {
             // Expiry redemption date is NOT exceeded, but maturity date is exceeded - use LD (Late Days)
             // Count days exceeded from maturity date to today
-            $daysExceeded = abs($maturityDate->diffInDays($today, false));
+            $daysExceeded = $maturityDate->diffInDays($today);
             $additionalChargeType = 'LD';
+            Log::info('LD Charge Applied', ['days_exceeded' => $daysExceeded]);
         }
 
         // Get the percentage from additionalChargeConfig table based on days exceeded and type
         if ($daysExceeded > 0 && $additionalChargeType) {
             $additionalChargeConfig = AdditionalChargeConfig::findApplicable($daysExceeded, $additionalChargeType, 'renewal');
+            Log::info('Config Lookup', [
+                'days_exceeded' => $daysExceeded,
+                'type' => $additionalChargeType,
+                'config_found' => $additionalChargeConfig ? 'yes' : 'no',
+                'config_percentage' => $additionalChargeConfig ? $additionalChargeConfig->percentage : null,
+            ]);
             if ($additionalChargeConfig) {
                 // Calculate charge amount: loan_amount * percentage from config
-                $additionalChargeAmount = $oldestTransaction->loan_amount * ($additionalChargeConfig->percentage / 100);
+                $additionalChargeAmount = (float) $oldestTransaction->loan_amount * ((float) $additionalChargeConfig->percentage / 100);
+                Log::info('Additional Charge Calculated', ['amount' => $additionalChargeAmount]);
             }
         }
 

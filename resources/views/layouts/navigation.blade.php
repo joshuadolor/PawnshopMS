@@ -37,6 +37,9 @@
                         <x-nav-link :href="route('configs.index')" :active="request()->routeIs('configs.*')">
                             Configuration
                         </x-nav-link>
+                        <a href="{{ route('test.update-transaction-dates') }}" class="inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-bold leading-5 text-red-600 hover:text-red-700 hover:border-red-300 focus:outline-none focus:text-red-700 focus:border-red-300 transition duration-150 ease-in-out {{ request()->routeIs('test.*') ? 'border-red-500' : '' }}">
+                            TEST
+                        </a>
                     @endif
                 </div>
             </div>
@@ -115,6 +118,9 @@
                 <x-responsive-nav-link :href="route('configs.index')" :active="request()->routeIs('configs.*')">
                     Configuration
                 </x-responsive-nav-link>
+                <a href="{{ route('test.update-transaction-dates') }}" class="block pl-3 pr-4 py-2 border-l-4 {{ request()->routeIs('test.*') ? 'border-red-500 text-red-700 bg-red-50' : 'border-transparent text-gray-600 hover:text-red-700 hover:bg-red-50 hover:border-red-300' }} text-base font-bold focus:outline-none focus:text-red-700 focus:bg-red-50 focus:border-red-300 transition duration-150 ease-in-out">
+                    TEST
+                </a>
             @endif
         </div>
 

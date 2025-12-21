@@ -95,6 +95,12 @@ Route::middleware('auth')->group(function () {
         
         // Items Management Routes
         Route::get('/items', [ItemsController::class, 'index'])->name('items.index');
+        
+        // Test Routes (for testing only - will be removed before production)
+        Route::prefix('test')->name('test.')->group(function () {
+            Route::get('/update-transaction-dates', [\App\Http\Controllers\Test\UpdateTransactionDatesController::class, 'index'])->name('update-transaction-dates');
+            Route::put('/transactions/{transaction}/dates', [\App\Http\Controllers\Test\UpdateTransactionDatesController::class, 'update'])->name('update-dates');
+        });
     });
 });
 
