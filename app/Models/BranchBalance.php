@@ -68,7 +68,7 @@ class BranchBalance extends Model
             ->sum('amount');
 
         $totalTransactionIn = $transactionEntries
-            ->filter(fn (BranchFinancialTransaction $t) => $t->isRenewalTransactionEntry() || $t->isTubosTransactionEntry())
+            ->filter(fn (BranchFinancialTransaction $t) => $t->isRenewalTransactionEntry() || $t->isTubosTransactionEntry() || $t->isPartialTransactionEntry())
             ->sum('amount');
         
         $balance = $totalReplenish + $totalTransactionIn - $totalExpense - $totalTransactionOut;

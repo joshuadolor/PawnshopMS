@@ -67,7 +67,7 @@
                             <div class="mb-3">
                                 <div class="flex justify-between items-center text-sm">
                                     <span class="text-yellow-800">
-                                        Interest (₱{{ number_format($transaction->loan_amount, 2) }} × {{ $transaction->interest_rate }}%):
+                                        Interest (₱{{ number_format($currentPrincipalAmount, 2) }} × {{ $transaction->interest_rate }}%):
                                     </span>
                                     <span class="font-medium text-yellow-900">₱{{ number_format($totalInterest, 2) }}</span>
                                 </div>
@@ -86,7 +86,7 @@
                                 <div class="flex justify-between items-center text-sm">
                                     <span class="text-yellow-800">
                                         @if($additionalChargeAmount > 0 && $additionalChargeConfig)
-                                            Additional Charge ({{ $additionalChargeType === 'EC' ? 'Exceeded Charge' : 'Late Days' }} - {{ $daysExceeded }} day(s), {{ $additionalChargeConfig->percentage }}%):
+                                            Additional Charge ({{ $additionalChargeType === 'EC' ? 'Exceeded Charge' : 'Late Days' }} - {{ $daysExceeded }} day(s), {{ $additionalChargeConfig->percentage }}% of ₱{{ number_format($currentPrincipalAmount, 2) }}):
                                         @else
                                             Additional Charge:
                                         @endif
@@ -152,7 +152,14 @@
                                 </div>
                                 <div>
                                     <p class="text-sm text-gray-600">Loan Amount</p>
-                                    <p class="text-sm font-medium text-gray-900">₱{{ number_format($transaction->loan_amount, 2) }}</p>
+                                    <div class="flex items-center gap-2">
+                                        @if($currentPrincipalAmount != $originalPrincipalAmount)
+                                            <span class="text-sm font-medium text-gray-500 line-through">₱{{ number_format($originalPrincipalAmount, 2) }}</span>
+                                            <span class="text-sm font-medium text-blue-600">₱{{ number_format($currentPrincipalAmount, 2) }}</span>
+                                        @else
+                                            <p class="text-sm font-medium text-gray-900">₱{{ number_format($currentPrincipalAmount, 2) }}</p>
+                                        @endif
+                                    </div>
                                 </div>
                                 <div>
                                     <p class="text-sm text-gray-600">Interest Rate</p>
@@ -171,6 +178,56 @@
                                     <p class="text-sm font-medium text-gray-900">{{ $transaction->expiry_date->format('M d, Y') }}</p>
                                 </div>
                             </div>
+                            
+                            @if($partialTransactions->count() > 0)
+                                <div class="mt-4 pt-4 border-t border-gray-200">
+                                    <p class="text-sm font-medium text-gray-900 mb-3">Loan Amount History</p>
+                                    <div class="space-y-2">
+                                        @php
+                                            // Build array of all principal amounts in chronological order
+                                            $principalHistory = [];
+                                            $principalHistory[] = [
+                                                'amount' => $originalPrincipalAmount,
+                                                'label' => 'Original Principal',
+                                                'date' => $transaction->created_at,
+                                                'isCurrent' => false
+                                            ];
+                                            
+                                            foreach($partialTransactions as $partialTx) {
+                                                $principalHistory[] = [
+                                                    'amount' => (float) $partialTx->loan_amount,
+                                                    'label' => 'After Partial Payment',
+                                                    'date' => $partialTx->created_at,
+                                                    'isCurrent' => false
+                                                ];
+                                            }
+                                            
+                                            // Mark the last one as current
+                                            if(count($principalHistory) > 0) {
+                                                $principalHistory[count($principalHistory) - 1]['isCurrent'] = true;
+                                            }
+                                        @endphp
+                                        
+                                        @foreach($principalHistory as $entry)
+                                            <div class="flex items-center justify-between text-sm {{ $entry['isCurrent'] ? 'bg-blue-50 p-2 rounded' : '' }}">
+                                                <span class="text-gray-600">
+                                                    {{ $entry['label'] }}
+                                                    @if($entry['label'] === 'After Partial Payment')
+                                                        ({{ $entry['date']->format('M d, Y') }})
+                                                    @endif
+                                                    :
+                                                </span>
+                                                @if($entry['isCurrent'])
+                                                    <span class="font-bold text-blue-600">₱{{ number_format($entry['amount'], 2) }}</span>
+                                                @else
+                                                    <span class="font-medium text-gray-500 line-through">₱{{ number_format($entry['amount'], 2) }}</span>
+                                                @endif
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                </div>
+                            @endif
+                            
                             @if($allTransactions->count() > 1)
                                 <div class="mt-4 pt-4 border-t border-gray-200">
                                     <p class="text-xs text-gray-600 mb-2">All Items in this Pawn Ticket:</p>
@@ -358,7 +415,7 @@
                                 />
                                 <p class="mt-1 text-xs text-gray-500">
                                     @if($additionalChargeAmount > 0 && $additionalChargeConfig)
-                                        {{ $additionalChargeType === 'EC' ? 'Exceeded Charge' : 'Late Days' }} - {{ $daysExceeded }} day(s) exceeded, {{ $additionalChargeConfig->percentage }}% of loan amount
+                                        {{ $additionalChargeType === 'EC' ? 'Exceeded Charge' : 'Late Days' }} - {{ $daysExceeded }} day(s) exceeded, {{ $additionalChargeConfig->percentage }}% of current principal (₱{{ number_format($currentPrincipalAmount, 2) }})
                                     @else
                                         No additional charge applicable
                                     @endif

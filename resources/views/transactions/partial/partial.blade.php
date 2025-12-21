@@ -1,7 +1,7 @@
 <x-app-layout>
     <x-slot name="header">
         <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-            Redeem Transaction (Tubos)
+            Partial Payment
         </h2>
     </x-slot>
 
@@ -50,55 +50,58 @@
                             <strong>Pawn Ticket Number:</strong> {{ $pawnTicketNumber }}
                         </p>
                         <p class="text-sm text-blue-700 mt-1">
-                            <strong>Found {{ $allTransactions->count() }} transaction(s)</strong> - Payment is calculated based on the principal amount.
+                            <strong>Found {{ $allTransactions->count() }} transaction(s)</strong> - Partial payment will reduce the principal amount.
                         </p>
                         @if($allTransactions->count() > 1)
                             <p class="text-xs text-blue-600 mt-1">
-                                <strong>Note:</strong> All item descriptions will be combined in the tubos transaction.
+                                <strong>Note:</strong> All item descriptions will be combined in the partial transaction.
                             </p>
                         @endif
                     </div>
 
                     <!-- Payment Summary -->
-                    <div class="mb-6 p-4 bg-green-50 border border-green-200 rounded-md">
-                        <h3 class="text-lg font-semibold text-green-900 mb-3">Payment Required</h3>
+                    <div class="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+                        <h3 class="text-lg font-semibold text-yellow-900 mb-3">Payment Information</h3>
                         <div class="space-y-2">
-                            <!-- Principal Amount -->
+                            <!-- Interest -->
                             <div class="mb-3">
                                 <div class="flex justify-between items-center text-sm">
-                                    <span class="text-green-800">Principal Amount:</span>
-                                    <span class="font-medium text-green-900">₱{{ number_format($principalAmount, 2) }}</span>
+                                    <span class="text-yellow-800">
+                                        Interest (₱{{ number_format($currentPrincipalAmount, 2) }} × {{ $transaction->interest_rate }}%):
+                                    </span>
+                                    <span class="font-medium text-yellow-900">₱{{ number_format($totalInterest, 2) }}</span>
                                 </div>
                             </div>
                             
                             <!-- Service Charge -->
                             <div class="mb-3">
                                 <div class="flex justify-between items-center text-sm">
-                                    <span class="text-green-800">Service Charge:</span>
-                                    <span class="font-medium text-green-900">₱{{ number_format($totalServiceCharge, 2) }}</span>
+                                    <span class="text-yellow-800">Service Charge:</span>
+                                    <span class="font-medium text-yellow-900">₱{{ number_format($totalServiceCharge, 2) }}</span>
                                 </div>
                             </div>
                             
                             <!-- Additional Charge -->
                             <div class="mb-3">
                                 <div class="flex justify-between items-center text-sm">
-                                    <span class="text-green-800">
+                                    <span class="text-yellow-800">
                                         @if($additionalChargeAmount > 0 && $additionalChargeConfig)
-                                            Additional Charge ({{ $additionalChargeType === 'EC' ? 'Exceeded Charge' : 'Late Days' }} - {{ $daysExceeded }} day(s), {{ $additionalChargeConfig->percentage }}% of ₱{{ number_format($currentPrincipalAmount, 2) }}):
+                                            Additional Charge ({{ $additionalChargeType === 'EC' ? 'Exceeded Charge' : 'Late Days' }} - {{ $daysExceeded }} day(s), {{ $additionalChargeConfig->percentage }}%):
                                         @else
                                             Additional Charge:
                                         @endif
                                     </span>
-                                    <span class="font-medium text-green-900">₱{{ number_format($additionalChargeAmount, 2) }}</span>
+                                    <span class="font-medium text-yellow-900">₱{{ number_format($additionalChargeAmount, 2) }}</span>
                                 </div>
                             </div>
                             
-                            <!-- Total -->
-                            <div class="border-t-2 border-green-400 pt-3 mt-3">
+                            <!-- Minimum Renewal Amount -->
+                            <div class="border-t-2 border-yellow-400 pt-3 mt-3">
                                 <div class="flex justify-between items-center">
-                                    <span class="text-lg font-semibold text-green-900">Total Amount to Pay:</span>
-                                    <span class="text-lg font-bold text-green-900">₱{{ number_format($totalAmountToPay, 2) }}</span>
+                                    <span class="text-lg font-semibold text-yellow-900">Minimum Renewal Amount:</span>
+                                    <span class="text-lg font-bold text-yellow-900">₱{{ number_format($minimumRenewalAmount, 2) }}</span>
                                 </div>
+                                <p class="text-xs text-yellow-700 mt-1">Partial payment must be at least this amount. The payment will directly reduce the principal amount.</p>
                             </div>
                         </div>
                     </div>
@@ -107,7 +110,7 @@
                     @if($transaction->pawner_id_image_path)
                         <div class="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
                             <h3 class="text-lg font-medium text-gray-900 mb-3">Pawner ID Verification</h3>
-                            <p class="text-sm text-gray-600 mb-3">Please verify that the person redeeming this transaction matches the ID shown below:</p>
+                            <p class="text-sm text-gray-600 mb-3">Please verify that the person making this partial payment matches the ID shown below:</p>
                             <div class="border-2 border-gray-300 rounded-lg overflow-hidden bg-white">
                                 <img 
                                     src="{{ route('images.show', ['path' => $transaction->pawner_id_image_path]) }}" 
@@ -145,7 +148,7 @@
                                     <p class="text-sm font-medium text-gray-900">{{ $transaction->first_name }} {{ $transaction->last_name }}</p>
                                 </div>
                                 <div>
-                                    <p class="text-sm text-gray-600">Loan Amount (Principal)</p>
+                                    <p class="text-sm text-gray-600">Loan Amount</p>
                                     <div class="flex items-center gap-2">
                                         @if($currentPrincipalAmount != $originalPrincipalAmount)
                                             <span class="text-sm font-medium text-gray-500 line-through">₱{{ number_format($originalPrincipalAmount, 2) }}</span>
@@ -154,6 +157,10 @@
                                             <p class="text-sm font-medium text-gray-900">₱{{ number_format($currentPrincipalAmount, 2) }}</p>
                                         @endif
                                     </div>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-gray-600">Interest Rate</p>
+                                    <p class="text-sm font-medium text-gray-900">{{ $transaction->interest_rate }}%</p>
                                 </div>
                                 <div>
                                     <p class="text-sm text-gray-600">Current Maturity Date</p>
@@ -262,127 +269,130 @@
                         </div>
                     </div>
 
-                    <form method="POST" action="{{ route('transactions.tubos.store') }}">
+                    <form method="POST" action="{{ route('transactions.partial.store') }}" id="partialForm">
                         @csrf
                         <input type="hidden" name="pawn_ticket_number" value="{{ $pawnTicketNumber }}">
 
                         <div class="space-y-6">
-                            <!-- Principal Amount (Readonly, calculated) -->
+                            <!-- Partial Amount Input -->
                             <div>
-                                <x-input-label for="principal_amount" value="Principal Amount to Pay" />
+                                <x-input-label for="partial_amount" value="Partial Payment Amount *" />
                                 <x-text-input 
-                                    id="principal_amount" 
-                                    name="principal_amount" 
+                                    id="partial_amount" 
+                                    name="partial_amount" 
                                     type="number" 
                                     step="0.01" 
-                                    min="0" 
-                                    class="mt-1 block w-full bg-gray-100" 
-                                    :value="old('principal_amount', number_format($principalAmount, 2, '.', ''))" 
+                                    min="{{ number_format($minimumRenewalAmount, 2, '.', '') }}" 
+                                    max="{{ number_format($currentPrincipalAmount, 2, '.', '') }}"
+                                    class="mt-1 block w-full" 
+                                    :value="old('partial_amount')" 
                                     required 
-                                    readonly
+                                    autofocus
                                 />
-                                <x-input-error :messages="$errors->get('principal_amount')" class="mt-2" />
-                                <p class="mt-1 text-xs text-gray-500">This is the principal amount (loan amount) to be redeemed.</p>
+                                <x-input-error :messages="$errors->get('partial_amount')" class="mt-2" />
+                                <p class="mt-1 text-xs text-gray-500">
+                                    Minimum: <strong>₱{{ number_format($minimumRenewalAmount, 2) }}</strong> | Maximum: <strong>₱{{ number_format($currentPrincipalAmount, 2) }}</strong>
+                                </p>
+                                <p class="mt-1 text-xs text-blue-600" id="newPrincipalInfo">
+                                    <!-- Will be populated by JavaScript -->
+                                </p>
                             </div>
 
-                            <!-- Service Charge (Readonly, calculated) -->
+                            <!-- New Principal Amount (Calculated, Readonly) -->
                             <div>
-                                <x-input-label for="service_charge" value="Service Charge" />
+                                <x-input-label for="new_principal_amount" value="New Principal Amount (After Payment)" />
                                 <x-text-input 
-                                    id="service_charge" 
-                                    name="service_charge" 
-                                    type="number" 
-                                    step="0.01" 
-                                    min="0" 
-                                    class="mt-1 block w-full bg-gray-100" 
-                                    :value="old('service_charge', number_format($totalServiceCharge, 2, '.', ''))" 
-                                    required 
-                                    readonly
-                                />
-                                <x-input-error :messages="$errors->get('service_charge')" class="mt-2" />
-                                <p class="mt-1 text-xs text-gray-500">Service charge (₱{{ number_format($serviceCharge, 2) }}) per pawn ticket.</p>
-                            </div>
-
-                            <!-- Additional Charge (Readonly, calculated) -->
-                            <div>
-                                <x-input-label for="additional_charge" value="Additional Charge" />
-                                <x-text-input 
-                                    id="additional_charge" 
-                                    name="additional_charge_display" 
+                                    id="new_principal_amount" 
+                                    name="new_principal_amount_display" 
                                     type="text" 
-                                    class="mt-1 block w-full bg-gray-100" 
-                                    value="₱{{ number_format($additionalChargeAmount, 2) }}" 
+                                    class="mt-1 block w-full bg-gray-100 font-semibold" 
+                                    value="₱{{ number_format($currentPrincipalAmount, 2) }}" 
                                     readonly
                                     disabled
                                 />
                                 <p class="mt-1 text-xs text-gray-500">
-                                    @if($additionalChargeAmount > 0 && $additionalChargeConfig)
-                                        {{ $additionalChargeType === 'EC' ? 'Exceeded Charge' : 'Late Days' }} - {{ $daysExceeded }} day(s) exceeded, {{ $additionalChargeConfig->percentage }}% of current principal (₱{{ number_format($currentPrincipalAmount, 2) }})
-                                    @else
-                                        No additional charge applicable
-                                    @endif
+                                    This will be calculated automatically based on your partial payment amount.
                                 </p>
                             </div>
 
-                            <!-- Total Amount (Readonly, calculated) -->
-                            <div>
-                                <x-input-label for="total_amount" value="Total Amount to Pay" />
-                                <x-text-input 
-                                    id="total_amount" 
-                                    name="total_amount_display" 
-                                    type="text" 
-                                    class="mt-1 block w-full bg-gray-100 font-semibold text-lg" 
-                                    value="₱{{ number_format($totalAmountToPay, 2) }}" 
-                                    readonly
-                                    disabled
-                                />
-                                <p class="mt-1 text-xs text-gray-500">
-                                    Total amount: Principal + Service Charge
-                                    @if($additionalChargeAmount > 0 && $additionalChargeConfig)
-                                        + Additional Charge ({{ $additionalChargeType === 'EC' ? 'Exceeded' : 'Late Days' }})
-                                    @else
-                                        + Additional Charge (if applicable)
-                                    @endif
-                                </p>
-                            </div>
+                            <!-- Date Fields -->
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                    <x-input-label for="maturity_date" value="New Maturity Date *" />
+                                    <x-text-input 
+                                        id="maturity_date" 
+                                        name="maturity_date" 
+                                        type="date" 
+                                        class="mt-1 block w-full" 
+                                        :value="old('maturity_date', $defaultMaturityDate)" 
+                                        min="{{ \Carbon\Carbon::today()->format('Y-m-d') }}"
+                                        required
+                                    />
+                                    <x-input-error :messages="$errors->get('maturity_date')" class="mt-2" />
+                                </div>
 
-                            <!-- Hidden input for additional charge amount -->
-                            <input type="hidden" name="additional_charge_amount" value="{{ number_format($additionalChargeAmount, 2, '.', '') }}">
-                        </div>
+                                <div>
+                                    <x-input-label for="expiry_date" value="New Expiry Redemption Date *" />
+                                    <x-text-input 
+                                        id="expiry_date" 
+                                        name="expiry_date" 
+                                        type="date" 
+                                        class="mt-1 block w-full" 
+                                        :value="old('expiry_date')" 
+                                        min="{{ \Carbon\Carbon::today()->format('Y-m-d') }}"
+                                        required
+                                    />
+                                    <x-input-error :messages="$errors->get('expiry_date')" class="mt-2" />
+                                </div>
 
-                        <!-- Signature Section -->
-                        <div class="mt-8 border-t pt-6">
-                            <x-input-label for="signature" value="Pawner Signature *" class="text-base font-semibold" />
-                            <p class="mt-1 text-sm text-gray-500 mb-4">Please sign below to confirm the redemption of this pawn ticket.</p>
-                            
-                            <div class="bg-white border-2 border-gray-300 rounded-lg p-4">
-                                <canvas 
-                                    id="signatureCanvas" 
-                                    class="border border-gray-300 rounded cursor-crosshair touch-none"
-                                    width="600"
-                                    height="200"
-                                    style="max-width: 100%; height: auto; display: block;"
-                                ></canvas>
-                                <div class="mt-3 flex gap-2">
-                                    <button 
-                                        type="button" 
-                                        id="clearSignature" 
-                                        class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 text-sm font-medium"
-                                    >
-                                        Clear Signature
-                                    </button>
+                                <div>
+                                    <x-input-label for="auction_sale_date" value="New Auction Sale Date" />
+                                    <x-text-input 
+                                        id="auction_sale_date" 
+                                        name="auction_sale_date" 
+                                        type="date" 
+                                        class="mt-1 block w-full" 
+                                        :value="old('auction_sale_date')" 
+                                        min="{{ \Carbon\Carbon::today()->format('Y-m-d') }}"
+                                    />
+                                    <x-input-error :messages="$errors->get('auction_sale_date')" class="mt-2" />
                                 </div>
                             </div>
-                            <input type="hidden" name="signature" id="signatureData">
-                            <x-input-error :messages="$errors->get('signature')" class="mt-2" />
+
+                            <!-- Signature Section -->
+                            <div class="mt-8 border-t pt-6">
+                                <x-input-label for="signature" value="Pawner Signature *" class="text-base font-semibold" />
+                                <p class="mt-1 text-sm text-gray-500 mb-4">Please sign below to confirm the partial payment.</p>
+                                
+                                <div class="bg-white border-2 border-gray-300 rounded-lg p-4">
+                                    <canvas 
+                                        id="signatureCanvas" 
+                                        class="border border-gray-300 rounded cursor-crosshair touch-none"
+                                        width="600"
+                                        height="200"
+                                        style="max-width: 100%; height: auto; display: block;"
+                                    ></canvas>
+                                    <div class="mt-3 flex gap-2">
+                                        <button 
+                                            type="button" 
+                                            id="clearSignature" 
+                                            class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 text-sm font-medium"
+                                        >
+                                            Clear Signature
+                                        </button>
+                                    </div>
+                                </div>
+                                <input type="hidden" name="signature" id="signatureData">
+                                <x-input-error :messages="$errors->get('signature')" class="mt-2" />
+                            </div>
                         </div>
 
                         <div class="flex items-center justify-end mt-6 gap-4">
-                            <a href="{{ route('transactions.tubos.search') }}" class="text-gray-600 hover:text-gray-900 font-medium">
+                            <a href="{{ route('transactions.partial.search') }}" class="text-gray-600 hover:text-gray-900 font-medium">
                                 Cancel
                             </a>
                             <x-primary-button>
-                                Redeem Transaction(s) (Tubos)
+                                Process Partial Payment
                             </x-primary-button>
                         </div>
                     </form>
@@ -397,7 +407,10 @@
             const ctx = canvas.getContext('2d');
             const signatureInput = document.getElementById('signatureData');
             const clearBtn = document.getElementById('clearSignature');
-            const form = document.querySelector('form');
+            const form = document.getElementById('partialForm');
+            const partialAmountInput = document.getElementById('partial_amount');
+            const newPrincipalInput = document.getElementById('new_principal_amount');
+            const newPrincipalInfo = document.getElementById('newPrincipalInfo');
             
             let isDrawing = false;
             let lastX = 0;
@@ -474,7 +487,6 @@
             }
 
             function updateSignatureData() {
-                // Convert canvas to base64 data URL
                 const dataURL = canvas.toDataURL('image/png');
                 signatureInput.value = dataURL;
             }
@@ -483,6 +495,66 @@
                 ctx.fillStyle = '#ffffff';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 signatureInput.value = '';
+            });
+
+            // Calculate new principal amount when partial amount changes
+            const currentPrincipal = {{ $currentPrincipalAmount }};
+            const minimumRenewal = {{ $minimumRenewalAmount }};
+
+            function calculateNewPrincipal() {
+                const partialAmount = parseFloat(partialAmountInput.value) || 0;
+                
+                if (partialAmount >= minimumRenewal && partialAmount <= currentPrincipal) {
+                    const newPrincipal = currentPrincipal - partialAmount;
+                    const finalPrincipal = newPrincipal < 0 ? 0 : newPrincipal;
+                    
+                    newPrincipalInput.value = '₱' + finalPrincipal.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                    newPrincipalInfo.textContent = `Partial payment of ₱${partialAmount.toFixed(2)} will reduce the principal from ₱${currentPrincipal.toFixed(2)} to ₱${finalPrincipal.toFixed(2)}.`;
+                    newPrincipalInfo.classList.remove('hidden');
+                    newPrincipalInfo.classList.remove('text-red-600');
+                } else if (partialAmount < minimumRenewal) {
+                    newPrincipalInput.value = '₱' + currentPrincipal.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                    newPrincipalInfo.textContent = `Warning: Partial amount must be at least ₱${minimumRenewal.toFixed(2)} (minimum renewal amount).`;
+                    newPrincipalInfo.classList.remove('hidden');
+                    newPrincipalInfo.classList.add('text-red-600');
+                } else if (partialAmount > currentPrincipal) {
+                    newPrincipalInput.value = '₱0.00';
+                    newPrincipalInfo.textContent = `Warning: Partial amount exceeds current principal. Maximum allowed: ₱${currentPrincipal.toFixed(2)}.`;
+                    newPrincipalInfo.classList.remove('hidden');
+                    newPrincipalInfo.classList.add('text-red-600');
+                } else {
+                    newPrincipalInput.value = '₱' + currentPrincipal.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                    newPrincipalInfo.textContent = '';
+                    newPrincipalInfo.classList.add('hidden');
+                }
+            }
+
+            partialAmountInput.addEventListener('input', calculateNewPrincipal);
+            partialAmountInput.addEventListener('change', calculateNewPrincipal);
+
+            // Auto-calculate expiry and auction dates based on maturity date
+            const maturityDateInput = document.getElementById('maturity_date');
+            const expiryDateInput = document.getElementById('expiry_date');
+            const auctionDateInput = document.getElementById('auction_sale_date');
+            const daysBeforeRedemption = {{ $daysBeforeRedemption }};
+            const daysBeforeAuctionSale = {{ $daysBeforeAuctionSale }};
+
+            maturityDateInput.addEventListener('change', function() {
+                if (maturityDateInput.value) {
+                    const maturityDate = new Date(maturityDateInput.value);
+                    
+                    // Set expiry date (maturity + daysBeforeRedemption)
+                    const expiryDate = new Date(maturityDate);
+                    expiryDate.setDate(expiryDate.getDate() + daysBeforeRedemption);
+                    expiryDateInput.value = expiryDate.toISOString().split('T')[0];
+                    expiryDateInput.min = expiryDateInput.value;
+                    
+                    // Set auction date (maturity + daysBeforeAuctionSale)
+                    const auctionDate = new Date(maturityDate);
+                    auctionDate.setDate(auctionDate.getDate() + daysBeforeAuctionSale);
+                    auctionDateInput.value = auctionDate.toISOString().split('T')[0];
+                    auctionDateInput.min = auctionDateInput.value;
+                }
             });
 
             // Validate signature before form submission

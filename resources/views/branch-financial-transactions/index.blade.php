@@ -266,9 +266,12 @@
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         @php
                                             // Determine sign based on money direction
-                                            // + for Replenish and Renewal (transaction IN)
+                                            // + for Replenish, Renewal, Tubos, and Partial (transaction IN)
                                             // - for Expense and Sangla (transaction OUT)
-                                            $isIncoming = $transaction->isReplenish() || $transaction->isRenewalTransactionEntry();
+                                            $isIncoming = $transaction->isReplenish() 
+                                                || $transaction->isRenewalTransactionEntry() 
+                                                || $transaction->isTubosTransactionEntry() 
+                                                || $transaction->isPartialTransactionEntry();
                                             $sign = $isIncoming ? '+' : '-';
 
                                             // Always show positive amounts in green, negative in red

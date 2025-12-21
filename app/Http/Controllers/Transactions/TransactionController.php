@@ -69,9 +69,10 @@ class TransactionController extends Controller
         // Get all unique pawn ticket numbers from the current page
         $pawnTicketNumbers = $transactions->pluck('pawn_ticket_number')->filter()->unique()->values();
 
-        // Fetch all renewals and tubos for these pawn tickets (even if they're on different pages)
+        // Fetch all renewals, tubos, and partials for these pawn tickets (even if they're on different pages)
         $renewalsForPawnTickets = collect();
         $tubosForPawnTickets = collect();
+        $partialsForPawnTickets = collect();
         if ($pawnTicketNumbers->isNotEmpty()) {
             $renewalQuery = Transaction::with(['branch', 'user', 'itemType', 'itemTypeSubtype', 'tags', 'voided.voidedBy'])
                 ->where('type', 'renew')
@@ -79,6 +80,10 @@ class TransactionController extends Controller
             
             $tubosQuery = Transaction::with(['branch', 'user', 'itemType', 'itemTypeSubtype', 'tags', 'voided.voidedBy'])
                 ->where('type', 'tubos')
+                ->whereIn('pawn_ticket_number', $pawnTicketNumbers->toArray());
+            
+            $partialQuery = Transaction::with(['branch', 'user', 'itemType', 'itemTypeSubtype', 'tags', 'voided.voidedBy'])
+                ->where('type', 'partial')
                 ->whereIn('pawn_ticket_number', $pawnTicketNumbers->toArray());
 
             // Apply same filters as main query
@@ -148,6 +153,40 @@ class TransactionController extends Controller
             }
 
             $tubosForPawnTickets = $tubosQuery->get();
+            
+            // Apply same filters for partial
+            if ($user->isStaff()) {
+                $partialQuery->where('branch_id', $user->branches()->first()->id);
+                $partialQuery->whereDate('created_at', today());
+            } else {
+                if ($request->filled('date')) {
+                    $partialQuery->whereDate('created_at', $request->date);
+                } elseif ($request->has('today_only') && $request->boolean('today_only')) {
+                    $partialQuery->whereDate('created_at', today());
+                }
+            }
+
+            if ($request->filled('search')) {
+                $search = $request->search;
+                $partialQuery->where(function ($q) use ($search) {
+                    $q->where('item_description', 'like', "%{$search}%")
+                      ->orWhere('first_name', 'like', "%{$search}%")
+                      ->orWhere('last_name', 'like', "%{$search}%")
+                      ->orWhere('transaction_number', 'like', "%{$search}%")
+                      ->orWhere('pawn_ticket_number', 'like', "%{$search}%");
+                });
+            }
+
+            if ($user->isStaff()) {
+                $userBranchIds = $user->branches()->pluck('branches.id')->toArray();
+                if (!empty($userBranchIds)) {
+                    $partialQuery->whereIn('branch_id', $userBranchIds);
+                }
+            } elseif ($request->filled('branch_id')) {
+                $partialQuery->where('branch_id', $request->branch_id);
+            }
+
+            $partialsForPawnTickets = $partialQuery->get();
         }
 
         // Get branches for filter (admin/superadmin only)
@@ -160,6 +199,7 @@ class TransactionController extends Controller
             'transactions' => $transactions,
             'renewalsForPawnTickets' => $renewalsForPawnTickets,
             'tubosForPawnTickets' => $tubosForPawnTickets,
+            'partialsForPawnTickets' => $partialsForPawnTickets,
             'branches' => $branches,
             'filters' => [
                 'date' => $request->date ?? null,

@@ -11,6 +11,7 @@ use App\Http\Controllers\Transactions\Sangla\SanglaController;
 use App\Http\Controllers\Transactions\TransactionController;
 use App\Http\Controllers\Transactions\RenewalController;
 use App\Http\Controllers\Transactions\TubosController;
+use App\Http\Controllers\Transactions\PartialController;
 use App\Http\Controllers\User\UserController;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use Illuminate\Support\Facades\Route;
@@ -53,6 +54,11 @@ Route::middleware('auth')->group(function () {
         Route::get('/tubos/search', [TubosController::class, 'search'])->name('tubos.search');
         Route::post('/tubos/find', [TubosController::class, 'find'])->name('tubos.find');
         Route::post('/tubos', [TubosController::class, 'store'])->name('tubos.store');
+        
+        // Partial Routes
+        Route::get('/partial/search', [PartialController::class, 'search'])->name('partial.search');
+        Route::match(['get', 'post'], '/partial/find', [PartialController::class, 'find'])->name('partial.find');
+        Route::post('/partial', [PartialController::class, 'store'])->name('partial.store');
     });
 
     // Branch Financial Transactions Routes

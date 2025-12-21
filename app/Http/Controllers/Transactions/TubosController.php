@@ -65,21 +65,39 @@ class TubosController extends Controller
         $oldestTransaction = $allTransactions->first();
         $branchId = $oldestTransaction->branch_id;
 
-        // Get the latest transaction (Sangla OR Renewal OR Tubos) for date calculations (most current dates)
-        // This ensures we use the dates from the most recent renewal/tubos if one exists
+        // Get the latest transaction (Sangla OR Renewal OR Partial OR Tubos) for date calculations (most current dates)
+        // This ensures we use the dates from the most recent renewal/partial/tubos if one exists
         $latestTransactionForDates = Transaction::where('pawn_ticket_number', $pawnTicketNumber)
-            ->whereIn('type', ['sangla', 'renew', 'tubos'])
+            ->whereIn('type', ['sangla', 'renew', 'partial', 'tubos'])
             ->whereDoesntHave('voided')
             ->orderBy('created_at', 'desc')
             ->first();
 
-        // If no renewal/tubos exists, use the latest Sangla transaction
+        // If no renewal/partial/tubos exists, use the latest Sangla transaction
         if (!$latestTransactionForDates) {
             $latestTransactionForDates = $allTransactions->last();
         }
 
-        // For tubos: Principal amount (loan_amount)
-        $principalAmount = (float) $oldestTransaction->loan_amount;
+        // Get all partial transactions to show history of principal reductions
+        $partialTransactions = Transaction::where('pawn_ticket_number', $pawnTicketNumber)
+            ->where('type', 'partial')
+            ->whereDoesntHave('voided')
+            ->orderBy('created_at', 'asc')
+            ->get();
+
+        // Get the latest partial transaction to check if principal has been reduced
+        $latestPartialTransaction = $partialTransactions->last();
+
+        // Original principal amount
+        $originalPrincipalAmount = (float) $oldestTransaction->loan_amount;
+
+        // Use the reduced principal from partial transaction if it exists, otherwise use the original
+        $currentPrincipalAmount = $latestPartialTransaction 
+            ? (float) $latestPartialTransaction->loan_amount 
+            : $originalPrincipalAmount;
+
+        // For tubos: Principal amount (current loan_amount after any partial payments)
+        $principalAmount = $currentPrincipalAmount;
 
         // Get service charge from config (one service charge per pawn ticket)
         $serviceCharge = Config::getValue('sangla_service_charge', 0);
@@ -112,8 +130,8 @@ class TubosController extends Controller
         if ($daysExceeded > 0 && $additionalChargeType) {
             $additionalChargeConfig = AdditionalChargeConfig::findApplicable($daysExceeded, $additionalChargeType, 'tubos');
             if ($additionalChargeConfig) {
-                // Calculate charge amount: loan_amount * percentage from config
-                $additionalChargeAmount = $oldestTransaction->loan_amount * ($additionalChargeConfig->percentage / 100);
+                // Calculate charge amount: current principal * percentage from config
+                $additionalChargeAmount = $currentPrincipalAmount * ($additionalChargeConfig->percentage / 100);
             }
         }
 
@@ -124,10 +142,13 @@ class TubosController extends Controller
         $combinedDescriptions = $allTransactions->pluck('item_description')->filter()->unique()->values()->implode('; ');
 
         return view('transactions.tubos.tubos', [
-            'transaction' => $oldestTransaction, // Show oldest transaction (has actual loan amount)
+            'transaction' => $oldestTransaction, // Show oldest transaction (for reference)
             'allTransactions' => $allTransactions, // Keep for reference if needed
             'pawnTicketNumber' => $pawnTicketNumber,
             'principalAmount' => $principalAmount,
+            'currentPrincipalAmount' => $currentPrincipalAmount, // Pass current principal to view
+            'originalPrincipalAmount' => $originalPrincipalAmount, // Pass original principal to view
+            'partialTransactions' => $partialTransactions, // Pass partial transactions for history
             'serviceCharge' => $serviceCharge,
             'totalServiceCharge' => $totalServiceCharge,
             'additionalChargeType' => $additionalChargeType,

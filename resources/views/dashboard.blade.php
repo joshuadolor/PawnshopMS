@@ -122,6 +122,8 @@
                     window.location.href = '{{ route("transactions.renewal.search") }}';
                 } else if (currentTransactionType === 'Tubos') {
                     window.location.href = '{{ route("transactions.tubos.search") }}';
+                } else if (currentTransactionType === 'Partial') {
+                    window.location.href = '{{ route("transactions.partial.search") }}';
                 } else {
                     // TODO: Add other transaction types
                     console.log(`Process mode for ${currentTransactionType} - to be implemented`);

@@ -123,6 +123,32 @@ class BranchFinancialTransaction extends Model
         return false;
     }
 
+    /**
+     * Determine if this "transaction" type row represents a Partial Payment (money IN).
+     *
+     * We identify partial rows by the description starting with "Partial payment"
+     * or by checking if the associated transaction type is 'partial'.
+     */
+    public function isPartialTransactionEntry(): bool
+    {
+        if (!$this->isTransaction()) {
+            return false;
+        }
+
+        // Check by description
+        $description = (string) $this->description;
+        if (str_starts_with($description, 'Partial payment')) {
+            return true;
+        }
+
+        // Check by associated transaction type
+        if ($this->transaction && $this->transaction->type === 'partial') {
+            return true;
+        }
+
+        return false;
+    }
+
     public function voided(): HasOne
     {
         return $this->hasOne(VoidedBranchFinancialTransaction::class, 'branch_financial_transaction_id');

@@ -164,8 +164,18 @@
                                         $tubosTransactions = $tubosFromPage->concat($tubosFromCollection)
                                             ->unique('id');
                                         
-                                        // Combine all child transactions (renewals and tubos) and sort in ascending order
-                                        $childTransactions = $renewalTransactions->concat($tubosTransactions)
+                                        // Get partial transactions for this pawn ticket
+                                        $partialsFromPage = $pawnTicketTransactions->where('type', 'partial');
+                                        $partialsFromCollection = ($pawnTicketNumber && isset($partialsForPawnTickets)) 
+                                            ? $partialsForPawnTickets->where('pawn_ticket_number', $pawnTicketNumber)
+                                            : collect();
+                                        
+                                        // Merge and deduplicate partials
+                                        $partialTransactions = $partialsFromPage->concat($partialsFromCollection)
+                                            ->unique('id');
+                                        
+                                        // Combine all child transactions (renewals, tubos, and partials) and sort in ascending order
+                                        $childTransactions = $renewalTransactions->concat($tubosTransactions)->concat($partialTransactions)
                                             ->unique('id')
                                             ->sortBy('created_at');
                                         
@@ -187,8 +197,20 @@
                                             
                                             // Use the oldest non-voided transaction's values (not sum)
                                             $oldestSanglaTransaction = $nonVoidedSanglaTransactions->sortBy('created_at')->first();
-                                            $principal = $oldestSanglaTransaction ? $oldestSanglaTransaction->loan_amount : 0;
+                                            $originalPrincipal = $oldestSanglaTransaction ? $oldestSanglaTransaction->loan_amount : 0;
                                             $netProceeds = $oldestSanglaTransaction ? $oldestSanglaTransaction->net_proceeds : 0;
+                                            
+                                            // Get current principal amount (after any partial payments)
+                                            $latestPartialTransaction = \App\Models\Transaction::where('pawn_ticket_number', $pawnTicketNumber)
+                                                ->where('type', 'partial')
+                                                ->whereDoesntHave('voided')
+                                                ->orderBy('created_at', 'desc')
+                                                ->first();
+                                            
+                                            // Use current principal from latest partial if exists, otherwise use original
+                                            $principal = $latestPartialTransaction 
+                                                ? (float) $latestPartialTransaction->loan_amount 
+                                                : $originalPrincipal;
                                             
                                             // Check if ALL Sangla transactions are voided (for opacity)
                                             $allSanglaTransactionsVoided = $sanglaTransactions->count() > 0 && 
@@ -289,7 +311,14 @@
                                             </td>
                                             <td class="px-6 py-3 whitespace-nowrap">
                                                 <div class="text-xs text-gray-500">Principal:</div>
-                                                <div class="text-sm font-medium text-gray-900">₱{{ number_format($principal, 2) }}</div>
+                                                <div class="text-sm font-medium text-gray-900">
+                                                    @if($latestPartialTransaction && $principal != $originalPrincipal)
+                                                        <span class="text-gray-500 line-through">₱{{ number_format($originalPrincipal, 2) }}</span>
+                                                        <span class="text-blue-600 ml-2">₱{{ number_format($principal, 2) }}</span>
+                                                    @else
+                                                        ₱{{ number_format($principal, 2) }}
+                                                    @endif
+                                                </div>
                                                 <div class="mt-2 text-xs text-gray-500">Net Proceeds:</div>
                                                 <div class="text-sm text-red-700 font-medium">₱{{ number_format($netProceeds, 2) }}</div>
                                             </td>
@@ -440,21 +469,26 @@
                                             // Determine styling and content based on transaction type
                                             $isRenewal = $childTransaction->type === 'renew';
                                             $isTubos = $childTransaction->type === 'tubos';
-                                            $bgColor = $isRenewal ? 'bg-yellow-50 hover:bg-yellow-100' : ($isTubos ? 'bg-green-50 hover:bg-green-100' : 'bg-gray-50');
-                                            $textColor = $isRenewal ? 'text-yellow-900' : ($isTubos ? 'text-green-900' : 'text-gray-900');
-                                            $badgeColor = $isRenewal ? 'bg-yellow-100 text-yellow-800' : ($isTubos ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800');
-                                            $label = $isRenewal ? 'Renewal' : ($isTubos ? 'Tubos' : ucfirst($childTransaction->type));
+                                            $isPartial = $childTransaction->type === 'partial';
+                                            $bgColor = $isRenewal ? 'bg-yellow-50 hover:bg-yellow-100' : ($isTubos ? 'bg-green-50 hover:bg-green-100' : ($isPartial ? 'bg-purple-50 hover:bg-purple-100' : 'bg-gray-50'));
+                                            $textColor = $isRenewal ? 'text-yellow-900' : ($isTubos ? 'text-green-900' : ($isPartial ? 'text-purple-900' : 'text-gray-900'));
+                                            $badgeColor = $isRenewal ? 'bg-yellow-100 text-yellow-800' : ($isTubos ? 'bg-green-100 text-green-800' : ($isPartial ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'));
+                                            $label = $isRenewal ? 'Renewal' : ($isTubos ? 'Tubos' : ($isPartial ? 'Partial' : ucfirst($childTransaction->type)));
                                             $description = $isRenewal 
                                                 ? "Renewal of Pawn Ticket #{$childTransaction->pawn_ticket_number}" 
                                                 : ($isTubos 
                                                     ? "Redemption of Pawn Ticket #{$childTransaction->pawn_ticket_number}"
-                                                    : "Transaction #{$childTransaction->transaction_number}");
+                                                    : ($isPartial
+                                                        ? "Partial Payment of Pawn Ticket #{$childTransaction->pawn_ticket_number}"
+                                                        : "Transaction #{$childTransaction->transaction_number}"));
                                             $subDescription = $isRenewal 
                                                 ? "Interest payment to extend maturity and expiry dates."
                                                 : ($isTubos 
                                                     ? "Principal + Service Charge + Additional Charge payment."
-                                                    : "");
-                                            $amountLabel = $isRenewal ? "Interest Paid:" : ($isTubos ? "Amount Paid:" : "Amount:");
+                                                    : ($isPartial
+                                                        ? "Partial payment that reduces principal amount."
+                                                        : ""));
+                                            $amountLabel = $isRenewal ? "Interest Paid:" : ($isTubos ? "Amount Paid:" : ($isPartial ? "Partial Amount Paid:" : "Amount:"));
                                         @endphp
                                         <tr 
                                             class="{{ $bgColor }} transition-colors cursor-pointer transaction-row {{ $isVoided ? 'opacity-40' : '' }}"
@@ -517,7 +551,7 @@
                                             </td>
                                             <td class="px-6 py-2 whitespace-nowrap">
                                                 <span class="px-2 inline-flex text-[11px] leading-5 font-semibold rounded-full {{ $badgeColor }}">
-                                                    {{ $isRenewal ? 'Renew' : ($isTubos ? 'Tubos' : ucfirst($childTransaction->type)) }}
+                                                    {{ $isRenewal ? 'Renew' : ($isTubos ? 'Tubos' : ($isPartial ? 'Partial' : ucfirst($childTransaction->type))) }}
                                                 </span>
                                             </td>
                                             <td class="px-6 py-2 whitespace-nowrap">
@@ -610,8 +644,9 @@
                                                     <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
                                                         {{ $transaction->type === 'sangla' ? 'bg-blue-100 text-blue-800' : 
                                                            ($transaction->type === 'tubos' ? 'bg-green-100 text-green-800' : 
-                                                           ($transaction->type === 'renew' ? 'bg-yellow-100 text-yellow-800' : 'bg-purple-100 text-purple-800')) }}">
-                                                        {{ ucfirst($transaction->type) }}
+                                                           ($transaction->type === 'renew' ? 'bg-yellow-100 text-yellow-800' : 
+                                                           ($transaction->type === 'partial' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'))) }}">
+                                                        {{ $transaction->type === 'partial' ? 'Partial' : ucfirst($transaction->type) }}
                                                     </span>
                                                 </td>
                                                 <td class="px-6 py-4 whitespace-nowrap">
@@ -1265,7 +1300,7 @@
             const signatureImage = document.getElementById('modalSignatureImage');
             const signaturePlaceholder = document.getElementById('modalSignaturePlaceholder');
             
-            if (data.transactionType === 'tubos') {
+            if (data.transactionType === 'tubos' || data.transactionType === 'partial') {
                 signatureSection.classList.remove('hidden');
                 if (data.signatureImageUrl && data.signatureImageUrl.trim() !== '') {
                     signatureImage.src = data.signatureImageUrl;
