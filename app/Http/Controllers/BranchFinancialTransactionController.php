@@ -24,8 +24,12 @@ class BranchFinancialTransactionController extends Controller
         $query = BranchFinancialTransaction::with(['branch', 'user', 'voided.voidedBy', 'transaction.voided']);
         // Note: Voided transactions are shown in table but excluded from calculations
 
-        // Default to today's transactions
-        if (!$request->filled('date_from') && !$request->filled('date_to') && !$request->has('all_dates')) {
+        // Default to showing all transactions (not just today)
+        // Users can filter by date if needed
+        if ($request->filled('date_from') || $request->filled('date_to')) {
+            // Apply date filters if provided
+        } elseif ($request->has('today_only') && $request->boolean('today_only')) {
+            // Only show today if explicitly requested
             $query->whereDate('transaction_date', today());
         }
 
@@ -73,9 +77,30 @@ class BranchFinancialTransactionController extends Controller
             foreach ($branches as $branch) {
                 $balance = $branch->getCurrentBalance();
                 
+                // Calculate additions (replenish + renewal transactions)
+                $additionsQuery = BranchFinancialTransaction::where('branch_id', $branch->id)
+                    ->whereDoesntHave('voided')
+                    ->with('transaction')
+                    ->get();
+                
+                $additions = $additionsQuery
+                    ->filter(function($t) {
+                        return $t->isReplenish() || $t->isRenewalTransactionEntry();
+                    })
+                    ->sum('amount');
+                
+                // Calculate expenses (expense + sangla transactions)
+                $expenses = $additionsQuery
+                    ->filter(function($t) {
+                        return $t->isExpense() || $t->isSanglaTransactionEntry();
+                    })
+                    ->sum('amount');
+                
                 $branchBalances[$branch->id] = [
                     'branch' => $branch,
                     'balance' => $balance,
+                    'additions' => $additions,
+                    'expenses' => $expenses,
                 ];
             }
         }
@@ -102,15 +127,15 @@ class BranchFinancialTransactionController extends Controller
             ->when(!$user->isStaff() && $request->filled('branch_id'), function ($q) use ($request) {
                 $q->where('branch_id', $request->branch_id);
             })
-            ->when(!$request->filled('date_from') && !$request->filled('date_to') && !$request->has('all_dates'), function ($q) {
-                // Default to today for all users
-                $q->whereDate('transaction_date', today());
-            })
             ->when($request->filled('date_from'), function ($q) use ($request) {
                 $q->whereDate('transaction_date', '>=', $request->date_from);
             })
             ->when($request->filled('date_to'), function ($q) use ($request) {
                 $q->whereDate('transaction_date', '<=', $request->date_to);
+            })
+            ->when($request->has('today_only') && $request->boolean('today_only'), function ($q) {
+                // Only show today if explicitly requested
+                $q->whereDate('transaction_date', today());
             });
 
         $totalReplenish = (clone $summaryQuery)->where('type', 'replenish')->sum('amount');

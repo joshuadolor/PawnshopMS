@@ -108,7 +108,6 @@
                                         Transaction #
                                     </th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pawner</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
@@ -118,180 +117,285 @@
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
                                 @php
-                                    // Track which pawn tickets we've already rendered renewals for,
-                                    // so we only show child rows once per pawn ticket number.
-                                    $renderedRenewalsForPawnTickets = [];
+                                    // Group transactions by pawn ticket number
+                                    // Transactions without pawn_ticket_number will be in a null group
+                                    $transactionsByPawnTicket = $transactions->groupBy(function($transaction) {
+                                        return $transaction->pawn_ticket_number ?? 'no-pawn-ticket-' . $transaction->id;
+                                    });
                                 @endphp
-                                @forelse ($transactions as $transaction)
+                                @forelse ($transactionsByPawnTicket as $pawnTicketKey => $pawnTicketTransactions)
                                     @php
-                                        $isVoided = $transaction->isVoided();
-                                    @endphp
-                                    <tr 
-                                        class="hover:bg-gray-50 transition-colors cursor-pointer transaction-row {{ $isVoided ? 'opacity-40' : '' }}"
-                                        data-item-image="{{ route('images.show', ['path' => $transaction->item_image_path]) }}"
-                                        data-pawner-image="{{ route('images.show', ['path' => $transaction->pawner_id_image_path]) }}"
-                                        data-pawn-ticket-image="{{ $transaction->pawn_ticket_image_path ? route('images.show', ['path' => $transaction->pawn_ticket_image_path]) : '' }}"
-                                        data-transaction-id="{{ $transaction->id }}"
-                                        data-transaction-number="{{ $transaction->transaction_number }}"
-                                        data-transaction-date="{{ $transaction->created_at->format('M d, Y') }} {{ $transaction->created_at->format('h:i A') }}"
-                                        data-is-voided="{{ $isVoided ? '1' : '0' }}"
-                                        data-maturity-date="{{ $transaction->maturity_date ? $transaction->maturity_date->format('M d, Y') : '' }}"
-                                        data-expiry-date="{{ $transaction->expiry_date ? $transaction->expiry_date->format('M d, Y') : '' }}"
-                                        data-auction-sale-date="{{ $transaction->auction_sale_date ? $transaction->auction_sale_date->format('M d, Y') : '' }}"
-                                        data-loan-amount="{{ number_format($transaction->loan_amount, 2) }}"
-                                        data-interest-rate="{{ number_format($transaction->interest_rate, 2) }}"
-                                        data-service-charge="{{ number_format($transaction->service_charge, 2) }}"
-                                        data-net-proceeds="{{ number_format($transaction->net_proceeds, 2) }}"
-                                    >
-                                        <td class="px-6 py-4 whitespace-nowrap">
-                                            <div class="text-sm font-medium text-gray-900">{{ $transaction->pawn_ticket_number }}</div>
-                                            <div class="text-xs text-gray-500">Pawn Ticket #</div>
-                                            <div class="text-sm mt-4 font-medium text-gray-900">{{ $transaction->transaction_number }}</div>
-                                            <div class="text-xs text-gray-500">Transaction #</div>
-                                        </td>
-                                        <td class="px-6 py-4 whitespace-nowrap">
-                                            <div class="text-sm text-gray-900">{{ $transaction->created_at->format('M d, Y') }}</div>
-                                            <div class="text-xs text-gray-500">{{ $transaction->created_at->format('h:i A') }}</div>
-                                        </td>
-                                        <td class="px-6 py-4">
-                                            <div class="text-sm font-medium text-gray-900">{{ $transaction->pawner_name }}</div>
-                                            <div class="text-xs text-gray-500">{{ \Illuminate\Support\Str::limit($transaction->address, 30) }}</div>
-                                        </td>
-                                        <td class="px-6 py-4">
-                                            <div class="text-sm font-medium text-gray-900">
-                                                {{ $transaction->itemType->name }}
-                                                @if($transaction->itemTypeSubtype)
-                                                    <span class="text-gray-500">- {{ $transaction->itemTypeSubtype->name }}</span>
-                                                @endif
-                                            </div>
-                                            <div class="text-xs text-gray-500 mt-1">{{ \Illuminate\Support\Str::limit($transaction->item_description, 40) }}</div>
-                                            @if($transaction->tags->count() > 0)
-                                                <div class="mt-1 flex flex-wrap gap-1">
-                                                    @foreach($transaction->tags as $tag)
-                                                        <span class="inline-block px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800 rounded">
-                                                            {{ $tag->name }}
-                                                        </span>
-                                                    @endforeach
-                                                </div>
-                                            @endif
-                                        </td>
-                                        <td class="px-6 py-4 whitespace-nowrap">
-                                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                                                {{ $transaction->type === 'sangla' ? 'bg-blue-100 text-blue-800' : 
-                                                   ($transaction->type === 'tubos' ? 'bg-green-100 text-green-800' : 
-                                                   ($transaction->type === 'renew' ? 'bg-yellow-100 text-yellow-800' : 'bg-purple-100 text-purple-800')) }}">
-                                                {{ ucfirst($transaction->type) }}
-                                            </span>
-                                        </td>
-                                        <td class="px-6 py-4 whitespace-nowrap">
-                                            <div class="text-xs text-gray-500">Principal:</div>
-                                            <div class="text-sm font-medium text-gray-900">₱{{ number_format($transaction->loan_amount, 2) }}</div>
-
-                                            @if($transaction->type === 'sangla')
-                                                <div class="mt-2 text-xs text-gray-500">Net Proceeds:</div>
-                                                <div class="text-sm text-red-700 font-medium">₱{{ number_format($transaction->net_proceeds, 2) }}</div>
-                                            @endif
-                                        </td>
-                                        <td class="px-6 py-4 whitespace-nowrap">
-                                            <div class="text-sm text-gray-900">{{ $transaction->branch->name }}</div>
-                                        </td>
-                                        <td class="px-6 py-4 whitespace-nowrap">
-                                            <div class="text-sm text-gray-900">{{ $transaction->user->name }}</div>
-                                        </td>
-                                    </tr>
-
-                                    @php
-                                        $pawnTicketNumber = $transaction->pawn_ticket_number;
-                                        $canRenderRenewals = $pawnTicketNumber && !in_array($pawnTicketNumber, $renderedRenewalsForPawnTickets, true);
-                                        $renewals = $canRenderRenewals && isset($renewalsByPawnTicket) 
-                                            ? ($renewalsByPawnTicket[$pawnTicketNumber] ?? collect())
+                                        $pawnTicketNumber = $pawnTicketTransactions->first()->pawn_ticket_number;
+                                        // Separate sangla and renewal transactions from current page
+                                        $sanglaTransactions = $pawnTicketTransactions->where('type', 'sangla')->sortByDesc('created_at');
+                                        $renewalsFromPage = $pawnTicketTransactions->where('type', 'renew');
+                                        
+                                        // Also get renewals from the additional collection (for renewals on different pages)
+                                        $renewalsFromCollection = ($pawnTicketNumber && isset($renewalsForPawnTickets)) 
+                                            ? $renewalsForPawnTickets->where('pawn_ticket_number', $pawnTicketNumber)
                                             : collect();
+                                        
+                                        // Merge and deduplicate renewals
+                                        $renewalTransactions = $renewalsFromPage->concat($renewalsFromCollection)
+                                            ->unique('id')
+                                            ->sortByDesc('created_at');
+                                        
+                                        // Get first transaction for pawner info (for header)
+                                        $firstTransaction = $sanglaTransactions->first() ?? $pawnTicketTransactions->first();
                                     @endphp
 
-                                    @if($renewals->isNotEmpty())
+                                    @if($pawnTicketNumber)
                                         @php
-                                            $renderedRenewalsForPawnTickets[] = $pawnTicketNumber;
+                                            // Use the oldest transaction's values (not sum)
+                                            $oldestSanglaTransaction = $sanglaTransactions->sortBy('created_at')->first();
+                                            $principal = $oldestSanglaTransaction ? $oldestSanglaTransaction->loan_amount : 0;
+                                            $netProceeds = $oldestSanglaTransaction ? $oldestSanglaTransaction->net_proceeds : 0;
                                         @endphp
+                                        {{-- Pawn Ticket Header Row --}}
+                                        <tr class="bg-violet-100 border-t-2 border-gray-300">
+                                            <td colspan="4" class="px-6 py-3">
+                                                <div class="flex  flex-col justify-between">
+                                                    <div>
+                                                        <span class="text-sm font-bold text-gray-900">PAWN TICKET #{{ $pawnTicketNumber }}</span>
+                                                    </div>
+                                                    <span class="text-sm text-gray-600">{{ $firstTransaction->pawner_name }}</span>
+                                                    <div class="text-xs text-gray-500">
+                                                        {{ $sanglaTransactions->count() }} Item(s) 
+                                                        @if($renewalTransactions->count() > 0)
+                                                            • {{ $renewalTransactions->count() }} Renewal(s)
+                                                        @endif
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td class="px-6 py-3 whitespace-nowrap">
+                                                <div class="text-xs text-gray-500">Principal:</div>
+                                                <div class="text-sm font-medium text-gray-900">₱{{ number_format($principal, 2) }}</div>
+                                                <div class="mt-2 text-xs text-gray-500">Net Proceeds:</div>
+                                                <div class="text-sm text-red-700 font-medium">₱{{ number_format($netProceeds, 2) }}</div>
+                                            </td>
+                                            <td class="px-6 py-3"></td>
+                                            <td class="px-6 py-3"></td>
+                                        </tr>
+                                    @endif
 
-                                        @foreach($renewals as $renewal)
-                                            <tr class="bg-yellow-50 text-xs">
-                                                <!-- Pawn Ticket / Transaction -->
-                                                <td class="px-10 py-2 whitespace-nowrap">
-                                                    <div class="text-xs font-semibold text-yellow-900">
-                                                        Renewal
+                                    {{-- Show all Sangla transactions first --}}
+                                    @foreach($sanglaTransactions as $transaction)
+                                        @php
+                                            $isVoided = $transaction->isVoided();
+                                        @endphp
+                                        <tr 
+                                            class="hover:bg-gray-50 transition-colors cursor-pointer transaction-row {{ $isVoided ? 'opacity-40' : '' }} {{ $pawnTicketNumber ? 'bg-gray-50' : '' }}"
+                                            data-item-image="{{ route('images.show', ['path' => $transaction->item_image_path]) }}"
+                                            data-pawner-image="{{ route('images.show', ['path' => $transaction->pawner_id_image_path]) }}"
+                                            data-pawn-ticket-image="{{ $transaction->pawn_ticket_image_path ? route('images.show', ['path' => $transaction->pawn_ticket_image_path]) : '' }}"
+                                            data-transaction-id="{{ $transaction->id }}"
+                                            data-transaction-number="{{ $transaction->transaction_number }}"
+                                            data-pawn-ticket-number="{{ $transaction->pawn_ticket_number ?? '' }}"
+                                            data-item-type="{{ $transaction->itemType->name }}"
+                                            data-item-subtype="{{ $transaction->itemTypeSubtype ? $transaction->itemTypeSubtype->name : '' }}"
+                                            data-item-description="{{ $transaction->item_description }}"
+                                            data-transaction-date="{{ $transaction->created_at->format('M d, Y') }} {{ $transaction->created_at->format('h:i A') }}"
+                                            data-is-voided="{{ $isVoided ? '1' : '0' }}"
+                                            data-maturity-date="{{ $transaction->maturity_date ? $transaction->maturity_date->format('M d, Y') : '' }}"
+                                            data-expiry-date="{{ $transaction->expiry_date ? $transaction->expiry_date->format('M d, Y') : '' }}"
+                                            data-auction-sale-date="{{ $transaction->auction_sale_date ? $transaction->auction_sale_date->format('M d, Y') : '' }}"
+                                            data-loan-amount="{{ number_format($transaction->loan_amount, 2) }}"
+                                            data-interest-rate="{{ number_format($transaction->interest_rate, 2) }}"
+                                            data-service-charge="{{ number_format($transaction->service_charge, 2) }}"
+                                            data-net-proceeds="{{ number_format($transaction->net_proceeds, 2) }}"
+                                        >
+                                            <td class="px-6 py-4 whitespace-nowrap {{ $pawnTicketNumber ? 'pl-12' : '' }}">
+                                                <div class="text-xs text-gray-500">Transaction #</div>
+                                                <div class="text-sm font-medium text-gray-900">{{ $transaction->transaction_number }}</div>
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                <div class="text-sm text-gray-900">{{ $transaction->created_at->format('M d, Y') }}</div>
+                                                <div class="text-xs text-gray-500">{{ $transaction->created_at->format('h:i A') }}</div>
+                                            </td>
+                                            <td class="px-6 py-4">
+                                                <div class="text-sm font-medium text-gray-900">
+                                                    {{ $transaction->itemType->name }}
+                                                    @if($transaction->itemTypeSubtype)
+                                                        <span class="text-gray-500">- {{ $transaction->itemTypeSubtype->name }}</span>
+                                                    @endif
+                                                </div>
+                                                <div class="text-xs text-gray-500 mt-1">{{ \Illuminate\Support\Str::limit($transaction->item_description, 40) }}</div>
+                                                @if($transaction->tags->count() > 0)
+                                                    <div class="mt-1 flex flex-wrap gap-1">
+                                                        @foreach($transaction->tags as $tag)
+                                                            <span class="inline-block px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800 rounded">
+                                                                {{ $tag->name }}
+                                                            </span>
+                                                        @endforeach
                                                     </div>
-                                                    <div class="text-[11px] text-gray-600">
-                                                        Pawn Ticket #{{ $transaction->pawn_ticket_number }}
-                                                    </div>
+                                                @endif
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                                                    Sangla
+                                                </span>
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                {{-- Amount cell left empty for Sangla transactions - shown on header row --}}
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                <div class="text-sm text-gray-900">{{ $transaction->branch->name }}</div>
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                <div class="text-sm text-gray-900">{{ $transaction->user->name }}</div>
+                                            </td>
+                                        </tr>
+                                    @endforeach
+
+                                    {{-- Show all Renewal transactions at the bottom --}}
+                                    @foreach($renewalTransactions as $renewal)
+                                        @php
+                                            $isVoided = $renewal->isVoided();
+                                        @endphp
+                                        <tr 
+                                            class="bg-yellow-50 hover:bg-yellow-100 transition-colors cursor-pointer transaction-row {{ $isVoided ? 'opacity-40' : '' }}"
+                                            data-item-image="{{ route('images.show', ['path' => $renewal->item_image_path]) }}"
+                                            data-pawner-image="{{ route('images.show', ['path' => $renewal->pawner_id_image_path]) }}"
+                                            data-pawn-ticket-image="{{ $renewal->pawn_ticket_image_path ? route('images.show', ['path' => $renewal->pawn_ticket_image_path]) : '' }}"
+                                            data-transaction-id="{{ $renewal->id }}"
+                                            data-transaction-number="{{ $renewal->transaction_number }}"
+                                            data-pawn-ticket-number="{{ $renewal->pawn_ticket_number ?? '' }}"
+                                            data-item-type="{{ $renewal->itemType->name }}"
+                                            data-item-subtype="{{ $renewal->itemTypeSubtype ? $renewal->itemTypeSubtype->name : '' }}"
+                                            data-item-description="{{ $renewal->item_description }}"
+                                            data-transaction-date="{{ $renewal->created_at->format('M d, Y') }} {{ $renewal->created_at->format('h:i A') }}"
+                                            data-is-voided="{{ $isVoided ? '1' : '0' }}"
+                                            data-maturity-date="{{ $renewal->maturity_date ? $renewal->maturity_date->format('M d, Y') : '' }}"
+                                            data-expiry-date="{{ $renewal->expiry_date ? $renewal->expiry_date->format('M d, Y') : '' }}"
+                                            data-auction-sale-date="{{ $renewal->auction_sale_date ? $renewal->auction_sale_date->format('M d, Y') : '' }}"
+                                            data-loan-amount="{{ number_format($renewal->loan_amount, 2) }}"
+                                            data-interest-rate="{{ number_format($renewal->interest_rate, 2) }}"
+                                            data-service-charge="{{ number_format($renewal->service_charge, 2) }}"
+                                            data-net-proceeds="{{ number_format($renewal->net_proceeds, 2) }}"
+                                        >
+                                            <td class="px-6 py-2 whitespace-nowrap {{ $pawnTicketNumber ? 'pl-12' : '' }}">
+                                                <div class="text-xs font-semibold text-yellow-900">
+                                                    Renewal
+                                                </div>
+                                                <div class="text-[11px] text-gray-600 mt-1">
+                                                    {{ $renewal->transaction_number }}
+                                                </div>
+                                            </td>
+                                            <td class="px-6 py-2 whitespace-nowrap">
+                                                <div class="text-xs text-gray-900">
+                                                    {{ $renewal->created_at->format('M d, Y') }}
+                                                </div>
+                                                <div class="text-[11px] text-gray-500">
+                                                    {{ $renewal->created_at->format('h:i A') }}
+                                                </div>
+                                            </td>
+                                            <td class="px-6 py-2">
+                                                <div class="text-xs font-medium text-gray-900">
+                                                    Renewal of {{ $renewal->itemType->name }}
+                                                    @if($renewal->itemTypeSubtype)
+                                                        <span class="text-gray-500">- {{ $renewal->itemTypeSubtype->name }}</span>
+                                                    @endif
+                                                </div>
+                                                <div class="text-[11px] text-gray-500 mt-1">
+                                                    Interest payment to extend maturity and expiry dates.
+                                                </div>
+                                            </td>
+                                            <td class="px-6 py-2 whitespace-nowrap">
+                                                <span class="px-2 inline-flex text-[11px] leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                                                    Renew
+                                                </span>
+                                            </td>
+                                            <td class="px-6 py-2 whitespace-nowrap">
+                                                <div class="text-[11px] text-gray-500">Interest Paid:</div>
+                                                <div class="text-xs font-medium text-green-700">
+                                                    +₱{{ number_format($renewal->net_proceeds, 2) }}
+                                                </div>
+                                            </td>
+                                            <td class="px-6 py-2 whitespace-nowrap">
+                                                <div class="text-xs text-gray-900">
+                                                    {{ $renewal->branch->name }}
+                                                </div>
+                                            </td>
+                                            <td class="px-6 py-2 whitespace-nowrap">
+                                                <div class="text-xs text-gray-900">
+                                                    {{ $renewal->user->name }}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    @endforeach
+
+                                    {{-- Handle transactions without pawn ticket number --}}
+                                    @if(!$pawnTicketNumber)
+                                        @foreach($pawnTicketTransactions as $transaction)
+                                            @php
+                                                $isVoided = $transaction->isVoided();
+                                            @endphp
+                                        <tr 
+                                            class="hover:bg-gray-50 transition-colors cursor-pointer transaction-row {{ $isVoided ? 'opacity-40' : '' }}"
+                                            data-item-image="{{ route('images.show', ['path' => $transaction->item_image_path]) }}"
+                                            data-pawner-image="{{ route('images.show', ['path' => $transaction->pawner_id_image_path]) }}"
+                                            data-pawn-ticket-image="{{ $transaction->pawn_ticket_image_path ? route('images.show', ['path' => $transaction->pawn_ticket_image_path]) : '' }}"
+                                            data-transaction-id="{{ $transaction->id }}"
+                                            data-transaction-number="{{ $transaction->transaction_number }}"
+                                            data-pawn-ticket-number="{{ $transaction->pawn_ticket_number ?? '' }}"
+                                            data-item-type="{{ $transaction->itemType->name }}"
+                                            data-item-subtype="{{ $transaction->itemTypeSubtype ? $transaction->itemTypeSubtype->name : '' }}"
+                                            data-item-description="{{ $transaction->item_description }}"
+                                            data-transaction-date="{{ $transaction->created_at->format('M d, Y') }} {{ $transaction->created_at->format('h:i A') }}"
+                                            data-is-voided="{{ $isVoided ? '1' : '0' }}"
+                                            data-maturity-date="{{ $transaction->maturity_date ? $transaction->maturity_date->format('M d, Y') : '' }}"
+                                            data-expiry-date="{{ $transaction->expiry_date ? $transaction->expiry_date->format('M d, Y') : '' }}"
+                                            data-auction-sale-date="{{ $transaction->auction_sale_date ? $transaction->auction_sale_date->format('M d, Y') : '' }}"
+                                            data-loan-amount="{{ number_format($transaction->loan_amount, 2) }}"
+                                            data-interest-rate="{{ number_format($transaction->interest_rate, 2) }}"
+                                            data-service-charge="{{ number_format($transaction->service_charge, 2) }}"
+                                            data-net-proceeds="{{ number_format($transaction->net_proceeds, 2) }}"
+                                        >
+                                                <td class="px-6 py-4 whitespace-nowrap">
+                                                    <div class="text-xs text-gray-500">Transaction #</div>
+                                                    <div class="text-sm font-medium text-gray-900">{{ $transaction->transaction_number }}</div>
                                                 </td>
-
-                                                <!-- Date -->
-                                                <td class="px-6 py-2 whitespace-nowrap">
-                                                    <div class="text-xs text-gray-900">
-                                                        {{ $renewal->transaction_date->format('M d, Y') }}
-                                                    </div>
-                                                    <div class="text-[11px] text-gray-500">
-                                                        {{ $renewal->created_at->format('h:i A') }}
-                                                    </div>
+                                                <td class="px-6 py-4 whitespace-nowrap">
+                                                    <div class="text-sm text-gray-900">{{ $transaction->created_at->format('M d, Y') }}</div>
+                                                    <div class="text-xs text-gray-500">{{ $transaction->created_at->format('h:i A') }}</div>
                                                 </td>
-
-                                                <!-- Pawner -->
-                                                <td class="px-6 py-2">
-                                                    <div class="text-xs font-medium text-gray-900">
-                                                        {{ $transaction->pawner_name }}
-                                                    </div>
-                                                    <div class="text-[11px] text-gray-500">
-                                                        {{ \Illuminate\Support\Str::limit($transaction->address, 30) }}
-                                                    </div>
-                                                </td>
-
-                                                <!-- Item -->
-                                                <td class="px-6 py-2">
-                                                    <div class="text-xs font-medium text-gray-900">
-                                                        Renewal of {{ $transaction->itemType->name }}
+                                                <td class="px-6 py-4">
+                                                    <div class="text-sm font-medium text-gray-900">
+                                                        {{ $transaction->itemType->name }}
                                                         @if($transaction->itemTypeSubtype)
                                                             <span class="text-gray-500">- {{ $transaction->itemTypeSubtype->name }}</span>
                                                         @endif
                                                     </div>
-                                                    <div class="text-[11px] text-gray-500 mt-1">
-                                                        Interest payment to extend maturity and expiry dates.
-                                                    </div>
+                                                    <div class="text-xs text-gray-500 mt-1">{{ \Illuminate\Support\Str::limit($transaction->item_description, 40) }}</div>
                                                 </td>
-
-                                                <!-- Type -->
-                                                <td class="px-6 py-2 whitespace-nowrap">
-                                                    <span class="px-2 inline-flex text-[11px] leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                                                        Renew
+                                                <td class="px-6 py-4 whitespace-nowrap">
+                                                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                                                        {{ $transaction->type === 'sangla' ? 'bg-blue-100 text-blue-800' : 
+                                                           ($transaction->type === 'tubos' ? 'bg-green-100 text-green-800' : 
+                                                           ($transaction->type === 'renew' ? 'bg-yellow-100 text-yellow-800' : 'bg-purple-100 text-purple-800')) }}">
+                                                        {{ ucfirst($transaction->type) }}
                                                     </span>
                                                 </td>
-
-                                                <!-- Amount -->
-                                                <td class="px-6 py-2 whitespace-nowrap">
-                                                    <div class="text-[11px] text-gray-500">Interest Paid:</div>
-                                                    <div class="text-xs font-medium text-green-700">
-                                                        +₱{{ number_format($renewal->amount, 2) }}
-                                                    </div>
+                                                <td class="px-6 py-4 whitespace-nowrap">
+                                                    <div class="text-xs text-gray-500">Principal:</div>
+                                                    <div class="text-sm font-medium text-gray-900">₱{{ number_format($transaction->loan_amount, 2) }}</div>
+                                                    @if($transaction->type === 'sangla')
+                                                        <div class="mt-2 text-xs text-gray-500">Net Proceeds:</div>
+                                                        <div class="text-sm text-red-700 font-medium">₱{{ number_format($transaction->net_proceeds, 2) }}</div>
+                                                    @endif
                                                 </td>
-
-                                                <!-- Branch -->
-                                                <td class="px-6 py-2 whitespace-nowrap">
-                                                    <div class="text-xs text-gray-900">
-                                                        {{ $renewal->branch->name ?? $transaction->branch->name }}
-                                                    </div>
+                                                <td class="px-6 py-4 whitespace-nowrap">
+                                                    <div class="text-sm text-gray-900">{{ $transaction->branch->name }}</div>
                                                 </td>
-
-                                                <!-- By -->
-                                                <td class="px-6 py-2 whitespace-nowrap">
-                                                    <div class="text-xs text-gray-900">
-                                                        {{ $renewal->user->name ?? $transaction->user->name }}
-                                                    </div>
+                                                <td class="px-6 py-4 whitespace-nowrap">
+                                                    <div class="text-sm text-gray-900">{{ $transaction->user->name }}</div>
                                                 </td>
                                             </tr>
                                         @endforeach
                                     @endif
                                 @empty
                                     <tr>
-                                        <td colspan="8" class="px-6 py-4 text-center text-sm text-gray-500">
+                                        <td colspan="7" class="px-6 py-4 text-center text-sm text-gray-500">
                                             @if(auth()->user()->isStaff())
                                                 No transactions found for today.
                                             @else
@@ -341,6 +445,20 @@
                         <div>
                             <p class="text-xs text-gray-500 uppercase tracking-wide">Transaction Date</p>
                             <p id="modalTransactionDate" class="text-sm font-medium text-gray-900 mt-1">-</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-500 uppercase tracking-wide">Pawn Ticket Number</p>
+                            <p id="modalPawnTicketNumber" class="text-sm font-medium text-gray-900 mt-1">-</p>
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <p class="text-xs text-gray-500 uppercase tracking-wide mb-2">Item Details</p>
+                        <div class="bg-gray-50 rounded-lg p-4">
+                            <p class="text-sm font-medium text-gray-900">
+                                <span id="modalItemType">-</span>
+                                <span id="modalItemSubtype" class="text-gray-600"></span>
+                            </p>
+                            <p id="modalItemDescription" class="text-sm text-gray-700 mt-2">-</p>
                         </div>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -516,6 +634,10 @@
                     const pawnTicketImageUrl = this.getAttribute('data-pawn-ticket-image');
                     const transactionId = this.getAttribute('data-transaction-id');
                     const transactionNumber = this.getAttribute('data-transaction-number');
+                    const pawnTicketNumber = this.getAttribute('data-pawn-ticket-number');
+                    const itemType = this.getAttribute('data-item-type');
+                    const itemSubtype = this.getAttribute('data-item-subtype');
+                    const itemDescription = this.getAttribute('data-item-description');
                     const transactionDate = this.getAttribute('data-transaction-date');
                     const isVoided = this.getAttribute('data-is-voided') === '1';
                     const maturityDate = this.getAttribute('data-maturity-date');
@@ -532,6 +654,10 @@
                         pawnTicketImageUrl,
                         transactionId,
                         transactionNumber,
+                        pawnTicketNumber,
+                        itemType,
+                        itemSubtype,
+                        itemDescription,
                         transactionDate,
                         isVoided,
                         maturityDate,
@@ -557,6 +683,30 @@
             
             // Set transaction date
             document.getElementById('modalTransactionDate').textContent = data.transactionDate || '-';
+            
+            // Set pawn ticket number
+            document.getElementById('modalPawnTicketNumber').textContent = data.pawnTicketNumber || '-';
+            
+            // Set item details
+            const itemTypeEl = document.getElementById('modalItemType');
+            const itemSubtypeEl = document.getElementById('modalItemSubtype');
+            const itemDescriptionEl = document.getElementById('modalItemDescription');
+            
+            if (itemTypeEl) {
+                itemTypeEl.textContent = data.itemType || '-';
+            }
+            if (itemSubtypeEl) {
+                if (data.itemSubtype && data.itemSubtype.trim() !== '') {
+                    itemSubtypeEl.textContent = ' - ' + data.itemSubtype;
+                    itemSubtypeEl.style.display = 'inline';
+                } else {
+                    itemSubtypeEl.textContent = '';
+                    itemSubtypeEl.style.display = 'none';
+                }
+            }
+            if (itemDescriptionEl) {
+                itemDescriptionEl.textContent = data.itemDescription || '-';
+            }
             
             // Show/hide void button based on voided status
             const voidBtn = document.getElementById('voidTransactionBtn');

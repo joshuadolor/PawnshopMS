@@ -33,20 +33,48 @@ class StoreSanglaTransactionRequest extends FormRequest
                 'numeric',
                 'min:0',
                 function ($attribute, $value, $fail) {
-                    if (!preg_match('/^\d+(\.\d{1})?$/', (string) $value)) {
-                        $fail('The '.$attribute.' may have at most 1 decimal place.');
+                    // Skip decimal place validation for additional items (values come from parent transaction)
+                    if (!$this->isAdditionalItem()) {
+                        if (!preg_match('/^\d+(\.\d{1})?$/', (string) $value)) {
+                            $fail('The '.$attribute.' may have at most 1 decimal place.');
+                        }
                     }
                 },
             ],
-            'interest_rate' => ['required', 'numeric', 'min:0', 'max:100', function ($attribute, $value, $fail) {
-                if (!preg_match('/^\d+(\.\d{1})?$/', (string) $value)) {
-                    $fail('The '.$attribute.' may have at most 1 decimal place.');
+            'interest_rate' => [
+                'required',
+                'numeric',
+                'min:0',
+                'max:100',
+                function ($attribute, $value, $fail) {
+                    // Skip decimal place validation for additional items (values come from parent transaction)
+                    if (!$this->isAdditionalItem()) {
+                        if (!preg_match('/^\d+(\.\d{1})?$/', (string) $value)) {
+                            $fail('The '.$attribute.' may have at most 1 decimal place.');
+                        }
+                    }
                 }
-            }],
+            ],
             'interest_rate_period' => ['required', 'in:per_annum,per_month,others'],
             'maturity_date' => ['required', 'date', 'after_or_equal:today'],
             'expiry_date' => ['required', 'date', 'after_or_equal:maturity_date'],
-            'pawn_ticket_number' => ['required', 'string', 'max:100'],
+            'pawn_ticket_number' => [
+                'required',
+                'string',
+                'max:100',
+                function ($attribute, $value, $fail) {
+                    // Only validate for new transactions, not additional items
+                    if (!$this->isAdditionalItem()) {
+                        $exists = \App\Models\Transaction::where('pawn_ticket_number', $value)
+                            ->where('type', 'sangla')
+                            ->exists();
+                        
+                        if ($exists) {
+                            $fail('This pawn ticket number already exists. Please use the "Additional Item" button to add another item to this pawn ticket.');
+                        }
+                    }
+                },
+            ],
             'pawn_ticket_image' => [
                 function ($attribute, $value, $fail) {
                     // Only required for first item, not for additional items

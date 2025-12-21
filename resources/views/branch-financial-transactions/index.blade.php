@@ -85,10 +85,34 @@
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         @foreach($branchBalances as $balance)
                             <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                                <p class="text-sm font-medium text-gray-600">{{ $balance['branch']->name }}</p>
-                                <p class="mt-1 text-2xl font-bold {{ $balance['balance'] >= 0 ? 'text-green-600' : 'text-red-600' }}">
-                                    ₱{{ number_format($balance['balance'], 2) }}
-                                </p>
+                                <p class="text-sm font-medium text-gray-600 mb-3">{{ $balance['branch']->name }}</p>
+                                
+                                <!-- Additions and Expenses side by side -->
+                                <div class="flex gap-4 mb-3">
+                                    <!-- Additions -->
+                                    <div class="flex-1">
+                                        <p class="text-xs text-gray-500">Additions</p>
+                                        <p class="text-lg font-semibold text-green-600">
+                                            +₱{{ number_format($balance['additions'], 2) }}
+                                        </p>
+                                    </div>
+                                    
+                                    <!-- Expenses -->
+                                    <div class="flex-1">
+                                        <p class="text-xs text-gray-500">Expenses</p>
+                                        <p class="text-lg font-semibold text-red-600">
+                                            -₱{{ number_format($balance['expenses'], 2) }}
+                                        </p>
+                                    </div>
+                                </div>
+                                
+                                <!-- Net Balance -->
+                                <div class="pt-2 border-t border-gray-300">
+                                    <p class="text-xs text-gray-500">Net Balance</p>
+                                    <p class="mt-1 text-2xl font-bold {{ $balance['balance'] >= 0 ? 'text-green-600' : 'text-red-600' }}">
+                                        ₱{{ number_format($balance['balance'], 2) }}
+                                    </p>
+                                </div>
                             </div>
                         @endforeach
                     </div>

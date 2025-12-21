@@ -49,9 +49,10 @@ class BranchBalance extends Model
      */
     public static function recalculateBalance(int $branchId): void
     {
-        // Get all non-voided transactions
+        // Get all non-voided transactions, eager load transaction relationship for type checking
         $transactions = BranchFinancialTransaction::where('branch_id', $branchId)
             ->whereDoesntHave('voided')
+            ->with('transaction')
             ->get();
         
         $totalReplenish = $transactions->where('type', 'replenish')->sum('amount');

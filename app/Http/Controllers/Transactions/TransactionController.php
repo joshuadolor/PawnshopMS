@@ -60,32 +60,52 @@ class TransactionController extends Controller
             $query->where('branch_id', $request->branch_id);
         }
 
-        $transactions = $query->orderBy('created_at', 'desc')->paginate(20);
+        // Get all transactions (sangla and renew) - we'll group by pawn ticket in the view
+        $transactions = $query->orderBy('created_at', 'desc')
+            ->paginate(20);
 
-        // Group renewal financial transactions (type: transaction, money IN)
-        // by pawn ticket number so we can show them as child rows under
-        // their parent Sangla transactions in the transactions table.
-        $renewalsByPawnTicket = collect();
-
+        // Get all unique pawn ticket numbers from the current page
         $pawnTicketNumbers = $transactions->pluck('pawn_ticket_number')->filter()->unique()->values();
 
+        // Fetch all renewals for these pawn tickets (even if they're on different pages)
+        $renewalsForPawnTickets = collect();
         if ($pawnTicketNumbers->isNotEmpty()) {
-            // Build the exact descriptions we use when creating renewal financial rows
-            $descriptions = $pawnTicketNumbers
-                ->map(fn (string $pt) => "Renewal interest payment - Pawn Ticket #{$pt}")
-                ->all();
+            $renewalQuery = Transaction::with(['branch', 'user', 'itemType', 'itemTypeSubtype', 'tags', 'voided'])
+                ->where('type', 'renew')
+                ->whereIn('pawn_ticket_number', $pawnTicketNumbers->toArray());
 
-            $renewalFinancialRows = BranchFinancialTransaction::with(['branch', 'user'])
-                ->where('type', 'transaction')
-                ->whereDoesntHave('voided')
-                ->whereIn('description', $descriptions)
-                ->orderBy('transaction_date')
-                ->get();
+            // Apply same filters as main query
+            if ($user->isStaff()) {
+                $renewalQuery->where('branch_id', $user->branches()->first()->id);
+                $renewalQuery->whereDate('created_at', today());
+            } else {
+                if ($request->filled('date')) {
+                    $renewalQuery->whereDate('created_at', $request->date);
+                } elseif ($request->has('today_only') && $request->boolean('today_only')) {
+                    $renewalQuery->whereDate('created_at', today());
+                }
+            }
 
-            // Map to pawn_ticket_number extracted from description
-            $renewalsByPawnTicket = $renewalFinancialRows->groupBy(function (BranchFinancialTransaction $row) {
-                return Str::after($row->description, 'Renewal interest payment - Pawn Ticket #');
-            });
+            if ($request->filled('search')) {
+                $search = $request->search;
+                $renewalQuery->where(function ($q) use ($search) {
+                    $q->where('item_description', 'like', "%{$search}%")
+                      ->orWhere('first_name', 'like', "%{$search}%")
+                      ->orWhere('last_name', 'like', "%{$search}%")
+                      ->orWhere('transaction_number', 'like', "%{$search}%");
+                });
+            }
+
+            if ($user->isStaff()) {
+                $userBranchIds = $user->branches()->pluck('branches.id')->toArray();
+                if (!empty($userBranchIds)) {
+                    $renewalQuery->whereIn('branch_id', $userBranchIds);
+                }
+            } elseif ($request->filled('branch_id')) {
+                $renewalQuery->where('branch_id', $request->branch_id);
+            }
+
+            $renewalsForPawnTickets = $renewalQuery->get();
         }
 
         // Get branches for filter (admin/superadmin only)
@@ -96,8 +116,8 @@ class TransactionController extends Controller
 
         return view('transactions.index', [
             'transactions' => $transactions,
+            'renewalsForPawnTickets' => $renewalsForPawnTickets,
             'branches' => $branches,
-            'renewalsByPawnTicket' => $renewalsByPawnTicket,
             'filters' => [
                 'date' => $request->date ?? null,
                 'today_only' => $request->boolean('today_only', false),
@@ -116,6 +136,22 @@ class TransactionController extends Controller
         if ($transaction->isVoided()) {
             return redirect()->back()
                 ->with('error', 'This transaction is already voided.');
+        }
+
+        // For Sangla transactions, check if there are any non-voided child transactions
+        if ($transaction->type === 'sangla') {
+            $pawnTicketNumber = $transaction->pawn_ticket_number;
+            if ($pawnTicketNumber) {
+                $hasChildTransactions = Transaction::where('pawn_ticket_number', $pawnTicketNumber)
+                    ->where('id', '!=', $transaction->id)
+                    ->whereDoesntHave('voided')
+                    ->exists();
+                
+                if ($hasChildTransactions) {
+                    return redirect()->back()
+                        ->with('error', 'Cannot void this transaction. There are active child transactions (additional items or renewals) associated with this pawn ticket number. Please void the child transactions first.');
+                }
+            }
         }
 
         // Create void record and void associated financial transaction within a transaction
@@ -137,14 +173,34 @@ class TransactionController extends Controller
             // If not found by transaction_id, try to find by matching description, branch, amount, and date
             // This handles records created before the transaction_id column was added
             if (!$financialTransaction) {
-                $financialTransaction = BranchFinancialTransaction::where('type', 'transaction')
-                    ->where('description', 'Sangla transaction')
-                    ->where('branch_id', $transaction->branch_id)
-                    ->where('amount', $transaction->net_proceeds)
-                    ->whereDate('transaction_date', $transaction->created_at->toDateString())
-                    ->whereDoesntHave('voided')
-                    ->whereNull('transaction_id') // Only match records without transaction_id
-                    ->first();
+                if ($transaction->type === 'sangla') {
+                    // For Sangla transactions, match by "Sangla transaction" description
+                    // Amount is stored as positive in BranchFinancialTransaction
+                    $financialTransaction = BranchFinancialTransaction::where('type', 'transaction')
+                        ->where(function($q) {
+                            $q->where('description', 'Sangla transaction')
+                              ->orWhere('description', 'Sangla transaction (additional item)');
+                        })
+                        ->where('branch_id', $transaction->branch_id)
+                        ->where('amount', $transaction->net_proceeds) // Amount is positive
+                        ->whereDate('transaction_date', $transaction->created_at->toDateString())
+                        ->whereDoesntHave('voided')
+                        ->whereNull('transaction_id') // Only match records without transaction_id
+                        ->first();
+                } elseif ($transaction->type === 'renew') {
+                    // For Renewal transactions, match by "Renewal interest payment" description
+                    $pawnTicketNumber = $transaction->pawn_ticket_number;
+                    if ($pawnTicketNumber) {
+                        $financialTransaction = BranchFinancialTransaction::where('type', 'transaction')
+                            ->where('description', "Renewal interest payment - Pawn Ticket #{$pawnTicketNumber}")
+                            ->where('branch_id', $transaction->branch_id)
+                            ->where('amount', $transaction->net_proceeds) // Renewal amounts are positive
+                            ->whereDate('transaction_date', $transaction->created_at->toDateString())
+                            ->whereDoesntHave('voided')
+                            ->whereNull('transaction_id') // Only match records without transaction_id
+                            ->first();
+                    }
+                }
             }
 
             if ($financialTransaction) {
@@ -162,8 +218,13 @@ class TransactionController extends Controller
                 ]);
 
                 // Reverse the transaction amount in the balance
-                // Since it's type 'transaction', it was negative, so we reverse by adding it back
-                BranchBalance::updateBalance($financialTransaction->branch_id, (float) $financialTransaction->amount);
+                if ($transaction->type === 'sangla') {
+                    // Sangla: amount was negative (money out), so we reverse by adding it back
+                    BranchBalance::updateBalance($financialTransaction->branch_id, (float) $financialTransaction->amount);
+                } elseif ($transaction->type === 'renew') {
+                    // Renewal: amount was positive (money in), so we reverse by subtracting it
+                    BranchBalance::updateBalance($financialTransaction->branch_id, -(float) $financialTransaction->amount);
+                }
             }
         });
 

@@ -80,47 +80,83 @@
                             <x-input-error :messages="$errors->get('address')" class="mt-2" />
                         </div>
 
-                        <!-- Appraised Value -->
+                        <!-- Appraised Value (Readonly) -->
                         <div class="mt-4">
                             <x-input-label for="appraised_value" value="Appraised Value" />
-                            <x-text-input id="appraised_value" name="appraised_value" type="number" step="0.01" min="0" class="mt-1 block w-full" :value="old('appraised_value')" required />
+                            <x-text-input 
+                                id="appraised_value" 
+                                name="appraised_value" 
+                                type="number" 
+                                step="0.01" 
+                                min="0" 
+                                class="mt-1 block w-full bg-gray-100" 
+                                :value="old('appraised_value', number_format($firstTransaction->appraised_value, 2, '.', ''))" 
+                                readonly 
+                                required 
+                            />
+                            <p class="mt-1 text-sm text-gray-500">Appraised value is readonly for additional items (same as parent transaction).</p>
                             <x-input-error :messages="$errors->get('appraised_value')" class="mt-2" />
                         </div>
 
-                        <!-- Loan Amount -->
+                        <!-- Loan Amount (Readonly) -->
                         <div class="mt-4">
                             <x-input-label for="loan_amount" value="Loan Amount" />
-                            <x-text-input id="loan_amount" name="loan_amount" type="number" step="0.01" min="0" class="mt-1 block w-full" :value="old('loan_amount')" required />
+                            <x-text-input 
+                                id="loan_amount" 
+                                name="loan_amount" 
+                                type="number" 
+                                step="0.01" 
+                                min="0" 
+                                class="mt-1 block w-full bg-gray-100" 
+                                :value="old('loan_amount', number_format($firstTransaction->loan_amount, 2, '.', ''))" 
+                                readonly 
+                                required 
+                            />
+                            <p class="mt-1 text-sm text-gray-500">Loan amount is readonly for additional items (same as parent transaction).</p>
                             <x-input-error :messages="$errors->get('loan_amount')" class="mt-2" />
                         </div>
 
-                        <!-- Interest Rate -->
+                        <!-- Interest Rate (Readonly) -->
                         <div class="mt-4">
                             <x-input-label for="interest_rate" value="Interest Rate (%)" />
-                            <x-text-input id="interest_rate" name="interest_rate" type="number" step="0.01" min="0" max="100" class="mt-1 block w-full" :value="old('interest_rate')" required />
+                            <x-text-input 
+                                id="interest_rate" 
+                                name="interest_rate" 
+                                type="number" 
+                                step="0.01" 
+                                min="0" 
+                                max="100" 
+                                class="mt-1 block w-full bg-gray-100" 
+                                :value="old('interest_rate', number_format($firstTransaction->interest_rate, 2, '.', ''))" 
+                                readonly 
+                                required 
+                            />
+                            <p class="mt-1 text-sm text-gray-500">Interest rate is readonly for additional items (same as parent transaction).</p>
                             <x-input-error :messages="$errors->get('interest_rate')" class="mt-2" />
                         </div>
 
-                        <!-- Interest Rate Period -->
+                        <!-- Interest Rate Period (Readonly) -->
                         <div class="mt-4">
                             <x-input-label value="Interest Rate Period" />
                             <div class="mt-2 flex flex-wrap gap-2">
                                 @php
-                                    $selectedPeriod = old('interest_rate_period', $interestPeriod);
+                                    $selectedPeriod = old('interest_rate_period', $firstTransaction->interest_rate_period);
                                 @endphp
-                                <label class="inline-flex items-center px-4 py-2 border-2 border-gray-300 rounded-lg hover:bg-gray-50 active:bg-gray-100 cursor-pointer touch-manipulation transition-colors">
-                                    <input type="radio" name="interest_rate_period" value="per_annum" {{ $selectedPeriod === 'per_annum' ? 'checked' : '' }} class="w-4 h-4 text-indigo-600 focus:ring-indigo-500" required>
+                                <label class="inline-flex items-center px-4 py-2 border-2 border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed opacity-75">
+                                    <input type="radio" name="interest_rate_period" value="per_annum" {{ $selectedPeriod === 'per_annum' ? 'checked' : '' }} disabled class="w-4 h-4 text-indigo-600 focus:ring-indigo-500">
                                     <span class="ms-2 text-sm text-gray-700 font-medium">Per Annum</span>
                                 </label>
-                                <label class="inline-flex items-center px-4 py-2 border-2 border-gray-300 rounded-lg hover:bg-gray-50 active:bg-gray-100 cursor-pointer touch-manipulation transition-colors">
-                                    <input type="radio" name="interest_rate_period" value="per_month" {{ $selectedPeriod === 'per_month' ? 'checked' : '' }} class="w-4 h-4 text-indigo-600 focus:ring-indigo-500" required>
+                                <label class="inline-flex items-center px-4 py-2 border-2 border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed opacity-75">
+                                    <input type="radio" name="interest_rate_period" value="per_month" {{ $selectedPeriod === 'per_month' ? 'checked' : '' }} disabled class="w-4 h-4 text-indigo-600 focus:ring-indigo-500">
                                     <span class="ms-2 text-sm text-gray-700 font-medium">Per Month</span>
                                 </label>
-                                <label class="inline-flex items-center px-4 py-2 border-2 border-gray-300 rounded-lg hover:bg-gray-50 active:bg-gray-100 cursor-pointer touch-manipulation transition-colors">
-                                    <input type="radio" name="interest_rate_period" value="others" {{ $selectedPeriod === 'others' ? 'checked' : '' }} class="w-4 h-4 text-indigo-600 focus:ring-indigo-500" required>
+                                <label class="inline-flex items-center px-4 py-2 border-2 border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed opacity-75">
+                                    <input type="radio" name="interest_rate_period" value="others" {{ $selectedPeriod === 'others' ? 'checked' : '' }} disabled class="w-4 h-4 text-indigo-600 focus:ring-indigo-500">
                                     <span class="ms-2 text-sm text-gray-700 font-medium">Others</span>
                                 </label>
                             </div>
+                            <p class="mt-1 text-sm text-gray-500">Interest rate period is readonly for additional items (same as parent transaction).</p>
+                            <input type="hidden" name="interest_rate_period" value="{{ $selectedPeriod }}">
                             <x-input-error :messages="$errors->get('interest_rate_period')" class="mt-2" />
                         </div>
 
@@ -622,15 +658,8 @@
                 }
             }
 
-            // Add event listeners for calculation
-            if (loanAmountInput) {
-                loanAmountInput.addEventListener('input', calculateAmounts);
-                loanAmountInput.addEventListener('change', calculateAmounts);
-            }
-            if (interestRateInput) {
-                interestRateInput.addEventListener('input', calculateAmounts);
-                interestRateInput.addEventListener('change', calculateAmounts);
-            }
+            // Fields are readonly, so no event listeners needed - just calculate on page load
+            // calculateAmounts() is called at the end of the script
             
             // Handle grams input to ensure single decimal place (no rounding)
             if (gramsInput) {

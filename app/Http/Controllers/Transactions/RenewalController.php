@@ -34,28 +34,33 @@ class RenewalController extends Controller
         $pawnTicketNumber = $request->input('pawn_ticket_number');
 
         // Find all transactions with this pawn ticket number (including additional items)
-        $transactions = Transaction::where('pawn_ticket_number', $pawnTicketNumber)
+        $allTransactions = Transaction::where('pawn_ticket_number', $pawnTicketNumber)
             ->where('type', 'sangla')
             ->whereDoesntHave('voided')
             ->with(['branch', 'itemType', 'itemTypeSubtype', 'tags'])
             ->orderBy('created_at', 'asc')
             ->get();
 
-        if ($transactions->isEmpty()) {
+        if ($allTransactions->isEmpty()) {
             return redirect()->route('transactions.renewal.search')
                 ->with('error', 'No active transaction found with the provided pawn ticket number.');
         }
 
-        // Calculate total interest amount for all transactions
-        $totalInterest = 0;
-        $firstTransaction = $transactions->first();
-        $branchId = $firstTransaction->branch_id;
+        // Use the oldest transaction for calculations (one pawn ticket = one computation)
+        // The oldest transaction has the actual loan amount (additional items have loan_amount = 0)
+        $oldestTransaction = $allTransactions->first();
+        $branchId = $oldestTransaction->branch_id;
 
-        foreach ($transactions as $transaction) {
-            // Interest = loan_amount * (interest_rate / 100)
-            $interest = (float) $transaction->loan_amount * ((float) $transaction->interest_rate / 100);
-            $totalInterest += $interest;
-        }
+        // Calculate interest from the oldest transaction only
+        $totalInterest = (float) $oldestTransaction->loan_amount * ((float) $oldestTransaction->interest_rate / 100);
+
+        // Get service charge from config (one service charge per pawn ticket)
+        $serviceCharge = Config::getValue('sangla_service_charge', 0);
+        $totalServiceCharge = $serviceCharge; // Only one service charge
+        $totalAmountToPay = $totalInterest + $totalServiceCharge;
+
+        // Combine all item descriptions for the renewal transaction
+        $combinedDescriptions = $allTransactions->pluck('item_description')->filter()->unique()->values()->implode('; ');
 
         // Get config values for date calculations
         $daysBeforeRedemption = (int) Config::getValue('sangla_days_before_redemption', 90);
@@ -71,9 +76,14 @@ class RenewalController extends Controller
         };
 
         return view('transactions.renewal.renew', [
-            'transactions' => $transactions,
+            'transaction' => $oldestTransaction, // Show oldest transaction (has actual loan amount)
+            'allTransactions' => $allTransactions, // Keep for reference if needed
             'pawnTicketNumber' => $pawnTicketNumber,
             'totalInterest' => $totalInterest,
+            'serviceCharge' => $serviceCharge,
+            'totalServiceCharge' => $totalServiceCharge,
+            'totalAmountToPay' => $totalAmountToPay,
+            'combinedDescriptions' => $combinedDescriptions,
             'branchId' => $branchId,
             'daysBeforeRedemption' => $daysBeforeRedemption,
             'daysBeforeAuctionSale' => $daysBeforeAuctionSale,
@@ -92,54 +102,119 @@ class RenewalController extends Controller
             'expiry_date' => ['required', 'date', 'after_or_equal:maturity_date'],
             'auction_sale_date' => ['nullable', 'date', 'after_or_equal:expiry_date'],
             'interest_amount' => ['required', 'numeric', 'min:0'],
+            'service_charge' => ['required', 'numeric', 'min:0'],
         ]);
 
         $pawnTicketNumber = $request->input('pawn_ticket_number');
 
         // Find all transactions with this pawn ticket number
-        $transactions = Transaction::where('pawn_ticket_number', $pawnTicketNumber)
+        $allTransactions = Transaction::where('pawn_ticket_number', $pawnTicketNumber)
             ->where('type', 'sangla')
             ->whereDoesntHave('voided')
+            ->orderBy('created_at', 'asc')
             ->get();
 
-        if ($transactions->isEmpty()) {
+        if ($allTransactions->isEmpty()) {
             return redirect()->route('transactions.renewal.search')
                 ->with('error', 'No active transaction found with the provided pawn ticket number.');
         }
 
-        $firstTransaction = $transactions->first();
-        $branchId = $firstTransaction->branch_id;
+        // Use the oldest transaction for renewal data (has actual loan amount)
+        $oldestTransaction = $allTransactions->first();
+        $branchId = $oldestTransaction->branch_id;
         $interestAmount = (float) $request->input('interest_amount');
+        $serviceCharge = (float) $request->input('service_charge');
+        $totalAmount = $interestAmount + $serviceCharge;
+
+        // Combine all item descriptions for the renewal transaction
+        $combinedDescriptions = $allTransactions->pluck('item_description')->filter()->unique()->values()->implode('; ');
 
         // Use database transaction to ensure data integrity
-        DB::transaction(function () use ($transactions, $request, $branchId, $interestAmount, $pawnTicketNumber) {
-            // Update all transactions with the new dates
-            $transactions->each(function ($transaction) use ($request) {
-                $transaction->update([
-                    'maturity_date' => $request->input('maturity_date'),
-                    'expiry_date' => $request->input('expiry_date'),
-                    'auction_sale_date' => $request->input('auction_sale_date'),
-                    'status' => 'active', // Reset status to active on renewal
-                ]);
-            });
+        DB::transaction(function () use ($allTransactions, $request, $branchId, $interestAmount, $serviceCharge, $totalAmount, $pawnTicketNumber, $oldestTransaction, $combinedDescriptions) {
+            // Note: We do NOT update the parent transaction dates - they remain as historical records
+            // Only the renewal transaction will have the new extended dates
 
-            // Create financial transaction for the renewal interest payment
+            // Generate renewal transaction number
+            $renewalTransactionNumber = $this->generateRenewalTransactionNumber();
+
+            // Create Transaction record for renewal
+            $renewalTransaction = Transaction::create([
+                'transaction_number' => $renewalTransactionNumber,
+                'branch_id' => $branchId,
+                'user_id' => $request->user()->id,
+                'type' => 'renew',
+                'first_name' => $oldestTransaction->first_name,
+                'last_name' => $oldestTransaction->last_name,
+                'address' => $oldestTransaction->address,
+                'appraised_value' => $oldestTransaction->appraised_value,
+                'loan_amount' => $oldestTransaction->loan_amount, // Use oldest transaction's loan amount
+                'interest_rate' => $oldestTransaction->interest_rate,
+                'interest_rate_period' => $oldestTransaction->interest_rate_period,
+                'maturity_date' => $request->input('maturity_date'),
+                'expiry_date' => $request->input('expiry_date'),
+                'pawn_ticket_number' => $pawnTicketNumber,
+                'pawn_ticket_image_path' => $oldestTransaction->pawn_ticket_image_path,
+                'auction_sale_date' => $request->input('auction_sale_date'),
+                'item_type_id' => $oldestTransaction->item_type_id,
+                'item_type_subtype_id' => $oldestTransaction->item_type_subtype_id,
+                'custom_item_type' => $oldestTransaction->custom_item_type,
+                'item_description' => $combinedDescriptions, // Combined descriptions from all transactions
+                'item_image_path' => $oldestTransaction->item_image_path,
+                'pawner_id_image_path' => $oldestTransaction->pawner_id_image_path,
+                'grams' => $oldestTransaction->grams,
+                'orcr_serial' => $oldestTransaction->orcr_serial,
+                'service_charge' => $serviceCharge, // Service charge for renewals
+                'net_proceeds' => $totalAmount, // For renewals, net_proceeds is the total amount paid (interest + service charge)
+                'status' => 'active',
+            ]);
+
+            // Create financial transaction for the renewal payment (interest + service charge)
             // Type: "transaction" (same family as Sangla), but this one is an ADD (money coming in)
             BranchFinancialTransaction::create([
                 'branch_id' => $branchId,
                 'user_id' => $request->user()->id,
+                'transaction_id' => $renewalTransaction->id,
                 'type' => 'transaction',
-                'description' => "Renewal interest payment - Pawn Ticket #{$pawnTicketNumber}",
-                'amount' => $interestAmount, // Positive amount (money coming in)
+                'description' => "Renewal payment - Pawn Ticket #{$pawnTicketNumber}",
+                'amount' => $totalAmount, // Positive amount (money coming in: interest + service charge)
                 'transaction_date' => now()->toDateString(),
             ]);
 
-            // Update branch balance (add the interest amount)
-            BranchBalance::updateBalance($branchId, $interestAmount);
+            // Update branch balance (add the total amount)
+            BranchBalance::updateBalance($branchId, $totalAmount);
         });
 
         return redirect()->route('transactions.index')
-            ->with('success', "Transaction(s) with pawn ticket number '{$pawnTicketNumber}' have been renewed successfully. Interest payment of ₱" . number_format($interestAmount, 2) . " has been recorded.");
+            ->with('success', "Transaction(s) with pawn ticket number '{$pawnTicketNumber}' have been renewed successfully. Payment of ₱" . number_format($totalAmount, 2) . " (Interest: ₱" . number_format($interestAmount, 2) . ", Service Charge: ₱" . number_format($serviceCharge, 2) . ") has been recorded.");
+    }
+
+    /**
+     * Generate a unique transaction number for renewal transactions.
+     */
+    private function generateRenewalTransactionNumber(): string
+    {
+        $prefix = 'RNW';
+        $date = now()->format('Ymd');
+        
+        // Get the last renewal transaction number for today
+        $lastTransaction = Transaction::where('transaction_number', 'like', "{$prefix}-{$date}-%")
+            ->orderBy('transaction_number', 'desc')
+            ->first();
+        
+        if ($lastTransaction) {
+            // Extract the sequence number and increment
+            $parts = explode('-', $lastTransaction->transaction_number);
+            $sequence = (int) end($parts);
+            $sequence++;
+        } else {
+            // First renewal transaction of the day
+            $sequence = 1;
+        }
+        
+        // Format sequence as 6-digit number
+        $sequenceFormatted = str_pad($sequence, 6, '0', STR_PAD_LEFT);
+        
+        return "{$prefix}-{$date}-{$sequenceFormatted}";
     }
 }
 

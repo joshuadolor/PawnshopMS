@@ -74,8 +74,8 @@ class BranchFinancialTransaction extends Model
     /**
      * Determine if this "transaction" type row represents a Renewal (money IN).
      *
-     * We identify renewal rows by the description starting with
-     * "Renewal interest payment".
+     * We identify renewal rows by the description starting with "Renewal payment"
+     * or by checking if the associated transaction type is 'renew'.
      */
     public function isRenewalTransactionEntry(): bool
     {
@@ -83,9 +83,18 @@ class BranchFinancialTransaction extends Model
             return false;
         }
 
+        // Check by description
         $description = (string) $this->description;
+        if (str_starts_with($description, 'Renewal payment') || str_starts_with($description, 'Renewal interest payment')) {
+            return true;
+        }
 
-        return str_starts_with($description, 'Renewal interest payment');
+        // Check by associated transaction type
+        if ($this->transaction && $this->transaction->type === 'renew') {
+            return true;
+        }
+
+        return false;
     }
 
     public function voided(): HasOne

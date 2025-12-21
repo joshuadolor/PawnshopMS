@@ -271,6 +271,26 @@ class SanglaController extends Controller
                 ->with('error', 'No transaction found with the provided pawn ticket number.');
         }
 
+        // Check if there are any child transactions (additional items or renewals) with this pawn ticket number
+        $childTransactions = Transaction::where('pawn_ticket_number', $pawnTicketNumber)
+            ->where('id', '!=', $firstTransaction->id)
+            ->whereDoesntHave('voided')
+            ->get();
+
+        if ($childTransactions->count() > 0) {
+            $childTypes = $childTransactions->pluck('type')
+                ->unique()
+                ->values()
+                ->toArray();
+            
+            $childTypesStr = implode(' and ', array_map(function($type) {
+                return $type === 'renew' ? 'renewal(s)' : 'additional item(s)';
+            }, $childTypes));
+            
+            return redirect()->route('transactions.sangla.create')
+                ->with('error', "Cannot add additional item. This pawn ticket already has {$childTransactions->count()} child transaction(s) ({$childTypesStr}). Additional items can only be added to the original transaction before any renewals or other additional items are created.");
+        }
+
         // Get item types for the form
         $itemTypes = ItemType::with(['subtypes', 'tags'])
             ->orderByRaw("CASE WHEN name = 'Jewelry' THEN 0 ELSE 1 END")
@@ -341,6 +361,36 @@ class SanglaController extends Controller
                 ->with('error', 'No transaction found with the provided pawn ticket number.');
         }
 
+        // Check if there are any child transactions (additional items or renewals) with this pawn ticket number
+        // Count all transactions with the same pawn ticket number (excluding the first one)
+        $childTransactions = Transaction::where('pawn_ticket_number', $pawnTicketNumber)
+            ->where('id', '!=', $firstTransaction->id)
+            ->whereDoesntHave('voided')
+            ->get();
+
+        if ($childTransactions->count() > 0) {
+            $childTypes = $childTransactions->pluck('type')
+                ->unique()
+                ->values()
+                ->toArray();
+            
+            $childTypesStr = implode(' and ', array_map(function($type) {
+                return $type === 'renew' ? 'renewal(s)' : 'additional item(s)';
+            }, $childTypes));
+            
+            return redirect()->back()
+                ->withInput()
+                ->with('error', "Cannot add additional item. This pawn ticket already has {$childTransactions->count()} child transaction(s) ({$childTypesStr}). Additional items can only be added to the original transaction before any renewals or other additional items are created.");
+        }
+
+        // Check if more than 6 hours have passed since the first transaction
+        $hoursSinceFirstTransaction = now()->diffInHours($firstTransaction->created_at);
+        if ($hoursSinceFirstTransaction > 6) {
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'Cannot add additional item. More than 6 hours have passed since the first transaction was created. The first transaction was created on ' . $firstTransaction->created_at->format('M d, Y h:i A') . '.');
+        }
+
         // For additional items, use the same data from first transaction but with new item details
         // No service charge for additional items
         $serviceCharge = 0;
@@ -354,11 +404,15 @@ class SanglaController extends Controller
             $validated = $request->validated();
             $user = $request->user();
             
-            // Calculate net proceeds: principal - (principal * interest) - NO service charge
-            $principal = (float) $validated['loan_amount'];
-            $interestRate = (float) $validated['interest_rate'];
-            $interest = $principal * ($interestRate / 100);
-            $netProceeds = $principal - $interest; // No service charge
+            // For additional items, use values from parent transaction (not from request)
+            // But save 0 for loan_amount and net_proceeds since the first transaction represents the summary
+            $principal = 0; // Additional items don't have their own principal
+            $interestRate = (float) $firstTransaction->interest_rate;
+            $appraisedValue = (float) $firstTransaction->appraised_value;
+            $interestRatePeriod = $firstTransaction->interest_rate_period;
+            
+            // Net proceeds is 0 for additional items
+            $netProceeds = 0; // Additional items don't have their own net proceeds
             
             // Generate unique transaction number
             $transactionNumber = $this->generateTransactionNumber();
@@ -402,10 +456,10 @@ class SanglaController extends Controller
                 'first_name' => $firstTransaction->first_name, // From first transaction
                 'last_name' => $firstTransaction->last_name, // From first transaction
                 'address' => $firstTransaction->address, // From first transaction
-                'appraised_value' => $validated['appraised_value'],
-                'loan_amount' => $principal,
-                'interest_rate' => $interestRate,
-                'interest_rate_period' => $validated['interest_rate_period'],
+                'appraised_value' => $appraisedValue, // From first transaction
+                'loan_amount' => $principal, // 0 for additional items (first transaction is the summary)
+                'interest_rate' => $interestRate, // From first transaction
+                'interest_rate_period' => $interestRatePeriod, // From first transaction
                 'maturity_date' => $firstTransaction->maturity_date, // From first transaction
                 'expiry_date' => $firstTransaction->expiry_date, // From first transaction
                 'pawn_ticket_number' => $pawnTicketNumber, // Same pawn ticket number
@@ -420,7 +474,7 @@ class SanglaController extends Controller
                 'grams' => $validated['grams'] ?? null,
                 'orcr_serial' => $validated['orcr_serial'] ?? null,
                 'service_charge' => $serviceCharge, // No service charge
-                'net_proceeds' => max(0, $netProceeds),
+                'net_proceeds' => $netProceeds, // 0 for additional items (first transaction is the summary)
                 'status' => 'active',
             ];
             
@@ -436,22 +490,8 @@ class SanglaController extends Controller
                 }
             }
             
-            // Create financial transaction entry for net proceeds (type: transaction, negative for Sangla)
-            // No service charge, so net proceeds = principal - interest
-            if ($netProceeds > 0) {
-                $financialTransaction = BranchFinancialTransaction::create([
-                    'branch_id' => $branchId,
-                    'user_id' => $user->id,
-                    'transaction_id' => $transaction->id,
-                    'type' => 'transaction',
-                    'description' => 'Sangla transaction (additional item)',
-                    'amount' => $netProceeds,
-                    'transaction_date' => now()->toDateString(),
-                ]);
-
-                // Update branch balance (negative for transaction type)
-                BranchBalance::updateBalance($branchId, -$netProceeds);
-            }
+            // No financial transaction for additional items - the financial transaction
+            // was already created when the first item was processed with the service charge
             
             DB::commit();
             

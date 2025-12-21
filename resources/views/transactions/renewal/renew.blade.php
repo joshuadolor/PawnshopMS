@@ -50,76 +50,129 @@
                             <strong>Pawn Ticket Number:</strong> {{ $pawnTicketNumber }}
                         </p>
                         <p class="text-sm text-blue-700 mt-1">
-                            <strong>Found {{ $transactions->count() }} transaction(s)</strong> - All transactions with this pawn ticket number will be renewed.
+                            <strong>Found {{ $allTransactions->count() }} transaction(s)</strong> - Payment is calculated based on the latest transaction only.
                         </p>
+                        @if($allTransactions->count() > 1)
+                            <p class="text-xs text-blue-600 mt-1">
+                                <strong>Note:</strong> All item descriptions will be combined in the renewal transaction.
+                            </p>
+                        @endif
                     </div>
 
-                    <!-- Interest Payment Summary -->
+                    <!-- Payment Summary -->
                     <div class="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
-                        <h3 class="text-lg font-semibold text-yellow-900 mb-3">Interest Payment Required</h3>
+                        <h3 class="text-lg font-semibold text-yellow-900 mb-3">Payment Required</h3>
                         <div class="space-y-2">
-                            @foreach ($transactions as $transaction)
-                                @php
-                                    $interest = (float) $transaction->loan_amount * ((float) $transaction->interest_rate / 100);
-                                @endphp
+                            <!-- Interest -->
+                            <div class="mb-3">
                                 <div class="flex justify-between items-center text-sm">
                                     <span class="text-yellow-800">
-                                        {{ $transaction->transaction_number }} (₱{{ number_format($transaction->loan_amount, 2) }} × {{ $transaction->interest_rate }}%)
+                                        Interest (₱{{ number_format($transaction->loan_amount, 2) }} × {{ $transaction->interest_rate }}%):
                                     </span>
-                                    <span class="font-medium text-yellow-900">₱{{ number_format($interest, 2) }}</span>
+                                    <span class="font-medium text-yellow-900">₱{{ number_format($totalInterest, 2) }}</span>
                                 </div>
-                            @endforeach
-                            <div class="border-t border-yellow-300 pt-2 mt-2">
+                            </div>
+                            
+                            <!-- Service Charge -->
+                            <div class="mb-3">
+                                <div class="flex justify-between items-center text-sm">
+                                    <span class="text-yellow-800">Service Charge:</span>
+                                    <span class="font-medium text-yellow-900">₱{{ number_format($totalServiceCharge, 2) }}</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Total -->
+                            <div class="border-t-2 border-yellow-400 pt-3 mt-3">
                                 <div class="flex justify-between items-center">
-                                    <span class="text-lg font-semibold text-yellow-900">Total Interest to Pay:</span>
-                                    <span class="text-lg font-bold text-yellow-900">₱{{ number_format($totalInterest, 2) }}</span>
+                                    <span class="text-lg font-semibold text-yellow-900">Total Amount to Pay:</span>
+                                    <span class="text-lg font-bold text-yellow-900">₱{{ number_format($totalAmountToPay, 2) }}</span>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Display Transaction Details -->
+                    <!-- Display Latest Transaction Details -->
                     <div class="mb-6">
                         <h3 class="text-lg font-medium text-gray-900 mb-4">Transaction Details</h3>
-                        <div class="space-y-4">
-                            @foreach ($transactions as $transaction)
-                                <div class="border border-gray-200 rounded-lg p-4">
-                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div>
-                                            <p class="text-sm text-gray-600">Transaction Number</p>
-                                            <p class="text-sm font-medium text-gray-900">{{ $transaction->transaction_number }}</p>
-                                        </div>
-                                        <div>
-                                            <p class="text-sm text-gray-600">Pawner</p>
-                                            <p class="text-sm font-medium text-gray-900">{{ $transaction->first_name }} {{ $transaction->last_name }}</p>
-                                        </div>
-                                        <div>
-                                            <p class="text-sm text-gray-600">Item Description</p>
-                                            <p class="text-sm font-medium text-gray-900">{{ $transaction->item_description }}</p>
-                                        </div>
-                                        <div>
-                                            <p class="text-sm text-gray-600">Loan Amount</p>
-                                            <p class="text-sm font-medium text-gray-900">₱{{ number_format($transaction->loan_amount, 2) }}</p>
-                                        </div>
-                                        <div>
-                                            <p class="text-sm text-gray-600">Interest Rate</p>
-                                            <p class="text-sm font-medium text-gray-900">{{ $transaction->interest_rate }}% ({{ $transaction->interest_rate_period === 'per_annum' ? 'Per Annum' : ($transaction->interest_rate_period === 'per_month' ? 'Per Month' : 'Other') }})</p>
-                                        </div>
-                                        <div>
-                                            <p class="text-sm text-gray-600">Interest Amount</p>
-                                            <p class="text-sm font-medium text-gray-900">₱{{ number_format((float) $transaction->loan_amount * ((float) $transaction->interest_rate / 100), 2) }}</p>
-                                        </div>
-                                        <div>
-                                            <p class="text-sm text-gray-600">Current Maturity Date</p>
-                                            <p class="text-sm font-medium text-gray-900">{{ $transaction->maturity_date->format('M d, Y') }}</p>
-                                        </div>
-                                        <div>
-                                            <p class="text-sm text-gray-600">Current Expiry Date</p>
-                                            <p class="text-sm font-medium text-gray-900">{{ $transaction->expiry_date->format('M d, Y') }}</p>
-                                        </div>
+                        <div class="border border-gray-200 rounded-lg p-4">
+                            <div class="mb-4 pb-4 border-b border-gray-200">
+                                <p class="text-sm text-gray-600 mb-2">All Transaction Numbers:</p>
+                                <div class="flex flex-wrap gap-2">
+                                    @foreach($allTransactions as $tx)
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 border border-gray-300">
+                                            {{ $tx->transaction_number }}
+                                        </span>
+                                    @endforeach
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <p class="text-sm text-gray-600">Transaction Number</p>
+                                    <p class="text-sm font-medium text-gray-900">{{ $transaction->transaction_number }}</p>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-gray-600">Pawner</p>
+                                    <p class="text-sm font-medium text-gray-900">{{ $transaction->first_name }} {{ $transaction->last_name }}</p>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-gray-600">Item Description</p>
+                                    <p class="text-sm font-medium text-gray-900">{{ $transaction->item_description }}</p>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-gray-600">Loan Amount</p>
+                                    <p class="text-sm font-medium text-gray-900">₱{{ number_format($transaction->loan_amount, 2) }}</p>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-gray-600">Interest Rate</p>
+                                    <p class="text-sm font-medium text-gray-900">{{ $transaction->interest_rate }}% ({{ $transaction->interest_rate_period === 'per_annum' ? 'Per Annum' : ($transaction->interest_rate_period === 'per_month' ? 'Per Month' : 'Other') }})</p>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-gray-600">Interest Amount</p>
+                                    <p class="text-sm font-medium text-gray-900">₱{{ number_format((float) $transaction->loan_amount * ((float) $transaction->interest_rate / 100), 2) }}</p>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-gray-600">Current Maturity Date</p>
+                                    <p class="text-sm font-medium text-gray-900">{{ $transaction->maturity_date->format('M d, Y') }}</p>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-gray-600">Current Expiry Date</p>
+                                    <p class="text-sm font-medium text-gray-900">{{ $transaction->expiry_date->format('M d, Y') }}</p>
+                                </div>
+                            </div>
+                            @if($allTransactions->count() > 1)
+                                <div class="mt-4 pt-4 border-t border-gray-200">
+                                    <p class="text-xs text-gray-600 mb-2">All Items in this Pawn Ticket:</p>
+                                    <div class="space-y-3">
+                                        @foreach($allTransactions as $tx)
+                                            <div class="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                                                <div class="flex items-start justify-between">
+                                                    <div class="flex-1">
+                                                        <p class="text-sm font-medium text-gray-900">
+                                                            {{ $tx->itemType->name }}
+                                                            @if($tx->itemTypeSubtype)
+                                                                <span class="text-gray-600">- {{ $tx->itemTypeSubtype->name }}</span>
+                                                            @endif
+                                                            @if($tx->custom_item_type)
+                                                                <span class="text-gray-600">- {{ $tx->custom_item_type }}</span>
+                                                            @endif
+                                                        </p>
+                                                        <p class="text-sm text-gray-700 mt-1">{{ $tx->item_description }}</p>
+                                                        @if($tx->tags && $tx->tags->count() > 0)
+                                                            <div class="flex flex-wrap gap-1 mt-2">
+                                                                @foreach($tx->tags as $tag)
+                                                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800">
+                                                                        {{ $tag->name }}
+                                                                    </span>
+                                                                @endforeach
+                                                            </div>
+                                                        @endif
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        @endforeach
                                     </div>
                                 </div>
-                            @endforeach
+                            @endif
                         </div>
                     </div>
 
@@ -187,7 +240,40 @@
                                     readonly
                                 />
                                 <x-input-error :messages="$errors->get('interest_amount')" class="mt-2" />
-                                <p class="mt-1 text-xs text-gray-500">This is the total interest amount calculated from all transactions. The pawner will pay this amount to renew.</p>
+                                <p class="mt-1 text-xs text-gray-500">This is the total interest amount calculated from all transactions.</p>
+                            </div>
+
+                            <!-- Service Charge (Readonly, calculated) -->
+                            <div>
+                                <x-input-label for="service_charge" value="Service Charge" />
+                                <x-text-input 
+                                    id="service_charge" 
+                                    name="service_charge" 
+                                    type="number" 
+                                    step="0.01" 
+                                    min="0" 
+                                    class="mt-1 block w-full bg-gray-100" 
+                                    :value="old('service_charge', number_format($totalServiceCharge, 2, '.', ''))" 
+                                    required 
+                                    readonly
+                                />
+                                <x-input-error :messages="$errors->get('service_charge')" class="mt-2" />
+                                <p class="mt-1 text-xs text-gray-500">Service charge (₱{{ number_format($serviceCharge, 2) }}) per pawn ticket.</p>
+                            </div>
+
+                            <!-- Total Amount (Readonly, calculated) -->
+                            <div>
+                                <x-input-label for="total_amount" value="Total Amount to Pay" />
+                                <x-text-input 
+                                    id="total_amount" 
+                                    name="total_amount_display" 
+                                    type="text" 
+                                    class="mt-1 block w-full bg-gray-100 font-semibold text-lg" 
+                                    value="₱{{ number_format($totalAmountToPay, 2) }}" 
+                                    readonly
+                                    disabled
+                                />
+                                <p class="mt-1 text-xs text-gray-500">Total amount: Interest + Service Charge</p>
                             </div>
                         </div>
 
@@ -210,16 +296,93 @@
             const maturityDateInput = document.getElementById('maturity_date');
             const expiryDateInput = document.getElementById('expiry_date');
             const auctionSaleDateInput = document.getElementById('auction_sale_date');
+            const form = document.querySelector('form');
             
             const daysBeforeRedemption = {{ $daysBeforeRedemption }};
             const daysBeforeAuctionSale = {{ $daysBeforeAuctionSale }};
 
-            // Set minimum date to today
-            const today = new Date().toISOString().split('T')[0];
-            maturityDateInput.setAttribute('min', today);
-            expiryDateInput.setAttribute('min', today);
+            // Set minimum date to today (no past dates allowed)
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const todayStr = today.toISOString().split('T')[0];
+            
+            maturityDateInput.setAttribute('min', todayStr);
+            expiryDateInput.setAttribute('min', todayStr);
             if (auctionSaleDateInput) {
-                auctionSaleDateInput.setAttribute('min', today);
+                auctionSaleDateInput.setAttribute('min', todayStr);
+            }
+
+            // Validation function to check date relationships
+            function validateDates() {
+                const maturityDate = maturityDateInput.value;
+                const expiryDate = expiryDateInput.value;
+                const auctionDate = auctionSaleDateInput ? auctionSaleDateInput.value : null;
+
+                // Clear previous validation messages
+                clearValidationMessages();
+
+                let isValid = true;
+                const errors = [];
+
+                // Check if maturity date is in the past
+                if (maturityDate && new Date(maturityDate) < today) {
+                    isValid = false;
+                    errors.push('Maturity date cannot be in the past.');
+                    showFieldError(maturityDateInput, 'Maturity date cannot be in the past.');
+                }
+
+                // Check if expiry date is before maturity date
+                if (maturityDate && expiryDate) {
+                    const maturity = new Date(maturityDate);
+                    const expiry = new Date(expiryDate);
+                    
+                    if (expiry < maturity) {
+                        isValid = false;
+                        errors.push('Expiry date must be on or after maturity date.');
+                        showFieldError(expiryDateInput, 'Expiry date must be on or after maturity date.');
+                    }
+                }
+
+                // Check if auction date is before expiry date
+                if (expiryDate && auctionDate) {
+                    const expiry = new Date(expiryDate);
+                    const auction = new Date(auctionDate);
+                    
+                    if (auction < expiry) {
+                        isValid = false;
+                        errors.push('Auction sale date must be on or after expiry date.');
+                        showFieldError(auctionSaleDateInput, 'Auction sale date must be on or after expiry date.');
+                    }
+                }
+
+                return isValid;
+            }
+
+            // Show error message for a field
+            function showFieldError(input, message) {
+                input.classList.add('border-red-500', 'focus:border-red-500', 'focus:ring-red-500');
+                
+                // Create or update error message
+                let errorDiv = input.parentElement.querySelector('.field-error-message');
+                if (!errorDiv) {
+                    errorDiv = document.createElement('p');
+                    errorDiv.className = 'mt-1 text-xs text-red-600 field-error-message';
+                    input.parentElement.appendChild(errorDiv);
+                }
+                errorDiv.textContent = message;
+            }
+
+            // Clear validation messages
+            function clearValidationMessages() {
+                [maturityDateInput, expiryDateInput, auctionSaleDateInput].forEach(input => {
+                    if (input) {
+                        input.classList.remove('border-red-500', 'focus:border-red-500', 'focus:ring-red-500');
+                        const errorDiv = input.parentElement.querySelector('.field-error-message');
+                        if (errorDiv) {
+                            errorDiv.remove();
+                        }
+                    }
+                });
             }
 
             // Calculate dates when maturity date changes
@@ -227,6 +390,12 @@
                 const maturityDate = maturityDateInput.value;
                 if (maturityDate) {
                     const maturity = new Date(maturityDate);
+                    
+                    // Validate maturity date is not in the past
+                    if (maturity < today) {
+                        showFieldError(maturityDateInput, 'Maturity date cannot be in the past.');
+                        return;
+                    }
                     
                     // Calculate expiry redemption date: maturity date + days before redemption
                     const expiryDate = new Date(maturity);
@@ -247,29 +416,68 @@
                         auctionSaleDateInput.setAttribute('min', expiryDateStr);
                         auctionSaleDateInput.value = auctionDateStr;
                     }
+                    
+                    // Clear any validation errors
+                    clearValidationMessages();
                 }
             }
 
             // Update expiry date minimum when maturity date changes
             maturityDateInput.addEventListener('change', function() {
+                clearValidationMessages();
                 calculateDatesFromMaturity();
+                validateDates();
             });
 
             // Update auction sale date minimum when expiry date changes manually
             expiryDateInput.addEventListener('change', function() {
+                clearValidationMessages();
                 const expiryDate = this.value;
-                if (expiryDate && auctionSaleDateInput) {
-                    // Calculate auction sale date: expiry redemption date + days before auction sale
+                
+                if (expiryDate) {
                     const expiry = new Date(expiryDate);
-                    const auctionDate = new Date(expiry);
-                    auctionDate.setDate(auctionDate.getDate() + daysBeforeAuctionSale);
-                    const auctionDateStr = auctionDate.toISOString().split('T')[0];
                     
-                    auctionSaleDateInput.setAttribute('min', expiryDate);
-                    // Only auto-update if auction date is empty or before the new expiry date
-                    if (!auctionSaleDateInput.value || auctionSaleDateInput.value < expiryDate) {
-                        auctionSaleDateInput.value = auctionDateStr;
+                    // Check if expiry date is before maturity date
+                    if (maturityDateInput.value) {
+                        const maturity = new Date(maturityDateInput.value);
+                        if (expiry < maturity) {
+                            showFieldError(this, 'Expiry date must be on or after maturity date.');
+                            return;
+                        }
                     }
+                    
+                    if (auctionSaleDateInput) {
+                        // Calculate auction sale date: expiry redemption date + days before auction sale
+                        const auctionDate = new Date(expiry);
+                        auctionDate.setDate(auctionDate.getDate() + daysBeforeAuctionSale);
+                        const auctionDateStr = auctionDate.toISOString().split('T')[0];
+                        
+                        auctionSaleDateInput.setAttribute('min', expiryDate);
+                        // Only auto-update if auction date is empty or before the new expiry date
+                        if (!auctionSaleDateInput.value || new Date(auctionSaleDateInput.value) < expiry) {
+                            auctionSaleDateInput.value = auctionDateStr;
+                        }
+                    }
+                }
+                
+                validateDates();
+            });
+
+            // Validate auction sale date when it changes
+            if (auctionSaleDateInput) {
+                auctionSaleDateInput.addEventListener('change', function() {
+                    clearValidationMessages();
+                    validateDates();
+                });
+            }
+
+            // Validate on form submit
+            form.addEventListener('submit', function(e) {
+                if (!validateDates()) {
+                    e.preventDefault();
+                    // Show general error message
+                    alert('Please fix the date validation errors before submitting.');
+                    return false;
                 }
             });
 
