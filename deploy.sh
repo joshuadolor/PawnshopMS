@@ -119,6 +119,30 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     docker compose exec -T app php artisan db:seed --force
 fi
 
+# Fix permissions for node_modules/.bin executables (needed for Vite)
+echo -e "${YELLOW}Fixing node_modules permissions...${NC}"
+docker compose exec -T app find node_modules/.bin -type f -exec chmod +x {} \; 2>/dev/null || true
+
+# Build Vite assets
+echo -e "${YELLOW}Building Vite assets...${NC}"
+docker compose exec -T app npm run build
+
+if [ $? -ne 0 ]; then
+    echo -e "${RED}Vite build failed!${NC}"
+    echo -e "${YELLOW}Trying to fix permissions and rebuild...${NC}"
+    docker compose exec -T app find node_modules/.bin -type f -exec chmod +x {} \; 2>/dev/null || true
+    docker compose exec -T app npm run build
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}Vite build failed again. Please check the error above.${NC}"
+    fi
+fi
+
+# Fix permissions for build directory
+echo -e "${YELLOW}Setting build directory permissions...${NC}"
+docker compose exec -T app chown -R www-data:www-data /var/www/html/public/build 2>/dev/null || true
+docker compose exec -T app find /var/www/html/public/build -type d -exec chmod 755 {} \; 2>/dev/null || true
+docker compose exec -T app find /var/www/html/public/build -type f -exec chmod 644 {} \; 2>/dev/null || true
+
 # Optimize Laravel
 echo -e "${YELLOW}Optimizing Laravel...${NC}"
 docker compose exec -T app php artisan config:cache
@@ -133,6 +157,8 @@ find . -type f -exec chmod 644 {} \; 2>/dev/null || true
 find . -name "*.sh" -exec chmod +x {} \; 2>/dev/null || true
 # Restore specific Laravel directories
 chmod -R 775 storage bootstrap/cache 2>/dev/null || true
+# Restore node_modules/.bin execute permissions on host
+find node_modules/.bin -type f -exec chmod +x {} \; 2>/dev/null || true
 
 # Get container status
 echo ""
