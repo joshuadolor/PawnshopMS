@@ -11,6 +11,7 @@ use App\Models\BranchBalance;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 use Carbon\Carbon;
 
@@ -149,6 +150,7 @@ class TubosController extends Controller
             'principal_amount' => ['required', 'numeric', 'min:0'],
             'service_charge' => ['required', 'numeric', 'min:0'],
             'additional_charge_amount' => ['nullable', 'numeric', 'min:0'],
+            'signature' => ['required', 'string'],
         ]);
 
         $pawnTicketNumber = $request->input('pawn_ticket_number');
@@ -187,8 +189,40 @@ class TubosController extends Controller
         // Combine all item descriptions for the tubos transaction
         $combinedDescriptions = $allTransactions->pluck('item_description')->filter()->unique()->values()->implode('; ');
 
+        // Process signature (base64 to image file)
+        $signaturePath = null;
+        $branch = $oldestTransaction->branch;
+        $branchName = $branch->name;
+        
+        try {
+            $signatureData = $request->input('signature');
+            if ($signatureData && strpos($signatureData, 'data:image') === 0) {
+                // Extract base64 data
+                list($type, $data) = explode(';', $signatureData);
+                list(, $data) = explode(',', $data);
+                $imageData = base64_decode($data);
+                
+                // Create directory structure: transactions/signatures/YYYY-MM-DD/branch-name/
+                $dateFolder = now()->format('Y-m-d');
+                $sanitizedBranchName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $branchName);
+                $directory = "transactions/signatures/{$dateFolder}/{$sanitizedBranchName}";
+                
+                // Generate unique filename
+                $filename = 'signature_' . uniqid() . '_' . time() . '.png';
+                $filePath = "{$directory}/{$filename}";
+                
+                // Store the image
+                Storage::disk('local')->put($filePath, $imageData);
+                $signaturePath = $filePath;
+            }
+        } catch (\Exception $e) {
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'Failed to process signature: ' . $e->getMessage());
+        }
+
         // Use database transaction to ensure data integrity
-        DB::transaction(function () use ($allTransactions, $request, $branchId, $principalAmount, $serviceCharge, $additionalChargeAmount, $totalAmount, $pawnTicketNumber, $oldestTransaction, $combinedDescriptions) {
+        DB::transaction(function () use ($allTransactions, $request, $branchId, $principalAmount, $serviceCharge, $additionalChargeAmount, $totalAmount, $pawnTicketNumber, $oldestTransaction, $combinedDescriptions, $signaturePath) {
             // Generate tubos transaction number
             $tubosTransactionNumber = $this->generateTubosTransactionNumber();
 
@@ -216,6 +250,7 @@ class TubosController extends Controller
                 'item_description' => $combinedDescriptions, // Combined descriptions from all transactions
                 'item_image_path' => $oldestTransaction->item_image_path,
                 'pawner_id_image_path' => $oldestTransaction->pawner_id_image_path,
+                'signature_path' => $signaturePath,
                 'grams' => $oldestTransaction->grams,
                 'orcr_serial' => $oldestTransaction->orcr_serial,
                 'service_charge' => $serviceCharge,

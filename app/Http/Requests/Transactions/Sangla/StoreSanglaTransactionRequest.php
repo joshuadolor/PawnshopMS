@@ -294,7 +294,7 @@ class StoreSanglaTransactionRequest extends FormRequest
 
         $itemType = \App\Models\ItemType::find($itemTypeId);
         
-        return $itemType && in_array($itemType->name, ['Vehicles', 'Cars']);
+        return $itemType && in_array($itemType->name, ['Vehicle', 'Vehicles', 'Cars']);
     }
 
     /**

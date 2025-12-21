@@ -340,6 +340,7 @@
                                             data-item-image="{{ route('images.show', ['path' => $transaction->item_image_path]) }}"
                                             data-pawner-image="{{ route('images.show', ['path' => $transaction->pawner_id_image_path]) }}"
                                             data-pawn-ticket-image="{{ $transaction->pawn_ticket_image_path ? route('images.show', ['path' => $transaction->pawn_ticket_image_path]) : '' }}"
+                                            data-signature-image="{{ $transaction->signature_path ? route('images.show', ['path' => $transaction->signature_path]) : '' }}"
                                             data-transaction-id="{{ $transaction->id }}"
                                             data-transaction-number="{{ $transaction->transaction_number }}"
                                             data-pawn-ticket-number="{{ $transaction->pawn_ticket_number ?? '' }}"
@@ -363,6 +364,8 @@
                                             data-interest-rate="{{ number_format($transaction->interest_rate, 2) }}"
                                             data-service-charge="{{ number_format($transaction->service_charge, 2) }}"
                                             data-net-proceeds="{{ number_format($transaction->net_proceeds, 2) }}"
+                                            data-orcr-serial="{{ $transaction->orcr_serial ?? '' }}"
+                                            data-grams="{{ $transaction->grams ? number_format($transaction->grams, 1) : '' }}"
                                         >
                                             <td class="px-6 py-4 whitespace-nowrap {{ $pawnTicketNumber ? 'pl-12' : '' }}">
                                                 <div class="text-xs text-gray-500">Transaction #</div>
@@ -458,6 +461,7 @@
                                             data-item-image="{{ route('images.show', ['path' => $childTransaction->item_image_path]) }}"
                                             data-pawner-image="{{ route('images.show', ['path' => $childTransaction->pawner_id_image_path]) }}"
                                             data-pawn-ticket-image="{{ $childTransaction->pawn_ticket_image_path ? route('images.show', ['path' => $childTransaction->pawn_ticket_image_path]) : '' }}"
+                                            data-signature-image="{{ $childTransaction->signature_path ? route('images.show', ['path' => $childTransaction->signature_path]) : '' }}"
                                             data-transaction-id="{{ $childTransaction->id }}"
                                             data-transaction-number="{{ $childTransaction->transaction_number }}"
                                             data-pawn-ticket-number="{{ $childTransaction->pawn_ticket_number ?? '' }}"
@@ -482,6 +486,8 @@
                                             data-interest-rate="{{ number_format($childTransaction->interest_rate, 2) }}"
                                             data-service-charge="{{ number_format($childTransaction->service_charge, 2) }}"
                                             data-net-proceeds="{{ number_format($childTransaction->net_proceeds, 2) }}"
+                                            data-orcr-serial="{{ $childTransaction->orcr_serial ?? '' }}"
+                                            data-grams="{{ $childTransaction->grams ? number_format($childTransaction->grams, 1) : '' }}"
                                         >
                                             <td class="px-6 py-2 whitespace-nowrap {{ $pawnTicketNumber ? 'pl-12' : '' }}">
                                                 <div class="text-xs font-semibold {{ $textColor }}">
@@ -556,6 +562,7 @@
                                             data-item-image="{{ route('images.show', ['path' => $transaction->item_image_path]) }}"
                                             data-pawner-image="{{ route('images.show', ['path' => $transaction->pawner_id_image_path]) }}"
                                             data-pawn-ticket-image="{{ $transaction->pawn_ticket_image_path ? route('images.show', ['path' => $transaction->pawn_ticket_image_path]) : '' }}"
+                                            data-signature-image="{{ $transaction->signature_path ? route('images.show', ['path' => $transaction->signature_path]) : '' }}"
                                             data-transaction-id="{{ $transaction->id }}"
                                             data-transaction-number="{{ $transaction->transaction_number }}"
                                             data-pawn-ticket-number="{{ $transaction->pawn_ticket_number ?? '' }}"
@@ -579,6 +586,8 @@
                                             data-interest-rate="{{ number_format($transaction->interest_rate, 2) }}"
                                             data-service-charge="{{ number_format($transaction->service_charge, 2) }}"
                                             data-net-proceeds="{{ number_format($transaction->net_proceeds, 2) }}"
+                                            data-orcr-serial="{{ $transaction->orcr_serial ?? '' }}"
+                                            data-grams="{{ $transaction->grams ? number_format($transaction->grams, 1) : '' }}"
                                         >
                                                 <td class="px-6 py-4 whitespace-nowrap">
                                                     <div class="text-xs text-gray-500">Transaction #</div>
@@ -695,6 +704,16 @@
                             <div id="modalItemTags" class="mt-1 flex flex-wrap gap-1">
                                 <!-- Tags will be inserted here -->
                             </div>
+                            <!-- ORCR/Serial (for Vehicle items) -->
+                            <div id="modalOrcrSection" class="mt-2 hidden">
+                                <p class="text-sm text-gray-600">OR&CR/Serial:</p>
+                                <p id="modalOrcrSerial" class="text-sm font-medium text-gray-900 mt-1">-</p>
+                            </div>
+                            <!-- Grams (for Jewelry items) -->
+                            <div id="modalGramsSection" class="mt-2 hidden">
+                                <p class="text-sm text-gray-600">Grams:</p>
+                                <p id="modalGrams" class="text-sm font-medium text-gray-900 mt-1">-</p>
+                            </div>
                         </div>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -802,6 +821,25 @@
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
                                     </svg>
                                     <p class="mt-2 text-sm">No image available</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Signature Image (for Tubos transactions) -->
+                        <div id="signatureSection" class="hidden">
+                            <h5 class="text-sm font-medium text-gray-700 mb-2">Pawner Signature</h5>
+                            <div class="border-2 border-gray-200 rounded-lg overflow-hidden">
+                                <img 
+                                    id="modalSignatureImage" 
+                                    src="" 
+                                    alt="Pawner Signature" 
+                                    class="w-auto h-full"
+                                />
+                                <div id="modalSignaturePlaceholder" class="hidden p-8 text-center text-gray-400">
+                                    <svg class="mx-auto h-12 w-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
+                                    </svg>
+                                    <p class="mt-2 text-sm">No signature available</p>
                                 </div>
                             </div>
                         </div>
@@ -920,6 +958,7 @@
                     const itemImageUrl = this.getAttribute('data-item-image');
                     const pawnerImageUrl = this.getAttribute('data-pawner-image');
                     const pawnTicketImageUrl = this.getAttribute('data-pawn-ticket-image');
+                    const signatureImageUrl = this.getAttribute('data-signature-image');
                     const transactionId = this.getAttribute('data-transaction-id');
                     const transactionNumber = this.getAttribute('data-transaction-number');
                     const pawnTicketNumber = this.getAttribute('data-pawn-ticket-number');
@@ -945,11 +984,14 @@
                     const interestRate = this.getAttribute('data-interest-rate');
                     const serviceCharge = this.getAttribute('data-service-charge');
                     const netProceeds = this.getAttribute('data-net-proceeds');
+                    const orcrSerial = this.getAttribute('data-orcr-serial') || '';
+                    const grams = this.getAttribute('data-grams') || '';
                     
                     showTransactionDetails({
                         itemImageUrl,
                         pawnerImageUrl,
                         pawnTicketImageUrl,
+                        signatureImageUrl,
                         transactionId,
                         transactionNumber,
                         pawnTicketNumber,
@@ -973,7 +1015,9 @@
                         loanAmount,
                         interestRate,
                         serviceCharge,
-                        netProceeds
+                        netProceeds,
+                        orcrSerial,
+                        grams
                     });
                 });
             });
@@ -1113,6 +1157,36 @@
                 }
             }
 
+            // Show/hide ORCR section for Vehicle items
+            const orcrSection = document.getElementById('modalOrcrSection');
+            const orcrSerialEl = document.getElementById('modalOrcrSerial');
+            const isVehicle = data.itemType && (data.itemType.toLowerCase() === 'vehicle' || data.itemType.toLowerCase() === 'vehicles' || data.itemType.toLowerCase() === 'cars');
+            
+            if (isVehicle && orcrSection && orcrSerialEl) {
+                orcrSection.classList.remove('hidden');
+                orcrSerialEl.textContent = data.orcrSerial && data.orcrSerial.trim() !== '' ? data.orcrSerial : '-';
+            } else if (orcrSection) {
+                orcrSection.classList.add('hidden');
+            }
+
+            // Show/hide Grams section for Jewelry items
+            const gramsSection = document.getElementById('modalGramsSection');
+            const gramsEl = document.getElementById('modalGrams');
+            const isJewelry = data.itemType && data.itemType.toLowerCase() === 'jewelry';
+            
+            if (isJewelry && gramsSection && gramsEl) {
+                gramsSection.classList.remove('hidden');
+                if (data.grams && data.grams.trim() !== '' && parseFloat(data.grams) > 0) {
+                    // Format grams value (remove trailing zeros if needed)
+                    const gramsValue = parseFloat(data.grams);
+                    gramsEl.textContent = gramsValue % 1 === 0 ? gramsValue.toFixed(0) + ' g' : gramsValue.toFixed(1) + ' g';
+                } else {
+                    gramsEl.textContent = '-';
+                }
+            } else if (gramsSection) {
+                gramsSection.classList.add('hidden');
+            }
+
             // Show transaction summary
             const summarySection = document.querySelector('.mb-6:has(#modalPrincipal)');
             if (summarySection) {
@@ -1184,6 +1258,25 @@
             } else {
                 pawnTicketImage.classList.add('hidden');
                 pawnTicketPlaceholder.classList.remove('hidden');
+            }
+            
+            // Handle signature image (only for tubos transactions)
+            const signatureSection = document.getElementById('signatureSection');
+            const signatureImage = document.getElementById('modalSignatureImage');
+            const signaturePlaceholder = document.getElementById('modalSignaturePlaceholder');
+            
+            if (data.transactionType === 'tubos') {
+                signatureSection.classList.remove('hidden');
+                if (data.signatureImageUrl && data.signatureImageUrl.trim() !== '') {
+                    signatureImage.src = data.signatureImageUrl;
+                    signatureImage.classList.remove('hidden');
+                    signaturePlaceholder.classList.add('hidden');
+                } else {
+                    signatureImage.classList.add('hidden');
+                    signaturePlaceholder.classList.remove('hidden');
+                }
+            } else {
+                signatureSection.classList.add('hidden');
             }
             
             modal.showModal();

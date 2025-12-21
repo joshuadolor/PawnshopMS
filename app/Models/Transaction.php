@@ -32,6 +32,7 @@ class Transaction extends Model
         'item_description',
         'item_image_path',
         'pawner_id_image_path',
+        'signature_path',
         'grams',
         'orcr_serial',
         'service_charge',

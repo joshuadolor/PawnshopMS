@@ -293,6 +293,33 @@
                             <input type="hidden" name="additional_charge_amount" value="{{ number_format($additionalChargeAmount, 2, '.', '') }}">
                         </div>
 
+                        <!-- Signature Section -->
+                        <div class="mt-8 border-t pt-6">
+                            <x-input-label for="signature" value="Pawner Signature *" class="text-base font-semibold" />
+                            <p class="mt-1 text-sm text-gray-500 mb-4">Please sign below to confirm the redemption of this pawn ticket.</p>
+                            
+                            <div class="bg-white border-2 border-gray-300 rounded-lg p-4">
+                                <canvas 
+                                    id="signatureCanvas" 
+                                    class="border border-gray-300 rounded cursor-crosshair touch-none"
+                                    width="600"
+                                    height="200"
+                                    style="max-width: 100%; height: auto; display: block;"
+                                ></canvas>
+                                <div class="mt-3 flex gap-2">
+                                    <button 
+                                        type="button" 
+                                        id="clearSignature" 
+                                        class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 text-sm font-medium"
+                                    >
+                                        Clear Signature
+                                    </button>
+                                </div>
+                            </div>
+                            <input type="hidden" name="signature" id="signatureData">
+                            <x-input-error :messages="$errors->get('signature')" class="mt-2" />
+                        </div>
+
                         <div class="flex items-center justify-end mt-6 gap-4">
                             <a href="{{ route('transactions.tubos.search') }}" class="text-gray-600 hover:text-gray-900 font-medium">
                                 Cancel
@@ -306,5 +333,110 @@
             </div>
         </div>
     </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const canvas = document.getElementById('signatureCanvas');
+            const ctx = canvas.getContext('2d');
+            const signatureInput = document.getElementById('signatureData');
+            const clearBtn = document.getElementById('clearSignature');
+            const form = document.querySelector('form');
+            
+            let isDrawing = false;
+            let lastX = 0;
+            let lastY = 0;
+
+            // Set canvas background to white
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+
+            // Mouse events
+            canvas.addEventListener('mousedown', startDrawing);
+            canvas.addEventListener('mousemove', draw);
+            canvas.addEventListener('mouseup', stopDrawing);
+            canvas.addEventListener('mouseout', stopDrawing);
+
+            // Touch events for mobile
+            canvas.addEventListener('touchstart', handleTouch);
+            canvas.addEventListener('touchmove', handleTouch);
+            canvas.addEventListener('touchend', stopDrawing);
+
+            function startDrawing(e) {
+                isDrawing = true;
+                const rect = canvas.getBoundingClientRect();
+                lastX = e.clientX - rect.left;
+                lastY = e.clientY - rect.top;
+            }
+
+            function draw(e) {
+                if (!isDrawing) return;
+                
+                const rect = canvas.getBoundingClientRect();
+                const currentX = e.clientX - rect.left;
+                const currentY = e.clientY - rect.top;
+
+                ctx.beginPath();
+                ctx.moveTo(lastX, lastY);
+                ctx.lineTo(currentX, currentY);
+                ctx.stroke();
+
+                lastX = currentX;
+                lastY = currentY;
+                updateSignatureData();
+            }
+
+            function handleTouch(e) {
+                e.preventDefault();
+                const touch = e.touches[0] || e.changedTouches[0];
+                const rect = canvas.getBoundingClientRect();
+                const x = touch.clientX - rect.left;
+                const y = touch.clientY - rect.top;
+
+                if (e.type === 'touchstart') {
+                    isDrawing = true;
+                    lastX = x;
+                    lastY = y;
+                } else if (e.type === 'touchmove' && isDrawing) {
+                    ctx.beginPath();
+                    ctx.moveTo(lastX, lastY);
+                    ctx.lineTo(x, y);
+                    ctx.stroke();
+                    lastX = x;
+                    lastY = y;
+                    updateSignatureData();
+                }
+            }
+
+            function stopDrawing() {
+                isDrawing = false;
+                updateSignatureData();
+            }
+
+            function updateSignatureData() {
+                // Convert canvas to base64 data URL
+                const dataURL = canvas.toDataURL('image/png');
+                signatureInput.value = dataURL;
+            }
+
+            clearBtn.addEventListener('click', function() {
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                signatureInput.value = '';
+            });
+
+            // Validate signature before form submission
+            form.addEventListener('submit', function(e) {
+                if (!signatureInput.value || signatureInput.value.trim() === '') {
+                    e.preventDefault();
+                    alert('Please provide a signature before submitting.');
+                    return false;
+                }
+            });
+        });
+    </script>
 </x-app-layout>
 

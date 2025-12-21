@@ -18,14 +18,14 @@ class ItemTypeSeeder extends Seeder
         $itemTypes = [
             'Jewelry',
             'Electronics',
-            'Appliances',
-            'Vehicles',
-            'Gadgets',
-            'Watches',
+            'Appliance',
+            'Vehicle',
+            'Gadget',
+            'Watch',
             'Tools',
-            'Musical Instruments',
+            'Musical Instrument',
             'Sports Equipment',
-            'Collectibles',
+            'Collectible',
             'Other'
         ];
 
