@@ -5,12 +5,14 @@ namespace App\Http\Controllers\Transactions;
 use App\Http\Controllers\Controller;
 use App\Models\Transaction;
 use App\Models\Config;
+use App\Models\AdditionalChargeConfig;
 use App\Models\BranchFinancialTransaction;
 use App\Models\BranchBalance;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
+use Carbon\Carbon;
 
 class RenewalController extends Controller
 {
@@ -51,13 +53,49 @@ class RenewalController extends Controller
         $oldestTransaction = $allTransactions->first();
         $branchId = $oldestTransaction->branch_id;
 
+        // Get the latest transaction for date calculations (most current dates)
+        $latestTransaction = $allTransactions->last();
+
         // Calculate interest from the oldest transaction only
         $totalInterest = (float) $oldestTransaction->loan_amount * ((float) $oldestTransaction->interest_rate / 100);
 
         // Get service charge from config (one service charge per pawn ticket)
         $serviceCharge = Config::getValue('sangla_service_charge', 0);
         $totalServiceCharge = $serviceCharge; // Only one service charge
-        $totalAmountToPay = $totalInterest + $totalServiceCharge;
+
+        // Calculate additional charges
+        // Use the latest transaction's dates (most current state)
+        $today = Carbon::today();
+        $expiryRedemptionDate = $latestTransaction->expiry_date ? Carbon::parse($latestTransaction->expiry_date) : null;
+        $maturityDate = $latestTransaction->maturity_date ? Carbon::parse($latestTransaction->maturity_date) : null;
+        $daysExceeded = 0;
+        $additionalChargeType = null;
+        $additionalChargeAmount = 0;
+        $additionalChargeConfig = null;
+
+        // First, check if expiry redemption date is exceeded
+        if ($expiryRedemptionDate && $today->gt($expiryRedemptionDate)) {
+            // Expiry redemption date is exceeded - use EC (Exceeded Charge)
+            // Count days exceeded from expiry redemption date to today
+            $daysExceeded = abs($expiryRedemptionDate->diffInDays($today, false));
+            $additionalChargeType = 'EC';
+        } elseif ($maturityDate && $today->gt($maturityDate)) {
+            // Expiry redemption date is NOT exceeded, but maturity date is exceeded - use LD (Late Days)
+            // Count days exceeded from maturity date to today
+            $daysExceeded = abs($maturityDate->diffInDays($today, false));
+            $additionalChargeType = 'LD';
+        }
+
+        // Get the percentage from additionalChargeConfig table based on days exceeded and type
+        if ($daysExceeded > 0 && $additionalChargeType) {
+            $additionalChargeConfig = AdditionalChargeConfig::findApplicable($daysExceeded, $additionalChargeType, 'renewal');
+            if ($additionalChargeConfig) {
+                // Calculate charge amount: loan_amount * percentage from config
+                $additionalChargeAmount = $oldestTransaction->loan_amount * ($additionalChargeConfig->percentage / 100);
+            }
+        }
+
+        $totalAmountToPay = $totalInterest + $totalServiceCharge + $additionalChargeAmount;
 
         // Combine all item descriptions for the renewal transaction
         $combinedDescriptions = $allTransactions->pluck('item_description')->filter()->unique()->values()->implode('; ');
@@ -68,7 +106,6 @@ class RenewalController extends Controller
         $interestPeriod = Config::getValue('sangla_interest_period', 'per_month');
 
         // Calculate default new maturity date based on interest period
-        $today = now();
         $defaultMaturityDate = match ($interestPeriod) {
             'per_annum' => $today->copy()->addYear()->format('Y-m-d'),
             'per_month' => $today->copy()->addMonth()->format('Y-m-d'),
@@ -82,6 +119,10 @@ class RenewalController extends Controller
             'totalInterest' => $totalInterest,
             'serviceCharge' => $serviceCharge,
             'totalServiceCharge' => $totalServiceCharge,
+            'additionalChargeType' => $additionalChargeType,
+            'additionalChargeAmount' => $additionalChargeAmount,
+            'daysExceeded' => $daysExceeded,
+            'additionalChargeConfig' => $additionalChargeConfig,
             'totalAmountToPay' => $totalAmountToPay,
             'combinedDescriptions' => $combinedDescriptions,
             'branchId' => $branchId,
@@ -124,13 +165,14 @@ class RenewalController extends Controller
         $branchId = $oldestTransaction->branch_id;
         $interestAmount = (float) $request->input('interest_amount');
         $serviceCharge = (float) $request->input('service_charge');
-        $totalAmount = $interestAmount + $serviceCharge;
+        $additionalChargeAmount = (float) ($request->input('additional_charge_amount') ?? 0);
+        $totalAmount = $interestAmount + $serviceCharge + $additionalChargeAmount;
 
         // Combine all item descriptions for the renewal transaction
         $combinedDescriptions = $allTransactions->pluck('item_description')->filter()->unique()->values()->implode('; ');
 
         // Use database transaction to ensure data integrity
-        DB::transaction(function () use ($allTransactions, $request, $branchId, $interestAmount, $serviceCharge, $totalAmount, $pawnTicketNumber, $oldestTransaction, $combinedDescriptions) {
+        DB::transaction(function () use ($allTransactions, $request, $branchId, $interestAmount, $serviceCharge, $additionalChargeAmount, $totalAmount, $pawnTicketNumber, $oldestTransaction, $combinedDescriptions) {
             // Note: We do NOT update the parent transaction dates - they remain as historical records
             // Only the renewal transaction will have the new extended dates
 
@@ -164,7 +206,7 @@ class RenewalController extends Controller
                 'grams' => $oldestTransaction->grams,
                 'orcr_serial' => $oldestTransaction->orcr_serial,
                 'service_charge' => $serviceCharge, // Service charge for renewals
-                'net_proceeds' => $totalAmount, // For renewals, net_proceeds is the total amount paid (interest + service charge)
+                'net_proceeds' => $totalAmount, // For renewals, net_proceeds is the total amount paid (interest + service charge + additional charge)
                 'status' => 'active',
             ]);
 
@@ -184,8 +226,13 @@ class RenewalController extends Controller
             BranchBalance::updateBalance($branchId, $totalAmount);
         });
 
+        $paymentBreakdown = "Interest: ₱" . number_format($interestAmount, 2) . ", Service Charge: ₱" . number_format($serviceCharge, 2);
+        if ($additionalChargeAmount > 0) {
+            $paymentBreakdown .= ", Additional Charge: ₱" . number_format($additionalChargeAmount, 2);
+        }
+        
         return redirect()->route('transactions.index')
-            ->with('success', "Transaction(s) with pawn ticket number '{$pawnTicketNumber}' have been renewed successfully. Payment of ₱" . number_format($totalAmount, 2) . " (Interest: ₱" . number_format($interestAmount, 2) . ", Service Charge: ₱" . number_format($serviceCharge, 2) . ") has been recorded.");
+            ->with('success', "Transaction(s) with pawn ticket number '{$pawnTicketNumber}' have been renewed successfully. Payment of ₱" . number_format($totalAmount, 2) . " ({$paymentBreakdown}) has been recorded.");
     }
 
     /**

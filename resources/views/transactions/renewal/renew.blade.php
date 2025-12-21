@@ -81,6 +81,20 @@
                                 </div>
                             </div>
                             
+                            <!-- Additional Charge -->
+                            <div class="mb-3">
+                                <div class="flex justify-between items-center text-sm">
+                                    <span class="text-yellow-800">
+                                        @if($additionalChargeAmount > 0 && $additionalChargeConfig)
+                                            Additional Charge ({{ $additionalChargeType === 'EC' ? 'Exceeded Charge' : 'Late Days' }} - {{ $daysExceeded }} day(s), {{ $additionalChargeConfig->percentage }}%):
+                                        @else
+                                            Additional Charge:
+                                        @endif
+                                    </span>
+                                    <span class="font-medium text-yellow-900">₱{{ number_format($additionalChargeAmount, 2) }}</span>
+                                </div>
+                            </div>
+                            
                             <!-- Total -->
                             <div class="border-t-2 border-yellow-400 pt-3 mt-3">
                                 <div class="flex justify-between items-center">
@@ -312,6 +326,27 @@
                                 <p class="mt-1 text-xs text-gray-500">Service charge (₱{{ number_format($serviceCharge, 2) }}) per pawn ticket.</p>
                             </div>
 
+                            <!-- Additional Charge (Readonly, calculated) -->
+                            <div>
+                                <x-input-label for="additional_charge" value="Additional Charge" />
+                                <x-text-input 
+                                    id="additional_charge" 
+                                    name="additional_charge_display" 
+                                    type="text" 
+                                    class="mt-1 block w-full bg-gray-100" 
+                                    value="₱{{ number_format($additionalChargeAmount, 2) }}" 
+                                    readonly
+                                    disabled
+                                />
+                                <p class="mt-1 text-xs text-gray-500">
+                                    @if($additionalChargeAmount > 0 && $additionalChargeConfig)
+                                        {{ $additionalChargeType === 'EC' ? 'Exceeded Charge' : 'Late Days' }} - {{ $daysExceeded }} day(s) exceeded, {{ $additionalChargeConfig->percentage }}% of loan amount
+                                    @else
+                                        No additional charge applicable
+                                    @endif
+                                </p>
+                            </div>
+
                             <!-- Total Amount (Readonly, calculated) -->
                             <div>
                                 <x-input-label for="total_amount" value="Total Amount to Pay" />
@@ -324,8 +359,18 @@
                                     readonly
                                     disabled
                                 />
-                                <p class="mt-1 text-xs text-gray-500">Total amount: Interest + Service Charge</p>
+                                <p class="mt-1 text-xs text-gray-500">
+                                    Total amount: Interest + Service Charge
+                                    @if($additionalChargeAmount > 0 && $additionalChargeConfig)
+                                        + Additional Charge ({{ $additionalChargeType === 'EC' ? 'Exceeded' : 'Late Days' }})
+                                    @else
+                                        + Additional Charge (if applicable)
+                                    @endif
+                                </p>
                             </div>
+
+                            <!-- Hidden input for additional charge amount -->
+                            <input type="hidden" name="additional_charge_amount" value="{{ number_format($additionalChargeAmount, 2, '.', '') }}">
                         </div>
 
                         <div class="flex items-center justify-end mt-6 gap-4">
