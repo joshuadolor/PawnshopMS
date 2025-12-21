@@ -41,5 +41,8 @@ class InitialSeeder extends Seeder
 
         // Seed Configurations
         $this->call(ConfigSeeder::class);
+
+        // Seed Additional Charge Configurations
+        $this->call(AdditionalChargeConfigSeeder::class);
     }
 }

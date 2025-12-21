@@ -249,13 +249,34 @@
                                     @foreach($sanglaTransactions as $transaction)
                                         @php
                                             $isVoided = $transaction->isVoided();
+                                            $voidedInfo = $transaction->voided;
                                             // Check if this Sangla transaction has child transactions (additional items or renewals)
                                             $hasChildTransactions = false;
+                                            $isLatestChild = true;
                                             if ($transaction->type === 'sangla' && $transaction->pawn_ticket_number) {
                                                 $hasChildTransactions = \App\Models\Transaction::where('pawn_ticket_number', $transaction->pawn_ticket_number)
                                                     ->where('id', '!=', $transaction->id)
                                                     ->whereDoesntHave('voided')
                                                     ->exists();
+                                                
+                                                // Check if this is the latest child transaction
+                                                $firstSangla = \App\Models\Transaction::where('pawn_ticket_number', $transaction->pawn_ticket_number)
+                                                    ->where('type', 'sangla')
+                                                    ->orderBy('created_at', 'asc')
+                                                    ->first();
+                                                
+                                                // If this is not the first Sangla, check if it's the latest child
+                                                if ($firstSangla && $transaction->id !== $firstSangla->id) {
+                                                    $latestChild = \App\Models\Transaction::where('pawn_ticket_number', $transaction->pawn_ticket_number)
+                                                        ->where('id', '!=', $firstSangla->id)
+                                                        ->whereDoesntHave('voided')
+                                                        ->orderBy('created_at', 'desc')
+                                                        ->first();
+                                                    $isLatestChild = $latestChild && $transaction->id === $latestChild->id;
+                                                } else {
+                                                    // First Sangla is not a child, so isLatestChild doesn't apply
+                                                    $isLatestChild = true;
+                                                }
                                             }
                                             // Check if transaction is older than 6 hours
                                             $hoursSinceCreation = $transaction->created_at->diffInHours(now());
@@ -276,6 +297,9 @@
                                             data-item-tags="{{ $transaction->tags->pluck('name')->toJson() }}"
                                             data-transaction-date="{{ $transaction->created_at->format('M d, Y') }} {{ $transaction->created_at->format('h:i A') }}"
                                             data-is-voided="{{ $isVoided ? '1' : '0' }}"
+                                            data-voided-by="{{ $voidedInfo && $voidedInfo->voidedBy ? $voidedInfo->voidedBy->name : '' }}"
+                                            data-voided-at="{{ $voidedInfo && $voidedInfo->voided_at ? $voidedInfo->voided_at->format('M d, Y h:i A') : '' }}"
+                                            data-void-reason="{{ $voidedInfo ? $voidedInfo->reason : '' }}"
                                             data-has-child-transactions="{{ $hasChildTransactions ? '1' : '0' }}"
                                             data-is-older-than-6-hours="{{ $isOlderThan6Hours ? '1' : '0' }}"
                                             data-transaction-type="{{ $transaction->type }}"
@@ -334,6 +358,28 @@
                                     @foreach($renewalTransactions as $renewal)
                                         @php
                                             $isVoided = $renewal->isVoided();
+                                            $voidedInfo = $renewal->voided;
+                                            // Check if this is the latest child transaction
+                                            $isLatestChild = true;
+                                            if ($renewal->pawn_ticket_number) {
+                                                $firstSangla = \App\Models\Transaction::where('pawn_ticket_number', $renewal->pawn_ticket_number)
+                                                    ->where('type', 'sangla')
+                                                    ->orderBy('created_at', 'asc')
+                                                    ->first();
+                                                
+                                                // Renewal is always a child, check if it's the latest
+                                                if ($firstSangla) {
+                                                    $latestChild = \App\Models\Transaction::where('pawn_ticket_number', $renewal->pawn_ticket_number)
+                                                        ->where('id', '!=', $firstSangla->id)
+                                                        ->whereDoesntHave('voided')
+                                                        ->orderBy('created_at', 'desc')
+                                                        ->first();
+                                                    $isLatestChild = $latestChild && $renewal->id === $latestChild->id;
+                                                }
+                                            }
+                                            // Check if transaction is older than 6 hours
+                                            $hoursSinceCreation = $renewal->created_at->diffInHours(now());
+                                            $isOlderThan6Hours = $hoursSinceCreation > 6;
                                         @endphp
                                         <tr 
                                             class="bg-yellow-50 hover:bg-yellow-100 transition-colors cursor-pointer transaction-row {{ $isVoided ? 'opacity-40' : '' }}"
@@ -350,7 +396,11 @@
                                             data-item-tags="{{ $renewal->tags->pluck('name')->toJson() }}"
                                             data-transaction-date="{{ $renewal->created_at->format('M d, Y') }} {{ $renewal->created_at->format('h:i A') }}"
                                             data-is-voided="{{ $isVoided ? '1' : '0' }}"
+                                            data-voided-by="{{ $voidedInfo && $voidedInfo->voidedBy ? $voidedInfo->voidedBy->name : '' }}"
+                                            data-voided-at="{{ $voidedInfo && $voidedInfo->voided_at ? $voidedInfo->voided_at->format('M d, Y h:i A') : '' }}"
+                                            data-void-reason="{{ $voidedInfo ? $voidedInfo->reason : '' }}"
                                             data-has-child-transactions="0"
+                                            data-is-latest-child="{{ $isLatestChild ? '1' : '0' }}"
                                             data-is-older-than-6-hours="{{ $isOlderThan6Hours ? '1' : '0' }}"
                                             data-transaction-type="{{ $renewal->type }}"
                                             data-maturity-date="{{ $renewal->maturity_date ? $renewal->maturity_date->format('M d, Y') : '' }}"
@@ -414,6 +464,7 @@
                                         @foreach($pawnTicketTransactions as $transaction)
                                             @php
                                                 $isVoided = $transaction->isVoided();
+                                                $voidedInfo = $transaction->voided;
                                                 // Check if this Sangla transaction has child transactions
                                                 $hasChildTransactions = false;
                                                 if ($transaction->type === 'sangla' && $transaction->pawn_ticket_number) {
@@ -441,6 +492,9 @@
                                             data-item-tags="{{ $transaction->tags->pluck('name')->toJson() }}"
                                             data-transaction-date="{{ $transaction->created_at->format('M d, Y') }} {{ $transaction->created_at->format('h:i A') }}"
                                             data-is-voided="{{ $isVoided ? '1' : '0' }}"
+                                            data-voided-by="{{ $voidedInfo && $voidedInfo->voidedBy ? $voidedInfo->voidedBy->name : '' }}"
+                                            data-voided-at="{{ $voidedInfo && $voidedInfo->voided_at ? $voidedInfo->voided_at->format('M d, Y h:i A') : '' }}"
+                                            data-void-reason="{{ $voidedInfo ? $voidedInfo->reason : '' }}"
                                             data-has-child-transactions="{{ $hasChildTransactions ? '1' : '0' }}"
                                             data-is-older-than-6-hours="{{ $isOlderThan6Hours ? '1' : '0' }}"
                                             data-transaction-type="{{ $transaction->type }}"
@@ -803,7 +857,11 @@
                     const itemTags = itemTagsJson ? JSON.parse(itemTagsJson) : [];
                     const transactionDate = this.getAttribute('data-transaction-date');
                     const isVoided = this.getAttribute('data-is-voided') === '1';
+                    const voidedBy = this.getAttribute('data-voided-by') || '';
+                    const voidedAt = this.getAttribute('data-voided-at') || '';
+                    const voidReason = this.getAttribute('data-void-reason') || '';
                     const hasChildTransactions = this.getAttribute('data-has-child-transactions') === '1';
+                    const isLatestChild = this.getAttribute('data-is-latest-child') === '1';
                     const isOlderThan6Hours = this.getAttribute('data-is-older-than-6-hours') === '1';
                     const transactionType = this.getAttribute('data-transaction-type') || '';
                     const maturityDate = this.getAttribute('data-maturity-date');
@@ -828,7 +886,11 @@
                         itemTags,
                         transactionDate,
                         isVoided,
+                        voidedBy,
+                        voidedAt,
+                        voidReason,
                         hasChildTransactions: hasChildTransactions || false,
+                        isLatestChild: isLatestChild || false,
                         isOlderThan6Hours: isOlderThan6Hours || false,
                         transactionType: transactionType,
                         maturityDate,
@@ -911,6 +973,18 @@
             currentTransactionId = data.transactionId;
             currentPawnTicketNumber = null; // Clear pawn ticket number for individual transactions
             
+            // Show/hide voided transaction notice
+            const voidedNotice = document.getElementById('voidedTransactionNotice');
+            const transactionIsVoided = data.isVoided === '1' || data.isVoided === true || data.isVoided === 1;
+            if (transactionIsVoided && voidedNotice) {
+                voidedNotice.classList.remove('hidden');
+                document.getElementById('modalVoidedBy').textContent = data.voidedBy || '-';
+                document.getElementById('modalVoidedAt').textContent = data.voidedAt || '-';
+                document.getElementById('modalVoidReason').textContent = data.voidReason || '-';
+            } else if (voidedNotice) {
+                voidedNotice.classList.add('hidden');
+            }
+            
             // Set transaction number
             document.getElementById('modalTransactionNumber').textContent = data.transactionNumber;
             
@@ -985,18 +1059,20 @@
                 document.getElementById('modalItemImage').parentElement.style.display = 'block';
             }
             
-            // Show/hide void button based on voided status, child transactions, and 6-hour rule
+            // Show/hide void button based on voided status, child transactions, latest child check, and 6-hour rule
             const voidBtn = document.getElementById('voidTransactionBtn');
             const isVoided = data.isVoided === '1' || data.isVoided === true || data.isVoided === 1;
             const hasChildTransactions = data.hasChildTransactions === true || data.hasChildTransactions === 1 || data.hasChildTransactions === '1';
+            const isLatestChild = data.isLatestChild === '1' || data.isLatestChild === true || data.isLatestChild === 1;
             const isOlderThan6Hours = data.isOlderThan6Hours === true || data.isOlderThan6Hours === 1 || data.isOlderThan6Hours === '1';
             const isSangla = data.transactionType === 'sangla';
             
             // Hide void button if:
             // 1. Transaction is already voided, OR
             // 2. It's a Sangla transaction with child transactions, OR
-            // 3. Transaction is older than 6 hours
-            if (isVoided || (isSangla && hasChildTransactions) || isOlderThan6Hours) {
+            // 3. Transaction is older than 6 hours, OR
+            // 4. It's a child transaction but not the latest one
+            if (isVoided || (isSangla && hasChildTransactions) || isOlderThan6Hours || !isLatestChild) {
                 voidBtn.classList.add('hidden');
             } else {
                 voidBtn.classList.remove('hidden');

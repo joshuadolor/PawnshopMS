@@ -25,7 +25,7 @@ class TransactionController extends Controller
     public function index(Request $request): View
     {
         $user = $request->user();
-        $query = Transaction::with(['branch', 'user', 'itemType', 'itemTypeSubtype', 'tags', 'voided']);
+        $query = Transaction::with(['branch', 'user', 'itemType', 'itemTypeSubtype', 'tags', 'voided.voidedBy']);
 
         // Staff users only see transactions for today
         if ($user->isStaff()) {
@@ -71,7 +71,7 @@ class TransactionController extends Controller
         // Fetch all renewals for these pawn tickets (even if they're on different pages)
         $renewalsForPawnTickets = collect();
         if ($pawnTicketNumbers->isNotEmpty()) {
-            $renewalQuery = Transaction::with(['branch', 'user', 'itemType', 'itemTypeSubtype', 'tags', 'voided'])
+            $renewalQuery = Transaction::with(['branch', 'user', 'itemType', 'itemTypeSubtype', 'tags', 'voided.voidedBy'])
                 ->where('type', 'renew')
                 ->whereIn('pawn_ticket_number', $pawnTicketNumbers->toArray());
 
@@ -146,11 +146,38 @@ class TransactionController extends Controller
                 ->with('error', 'Cannot void this transaction. Transactions can only be voided within 6 hours of creation.');
         }
 
-        // For Sangla transactions, check if there are any non-voided child transactions
-        if ($transaction->type === 'sangla') {
-            $pawnTicketNumber = $transaction->pawn_ticket_number;
-            if ($pawnTicketNumber) {
-                $hasChildTransactions = Transaction::where('pawn_ticket_number', $pawnTicketNumber)
+        // Check if this is a child transaction and if it's the latest one
+        if ($transaction->pawn_ticket_number) {
+            // Get the first Sangla transaction (parent) for this pawn ticket
+            $firstSangla = Transaction::where('pawn_ticket_number', $transaction->pawn_ticket_number)
+                ->where('type', 'sangla')
+                ->orderBy('created_at', 'asc')
+                ->first();
+
+            // If this is not the first Sangla transaction, it's a child transaction
+            if ($firstSangla && $transaction->id !== $firstSangla->id) {
+                // Get all non-voided child transactions (excluding this one) ordered by creation date
+                $otherChildTransactions = Transaction::where('pawn_ticket_number', $transaction->pawn_ticket_number)
+                    ->where('id', '!=', $transaction->id)
+                    ->where('id', '!=', $firstSangla->id)
+                    ->whereDoesntHave('voided')
+                    ->orderBy('created_at', 'desc')
+                    ->get();
+
+                // If there are other child transactions, check if this is the latest
+                if ($otherChildTransactions->isNotEmpty()) {
+                    $latestChild = $otherChildTransactions->first();
+                    // Compare by created_at to determine which is latest
+                    if ($transaction->created_at->lt($latestChild->created_at)) {
+                        return redirect()->back()
+                            ->with('error', 'Cannot void this transaction. Only the latest child transaction can be voided. Please void the most recent transaction first.');
+                    }
+                }
+            }
+
+            // For the first Sangla transaction, check if there are any non-voided child transactions
+            if ($transaction->type === 'sangla' && $transaction->id === $firstSangla->id) {
+                $hasChildTransactions = Transaction::where('pawn_ticket_number', $transaction->pawn_ticket_number)
                     ->where('id', '!=', $transaction->id)
                     ->whereDoesntHave('voided')
                     ->exists();
@@ -232,6 +259,58 @@ class TransactionController extends Controller
                 } elseif ($transaction->type === 'renew') {
                     // Renewal: amount was positive (money in), so we reverse by subtracting it
                     BranchBalance::updateBalance($financialTransaction->branch_id, -(float) $financialTransaction->amount);
+                }
+            } else {
+                // No existing financial transaction found - create one for voiding log
+                // Determine the amount and description based on transaction type
+                $amount = 0;
+                $description = '';
+                
+                if ($transaction->type === 'sangla') {
+                    $amount = $transaction->net_proceeds;
+                    $description = $transaction->pawn_ticket_number && 
+                        Transaction::where('pawn_ticket_number', $transaction->pawn_ticket_number)
+                            ->where('id', '!=', $transaction->id)
+                            ->where('type', 'sangla')
+                            ->exists() 
+                        ? 'Sangla transaction (additional item)' 
+                        : 'Sangla transaction';
+                } elseif ($transaction->type === 'renew') {
+                    $amount = $transaction->net_proceeds;
+                    $pawnTicketNumber = $transaction->pawn_ticket_number;
+                    $description = $pawnTicketNumber 
+                        ? "Renewal interest payment - Pawn Ticket #{$pawnTicketNumber}" 
+                        : 'Renewal interest payment';
+                }
+
+                if ($amount > 0) {
+                    // Create financial transaction entry for voiding
+                    $voidFinancialTransaction = BranchFinancialTransaction::create([
+                        'branch_id' => $transaction->branch_id,
+                        'user_id' => $request->user()->id,
+                        'transaction_id' => $transaction->id,
+                        'type' => 'transaction',
+                        'description' => "VOIDED: {$description}",
+                        'amount' => $amount,
+                        'transaction_date' => now(),
+                    ]);
+
+                    // Create void record for the financial transaction
+                    VoidedBranchFinancialTransaction::create([
+                        'branch_financial_transaction_id' => $voidFinancialTransaction->id,
+                        'voided_by' => $request->user()->id,
+                        'reason' => "Transaction #{$transaction->transaction_number} was voided: {$request->reason}",
+                        'voided_at' => now(),
+                    ]);
+
+                    // Update branch balance - reverse the original transaction effect
+                    if ($transaction->type === 'sangla') {
+                        // Sangla: original was money out (negative), voiding adds it back (positive)
+                        BranchBalance::updateBalance($transaction->branch_id, (float) $amount);
+                    } elseif ($transaction->type === 'renew') {
+                        // Renewal: original was money in (positive), voiding subtracts it (negative)
+                        BranchBalance::updateBalance($transaction->branch_id, -(float) $amount);
+                    }
                 }
             }
         });
@@ -360,6 +439,40 @@ class TransactionController extends Controller
 
                     // Reverse the transaction amount in the balance (Sangla: amount was negative, so we add it back)
                     BranchBalance::updateBalance($financialTransaction->branch_id, (float) $financialTransaction->amount);
+                } else {
+                    // No existing financial transaction found - create one for voiding log
+                    $amount = $transaction->net_proceeds;
+                    $description = $transaction->pawn_ticket_number && 
+                        Transaction::where('pawn_ticket_number', $transaction->pawn_ticket_number)
+                            ->where('id', '!=', $transaction->id)
+                            ->where('type', 'sangla')
+                            ->exists() 
+                        ? 'Sangla transaction (additional item)' 
+                        : 'Sangla transaction';
+
+                    if ($amount > 0) {
+                        // Create financial transaction entry for voiding
+                        $voidFinancialTransaction = BranchFinancialTransaction::create([
+                            'branch_id' => $transaction->branch_id,
+                            'user_id' => $request->user()->id,
+                            'transaction_id' => $transaction->id,
+                            'type' => 'transaction',
+                            'description' => "VOIDED: {$description}",
+                            'amount' => $amount,
+                            'transaction_date' => now(),
+                        ]);
+
+                        // Create void record for the financial transaction
+                        VoidedBranchFinancialTransaction::create([
+                            'branch_financial_transaction_id' => $voidFinancialTransaction->id,
+                            'voided_by' => $request->user()->id,
+                            'reason' => "Pawn ticket #{$pawnTicketNumber} voided: {$request->reason}",
+                            'voided_at' => now(),
+                        ]);
+
+                        // Update branch balance - reverse the original transaction effect (Sangla: add back)
+                        BranchBalance::updateBalance($transaction->branch_id, (float) $amount);
+                    }
                 }
             }
         });
