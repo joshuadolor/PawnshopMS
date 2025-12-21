@@ -62,6 +62,36 @@ fi
 echo -e "${YELLOW}Waiting for container to be ready...${NC}"
 sleep 5
 
+# Download QR code libraries
+echo -e "${YELLOW}Downloading QR code libraries...${NC}"
+mkdir -p public/js
+
+# Download qrcode.js library
+if [ ! -f public/js/qrcode.min.js ]; then
+    echo -e "${YELLOW}Downloading qrcode.min.js...${NC}"
+    curl -L -o public/js/qrcode.min.js https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}qrcode.min.js downloaded successfully.${NC}"
+    else
+        echo -e "${RED}Failed to download qrcode.min.js${NC}"
+    fi
+else
+    echo -e "${GREEN}qrcode.min.js already exists. Skipping download.${NC}"
+fi
+
+# Download html5-qrcode library
+if [ ! -f public/js/html5-qrcode.min.js ]; then
+    echo -e "${YELLOW}Downloading html5-qrcode.min.js...${NC}"
+    curl -L -o public/js/html5-qrcode.min.js https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}html5-qrcode.min.js downloaded successfully.${NC}"
+    else
+        echo -e "${RED}Failed to download html5-qrcode.min.js${NC}"
+    fi
+else
+    echo -e "${GREEN}html5-qrcode.min.js already exists. Skipping download.${NC}"
+fi
+
 # Check and generate application key if not set
 echo -e "${YELLOW}Checking application key...${NC}"
 APP_KEY_LINE=$(grep "^APP_KEY=" .env 2>/dev/null || echo "")

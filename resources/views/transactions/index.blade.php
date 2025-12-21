@@ -247,6 +247,17 @@
                                                             • {{ $nonVoidedRenewalCount }} Renewal(s)
                                                         @endif
                                                     </div>
+                                                    <div>
+                                                        <button 
+                                                            onclick="showQRCode('{{ $pawnTicketNumber }}')"
+                                                            class="my-4 inline-flex items-center px-3 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-700 focus:bg-blue-700 active:bg-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition ease-in-out duration-150"
+                                                        >
+                                                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path>
+                                                            </svg>
+                                                            View QR Code
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </td>
                                             <td class="px-6 py-3 whitespace-nowrap" colspan="3">
@@ -1340,6 +1351,70 @@
                 return false;
             }
         });
+
+        // QR Code Modal Functions
+        function showQRCode(pawnTicketNumber) {
+            const modal = document.getElementById('qrCodeModal');
+            const qrCodeContainer = document.getElementById('qrCodeContainer');
+            
+            // Clear previous QR code
+            qrCodeContainer.innerHTML = '';
+            
+            // Generate QR code using qrcode.js library
+            if (typeof QRCode !== 'undefined') {
+                new QRCode(qrCodeContainer, {
+                    text: pawnTicketNumber,
+                    width: 256,
+                    height: 256,
+                    colorDark: '#000000',
+                    colorLight: '#ffffff',
+                    correctLevel: QRCode.CorrectLevel.H
+                });
+            } else {
+                // Fallback: use QR code API
+                const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(pawnTicketNumber)}`;
+                const img = document.createElement('img');
+                img.src = qrCodeUrl;
+                img.alt = 'QR Code';
+                img.className = 'mx-auto';
+                qrCodeContainer.appendChild(img);
+            }
+            
+            document.getElementById('qrCodePawnTicket').textContent = pawnTicketNumber;
+            modal.showModal();
+        }
+
+        function closeQRCodeModal() {
+            document.getElementById('qrCodeModal').close();
+        }
     </script>
+
+    <!-- QR Code Modal -->
+    <dialog id="qrCodeModal" class="rounded-lg p-0 w-[90vw] max-w-md backdrop:bg-black/50">
+        <div class="bg-white rounded-lg">
+            <div class="flex items-center justify-between p-4 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900">QR Code</h3>
+                <button
+                    onclick="closeQRCodeModal()"
+                    class="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <div class="p-6">
+                <div class="text-center">
+                    <p class="text-sm text-gray-600 mb-4">Pawn Ticket Number:</p>
+                    <p class="text-lg font-semibold text-gray-900 mb-6" id="qrCodePawnTicket"></p>
+                    <div id="qrCodeContainer" class="flex items-center justify-center bg-white p-4 rounded-lg border border-gray-200"></div>
+                    <p class="text-xs text-gray-500 mt-4">Scan this QR code to quickly access this pawn ticket</p>
+                </div>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- QR Code Library -->
+    <script src="{{ asset('js/qrcode.min.js') }}"></script>
 </x-app-layout>
 
