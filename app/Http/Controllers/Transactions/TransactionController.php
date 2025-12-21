@@ -69,11 +69,16 @@ class TransactionController extends Controller
         // Get all unique pawn ticket numbers from the current page
         $pawnTicketNumbers = $transactions->pluck('pawn_ticket_number')->filter()->unique()->values();
 
-        // Fetch all renewals for these pawn tickets (even if they're on different pages)
+        // Fetch all renewals and tubos for these pawn tickets (even if they're on different pages)
         $renewalsForPawnTickets = collect();
+        $tubosForPawnTickets = collect();
         if ($pawnTicketNumbers->isNotEmpty()) {
             $renewalQuery = Transaction::with(['branch', 'user', 'itemType', 'itemTypeSubtype', 'tags', 'voided.voidedBy'])
                 ->where('type', 'renew')
+                ->whereIn('pawn_ticket_number', $pawnTicketNumbers->toArray());
+            
+            $tubosQuery = Transaction::with(['branch', 'user', 'itemType', 'itemTypeSubtype', 'tags', 'voided.voidedBy'])
+                ->where('type', 'tubos')
                 ->whereIn('pawn_ticket_number', $pawnTicketNumbers->toArray());
 
             // Apply same filters as main query
@@ -109,6 +114,40 @@ class TransactionController extends Controller
             }
 
             $renewalsForPawnTickets = $renewalQuery->get();
+            
+            // Apply same filters for tubos
+            if ($user->isStaff()) {
+                $tubosQuery->where('branch_id', $user->branches()->first()->id);
+                $tubosQuery->whereDate('created_at', today());
+            } else {
+                if ($request->filled('date')) {
+                    $tubosQuery->whereDate('created_at', $request->date);
+                } elseif ($request->has('today_only') && $request->boolean('today_only')) {
+                    $tubosQuery->whereDate('created_at', today());
+                }
+            }
+
+            if ($request->filled('search')) {
+                $search = $request->search;
+                $tubosQuery->where(function ($q) use ($search) {
+                    $q->where('item_description', 'like', "%{$search}%")
+                      ->orWhere('first_name', 'like', "%{$search}%")
+                      ->orWhere('last_name', 'like', "%{$search}%")
+                      ->orWhere('transaction_number', 'like', "%{$search}%")
+                      ->orWhere('pawn_ticket_number', 'like', "%{$search}%");
+                });
+            }
+
+            if ($user->isStaff()) {
+                $userBranchIds = $user->branches()->pluck('branches.id')->toArray();
+                if (!empty($userBranchIds)) {
+                    $tubosQuery->whereIn('branch_id', $userBranchIds);
+                }
+            } elseif ($request->filled('branch_id')) {
+                $tubosQuery->where('branch_id', $request->branch_id);
+            }
+
+            $tubosForPawnTickets = $tubosQuery->get();
         }
 
         // Get branches for filter (admin/superadmin only)
@@ -120,6 +159,7 @@ class TransactionController extends Controller
         return view('transactions.index', [
             'transactions' => $transactions,
             'renewalsForPawnTickets' => $renewalsForPawnTickets,
+            'tubosForPawnTickets' => $tubosForPawnTickets,
             'branches' => $branches,
             'filters' => [
                 'date' => $request->date ?? null,

@@ -85,7 +85,7 @@ class BranchFinancialTransactionController extends Controller
                 
                 $additions = $additionsQuery
                     ->filter(function($t) {
-                        return $t->isReplenish() || $t->isRenewalTransactionEntry();
+                        return $t->isReplenish() || $t->isRenewalTransactionEntry() || $t->isTubosTransactionEntry();
                     })
                     ->sum('amount');
                 
@@ -151,7 +151,7 @@ class BranchFinancialTransactionController extends Controller
             ->sum('amount');
 
         $totalTransactionIn = $transactionEntries
-            ->filter(fn (BranchFinancialTransaction $t) => $t->isRenewalTransactionEntry())
+            ->filter(fn (BranchFinancialTransaction $t) => $t->isRenewalTransactionEntry() || $t->isTubosTransactionEntry())
             ->sum('amount');
 
         // Optional aggregate of all "transaction" amounts (regardless of direction)

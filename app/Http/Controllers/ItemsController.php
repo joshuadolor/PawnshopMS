@@ -74,12 +74,27 @@ class ItemsController extends Controller
 
         $items = $query->paginate(20)->withQueryString();
 
+        // Get all unique pawn ticket numbers from the items
+        $pawnTicketNumbers = $items->pluck('pawn_ticket_number')->filter()->unique()->values();
+        
+        // Fetch all non-voided tubos transactions for these pawn tickets
+        $tubosForPawnTickets = collect();
+        if ($pawnTicketNumbers->isNotEmpty()) {
+            $tubosForPawnTickets = Transaction::where('type', 'tubos')
+                ->whereIn('pawn_ticket_number', $pawnTicketNumbers->toArray())
+                ->whereDoesntHave('voided')
+                ->pluck('pawn_ticket_number')
+                ->unique()
+                ->values();
+        }
+
         // Get branches for filter
         $branches = \App\Models\Branch::orderBy('name', 'asc')->get();
 
         return view('items.index', [
             'items' => $items,
             'branches' => $branches,
+            'redeemedPawnTickets' => $tubosForPawnTickets,
             'filters' => [
                 'search' => $request->search ?? null,
                 'branch_ids' => $request->branch_ids ?? [],

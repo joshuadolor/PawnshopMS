@@ -10,6 +10,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Transactions\Sangla\SanglaController;
 use App\Http\Controllers\Transactions\TransactionController;
 use App\Http\Controllers\Transactions\RenewalController;
+use App\Http\Controllers\Transactions\TubosController;
 use App\Http\Controllers\User\UserController;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use Illuminate\Support\Facades\Route;
@@ -47,6 +48,11 @@ Route::middleware('auth')->group(function () {
         Route::get('/renewal/search', [RenewalController::class, 'search'])->name('renewal.search');
         Route::post('/renewal/find', [RenewalController::class, 'find'])->name('renewal.find');
         Route::post('/renewal', [RenewalController::class, 'store'])->name('renewal.store');
+        
+        // Tubos Routes
+        Route::get('/tubos/search', [TubosController::class, 'search'])->name('tubos.search');
+        Route::post('/tubos/find', [TubosController::class, 'find'])->name('tubos.find');
+        Route::post('/tubos', [TubosController::class, 'store'])->name('tubos.store');
     });
 
     // Branch Financial Transactions Routes

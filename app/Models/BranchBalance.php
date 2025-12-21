@@ -62,12 +62,13 @@ class BranchBalance extends Model
         // For "transaction" type:
         // - Sangla entries are money OUT (minus)
         // - Renewal entries are money IN (plus)
+        // - Tubos entries are money IN (plus)
         $totalTransactionOut = $transactionEntries
             ->filter(fn (BranchFinancialTransaction $t) => $t->isSanglaTransactionEntry())
             ->sum('amount');
 
         $totalTransactionIn = $transactionEntries
-            ->filter(fn (BranchFinancialTransaction $t) => $t->isRenewalTransactionEntry())
+            ->filter(fn (BranchFinancialTransaction $t) => $t->isRenewalTransactionEntry() || $t->isTubosTransactionEntry())
             ->sum('amount');
         
         $balance = $totalReplenish + $totalTransactionIn - $totalExpense - $totalTransactionOut;

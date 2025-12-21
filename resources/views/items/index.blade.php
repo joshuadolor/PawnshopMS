@@ -111,8 +111,10 @@
                                 @foreach($items as $item)
                                     @php
                                         $isVoided = $item->isVoided();
-                                        $isReadyForAuction = !$isVoided && $item->auction_sale_date && \Carbon\Carbon::parse($item->auction_sale_date)->lte(\Carbon\Carbon::today());
-                                        $isAvailable = !$isVoided && (!$item->auction_sale_date || \Carbon\Carbon::parse($item->auction_sale_date)->gt(\Carbon\Carbon::today()));
+                                        // Check if this pawn ticket has a non-voided tubos transaction
+                                        $isRedeemed = $item->pawn_ticket_number && $redeemedPawnTickets->contains($item->pawn_ticket_number);
+                                        $isReadyForAuction = !$isVoided && !$isRedeemed && $item->auction_sale_date && \Carbon\Carbon::parse($item->auction_sale_date)->lte(\Carbon\Carbon::today());
+                                        $isAvailable = !$isVoided && !$isRedeemed && (!$item->auction_sale_date || \Carbon\Carbon::parse($item->auction_sale_date)->gt(\Carbon\Carbon::today()));
                                         
                                         // Build category string
                                         $category = $item->itemType->name;
@@ -182,6 +184,10 @@
                                             @if($isVoided)
                                                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                                                     Voided
+                                                </span>
+                                            @elseif($isRedeemed)
+                                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                                    Already Redeemed
                                                 </span>
                                             @elseif($isReadyForAuction)
                                                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">

@@ -14,18 +14,18 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use Carbon\Carbon;
 
-class RenewalController extends Controller
+class TubosController extends Controller
 {
     /**
-     * Show the renewal search page.
+     * Show the tubos search page.
      */
     public function search(): View
     {
-        return view('transactions.renewal.search');
+        return view('transactions.tubos.search');
     }
 
     /**
-     * Process the search and show renewal form.
+     * Process the search and show tubos form.
      */
     public function find(Request $request): View|RedirectResponse
     {
@@ -44,7 +44,7 @@ class RenewalController extends Controller
             ->get();
 
         if ($allTransactions->isEmpty()) {
-            return redirect()->route('transactions.renewal.search')
+            return redirect()->route('transactions.tubos.search')
                 ->with('error', 'No active transaction found with the provided pawn ticket number.');
         }
 
@@ -55,8 +55,8 @@ class RenewalController extends Controller
             ->exists();
 
         if ($hasActiveTubos) {
-            return redirect()->route('transactions.renewal.search')
-                ->with('error', 'This pawn ticket has already been redeemed (tubos). Renewal is not allowed for redeemed transactions.');
+            return redirect()->route('transactions.tubos.search')
+                ->with('error', 'This pawn ticket has already been redeemed (tubos). Another redemption is not allowed.');
         }
 
         // Use the oldest Sangla transaction for calculations (one pawn ticket = one computation)
@@ -64,28 +64,28 @@ class RenewalController extends Controller
         $oldestTransaction = $allTransactions->first();
         $branchId = $oldestTransaction->branch_id;
 
-        // Get the latest transaction (Sangla OR Renewal) for date calculations (most current dates)
-        // This ensures we use the dates from the most recent renewal if one exists
+        // Get the latest transaction (Sangla OR Renewal OR Tubos) for date calculations (most current dates)
+        // This ensures we use the dates from the most recent renewal/tubos if one exists
         $latestTransactionForDates = Transaction::where('pawn_ticket_number', $pawnTicketNumber)
-            ->whereIn('type', ['sangla', 'renew'])
+            ->whereIn('type', ['sangla', 'renew', 'tubos'])
             ->whereDoesntHave('voided')
             ->orderBy('created_at', 'desc')
             ->first();
 
-        // If no renewal exists, use the latest Sangla transaction
+        // If no renewal/tubos exists, use the latest Sangla transaction
         if (!$latestTransactionForDates) {
             $latestTransactionForDates = $allTransactions->last();
         }
 
-        // Calculate interest from the oldest transaction only
-        $totalInterest = (float) $oldestTransaction->loan_amount * ((float) $oldestTransaction->interest_rate / 100);
+        // For tubos: Principal amount (loan_amount)
+        $principalAmount = (float) $oldestTransaction->loan_amount;
 
         // Get service charge from config (one service charge per pawn ticket)
         $serviceCharge = Config::getValue('sangla_service_charge', 0);
         $totalServiceCharge = $serviceCharge; // Only one service charge
 
         // Calculate additional charges
-        // Use the latest transaction's dates (most current state - could be from a renewal)
+        // Use the latest transaction's dates (most current state - could be from a renewal/tubos)
         $today = Carbon::today();
         $expiryRedemptionDate = $latestTransactionForDates->expiry_date ? Carbon::parse($latestTransactionForDates->expiry_date) : null;
         $maturityDate = $latestTransactionForDates->maturity_date ? Carbon::parse($latestTransactionForDates->maturity_date) : null;
@@ -109,35 +109,24 @@ class RenewalController extends Controller
 
         // Get the percentage from additionalChargeConfig table based on days exceeded and type
         if ($daysExceeded > 0 && $additionalChargeType) {
-            $additionalChargeConfig = AdditionalChargeConfig::findApplicable($daysExceeded, $additionalChargeType, 'renewal');
+            $additionalChargeConfig = AdditionalChargeConfig::findApplicable($daysExceeded, $additionalChargeType, 'tubos');
             if ($additionalChargeConfig) {
                 // Calculate charge amount: loan_amount * percentage from config
                 $additionalChargeAmount = $oldestTransaction->loan_amount * ($additionalChargeConfig->percentage / 100);
             }
         }
 
-        $totalAmountToPay = $totalInterest + $totalServiceCharge + $additionalChargeAmount;
+        // Total amount to pay: Principal + Service Charge + Additional Charge
+        $totalAmountToPay = $principalAmount + $totalServiceCharge + $additionalChargeAmount;
 
-        // Combine all item descriptions for the renewal transaction
+        // Combine all item descriptions for the tubos transaction
         $combinedDescriptions = $allTransactions->pluck('item_description')->filter()->unique()->values()->implode('; ');
 
-        // Get config values for date calculations
-        $daysBeforeRedemption = (int) Config::getValue('sangla_days_before_redemption', 90);
-        $daysBeforeAuctionSale = (int) Config::getValue('sangla_days_before_auction_sale', 85);
-        $interestPeriod = Config::getValue('sangla_interest_period', 'per_month');
-
-        // Calculate default new maturity date based on interest period
-        $defaultMaturityDate = match ($interestPeriod) {
-            'per_annum' => $today->copy()->addYear()->format('Y-m-d'),
-            'per_month' => $today->copy()->addMonth()->format('Y-m-d'),
-            default => $today->copy()->addMonth()->format('Y-m-d'),
-        };
-
-        return view('transactions.renewal.renew', [
+        return view('transactions.tubos.tubos', [
             'transaction' => $oldestTransaction, // Show oldest transaction (has actual loan amount)
             'allTransactions' => $allTransactions, // Keep for reference if needed
             'pawnTicketNumber' => $pawnTicketNumber,
-            'totalInterest' => $totalInterest,
+            'principalAmount' => $principalAmount,
             'serviceCharge' => $serviceCharge,
             'totalServiceCharge' => $totalServiceCharge,
             'additionalChargeType' => $additionalChargeType,
@@ -147,24 +136,19 @@ class RenewalController extends Controller
             'totalAmountToPay' => $totalAmountToPay,
             'combinedDescriptions' => $combinedDescriptions,
             'branchId' => $branchId,
-            'daysBeforeRedemption' => $daysBeforeRedemption,
-            'daysBeforeAuctionSale' => $daysBeforeAuctionSale,
-            'defaultMaturityDate' => $defaultMaturityDate,
         ]);
     }
 
     /**
-     * Process the renewal.
+     * Process the tubos (redemption).
      */
     public function store(Request $request): RedirectResponse
     {
         $request->validate([
             'pawn_ticket_number' => ['required', 'string', 'max:100'],
-            'maturity_date' => ['required', 'date', 'after_or_equal:today'],
-            'expiry_date' => ['required', 'date', 'after_or_equal:maturity_date'],
-            'auction_sale_date' => ['nullable', 'date', 'after_or_equal:expiry_date'],
-            'interest_amount' => ['required', 'numeric', 'min:0'],
+            'principal_amount' => ['required', 'numeric', 'min:0'],
             'service_charge' => ['required', 'numeric', 'min:0'],
+            'additional_charge_amount' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         $pawnTicketNumber = $request->input('pawn_ticket_number');
@@ -177,7 +161,7 @@ class RenewalController extends Controller
             ->get();
 
         if ($allTransactions->isEmpty()) {
-            return redirect()->route('transactions.renewal.search')
+            return redirect()->route('transactions.tubos.search')
                 ->with('error', 'No active transaction found with the provided pawn ticket number.');
         }
 
@@ -188,47 +172,44 @@ class RenewalController extends Controller
             ->exists();
 
         if ($hasActiveTubos) {
-            return redirect()->route('transactions.renewal.search')
-                ->with('error', 'This pawn ticket has already been redeemed (tubos). Renewal is not allowed for redeemed transactions.');
+            return redirect()->route('transactions.tubos.search')
+                ->with('error', 'This pawn ticket has already been redeemed (tubos). Another redemption is not allowed.');
         }
 
-        // Use the oldest transaction for renewal data (has actual loan amount)
+        // Use the oldest transaction for tubos data (has actual loan amount)
         $oldestTransaction = $allTransactions->first();
         $branchId = $oldestTransaction->branch_id;
-        $interestAmount = (float) $request->input('interest_amount');
+        $principalAmount = (float) $request->input('principal_amount');
         $serviceCharge = (float) $request->input('service_charge');
         $additionalChargeAmount = (float) ($request->input('additional_charge_amount') ?? 0);
-        $totalAmount = $interestAmount + $serviceCharge + $additionalChargeAmount;
+        $totalAmount = $principalAmount + $serviceCharge + $additionalChargeAmount;
 
-        // Combine all item descriptions for the renewal transaction
+        // Combine all item descriptions for the tubos transaction
         $combinedDescriptions = $allTransactions->pluck('item_description')->filter()->unique()->values()->implode('; ');
 
         // Use database transaction to ensure data integrity
-        DB::transaction(function () use ($allTransactions, $request, $branchId, $interestAmount, $serviceCharge, $additionalChargeAmount, $totalAmount, $pawnTicketNumber, $oldestTransaction, $combinedDescriptions) {
-            // Note: We do NOT update the parent transaction dates - they remain as historical records
-            // Only the renewal transaction will have the new extended dates
+        DB::transaction(function () use ($allTransactions, $request, $branchId, $principalAmount, $serviceCharge, $additionalChargeAmount, $totalAmount, $pawnTicketNumber, $oldestTransaction, $combinedDescriptions) {
+            // Generate tubos transaction number
+            $tubosTransactionNumber = $this->generateTubosTransactionNumber();
 
-            // Generate renewal transaction number
-            $renewalTransactionNumber = $this->generateRenewalTransactionNumber();
-
-            // Create Transaction record for renewal
-            $renewalTransaction = Transaction::create([
-                'transaction_number' => $renewalTransactionNumber,
+            // Create Transaction record for tubos (redemption)
+            $tubosTransaction = Transaction::create([
+                'transaction_number' => $tubosTransactionNumber,
                 'branch_id' => $branchId,
                 'user_id' => $request->user()->id,
-                'type' => 'renew',
+                'type' => 'tubos',
                 'first_name' => $oldestTransaction->first_name,
                 'last_name' => $oldestTransaction->last_name,
                 'address' => $oldestTransaction->address,
                 'appraised_value' => $oldestTransaction->appraised_value,
-                'loan_amount' => $oldestTransaction->loan_amount, // Use oldest transaction's loan amount
+                'loan_amount' => $principalAmount, // Principal amount paid
                 'interest_rate' => $oldestTransaction->interest_rate,
                 'interest_rate_period' => $oldestTransaction->interest_rate_period,
-                'maturity_date' => $request->input('maturity_date'),
-                'expiry_date' => $request->input('expiry_date'),
+                'maturity_date' => $oldestTransaction->maturity_date, // Keep original dates
+                'expiry_date' => $oldestTransaction->expiry_date, // Keep original dates
                 'pawn_ticket_number' => $pawnTicketNumber,
                 'pawn_ticket_image_path' => $oldestTransaction->pawn_ticket_image_path,
-                'auction_sale_date' => $request->input('auction_sale_date'),
+                'auction_sale_date' => $oldestTransaction->auction_sale_date,
                 'item_type_id' => $oldestTransaction->item_type_id,
                 'item_type_subtype_id' => $oldestTransaction->item_type_subtype_id,
                 'custom_item_type' => $oldestTransaction->custom_item_type,
@@ -237,45 +218,50 @@ class RenewalController extends Controller
                 'pawner_id_image_path' => $oldestTransaction->pawner_id_image_path,
                 'grams' => $oldestTransaction->grams,
                 'orcr_serial' => $oldestTransaction->orcr_serial,
-                'service_charge' => $serviceCharge, // Service charge for renewals
-                'net_proceeds' => $totalAmount, // For renewals, net_proceeds is the total amount paid (interest + service charge + additional charge)
-                'status' => 'active',
+                'service_charge' => $serviceCharge,
+                'net_proceeds' => $totalAmount, // Total amount paid (principal + service charge + additional charge)
+                'status' => 'redeemed', // Mark as redeemed
             ]);
 
-            // Create financial transaction for the renewal payment (interest + service charge)
+            // Create financial transaction for the tubos payment
             // Type: "transaction" (same family as Sangla), but this one is an ADD (money coming in)
             BranchFinancialTransaction::create([
                 'branch_id' => $branchId,
                 'user_id' => $request->user()->id,
-                'transaction_id' => $renewalTransaction->id,
+                'transaction_id' => $tubosTransaction->id,
                 'type' => 'transaction',
-                'description' => "Renewal payment - Pawn Ticket #{$pawnTicketNumber}",
-                'amount' => $totalAmount, // Positive amount (money coming in: interest + service charge)
+                'description' => "Tubos (Redemption) payment - Pawn Ticket #{$pawnTicketNumber}",
+                'amount' => $totalAmount, // Positive amount (money coming in: principal + service charge + additional charge)
                 'transaction_date' => now()->toDateString(),
             ]);
 
             // Update branch balance (add the total amount)
             BranchBalance::updateBalance($branchId, $totalAmount);
+
+            // Mark all related Sangla transactions as redeemed
+            foreach ($allTransactions as $sanglaTransaction) {
+                $sanglaTransaction->update(['status' => 'redeemed']);
+            }
         });
 
-        $paymentBreakdown = "Interest: ₱" . number_format($interestAmount, 2) . ", Service Charge: ₱" . number_format($serviceCharge, 2);
+        $paymentBreakdown = "Principal: ₱" . number_format($principalAmount, 2) . ", Service Charge: ₱" . number_format($serviceCharge, 2);
         if ($additionalChargeAmount > 0) {
             $paymentBreakdown .= ", Additional Charge: ₱" . number_format($additionalChargeAmount, 2);
         }
         
         return redirect()->route('transactions.index')
-            ->with('success', "Transaction(s) with pawn ticket number '{$pawnTicketNumber}' have been renewed successfully. Payment of ₱" . number_format($totalAmount, 2) . " ({$paymentBreakdown}) has been recorded.");
+            ->with('success', "Transaction(s) with pawn ticket number '{$pawnTicketNumber}' have been redeemed (tubos) successfully. Payment of ₱" . number_format($totalAmount, 2) . " ({$paymentBreakdown}) has been recorded.");
     }
 
     /**
-     * Generate a unique transaction number for renewal transactions.
+     * Generate a unique transaction number for tubos transactions.
      */
-    private function generateRenewalTransactionNumber(): string
+    private function generateTubosTransactionNumber(): string
     {
-        $prefix = 'RNW';
+        $prefix = 'TBS';
         $date = now()->format('Ymd');
         
-        // Get the last renewal transaction number for today
+        // Get the last tubos transaction number for today
         $lastTransaction = Transaction::where('transaction_number', 'like', "{$prefix}-{$date}-%")
             ->orderBy('transaction_number', 'desc')
             ->first();
@@ -286,7 +272,7 @@ class RenewalController extends Controller
             $sequence = (int) end($parts);
             $sequence++;
         } else {
-            // First renewal transaction of the day
+            // First tubos transaction of the day
             $sequence = 1;
         }
         

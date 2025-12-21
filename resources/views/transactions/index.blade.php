@@ -152,8 +152,27 @@
                                         
                                         // Merge and deduplicate renewals
                                         $renewalTransactions = $renewalsFromPage->concat($renewalsFromCollection)
+                                            ->unique('id');
+                                        
+                                        // Get tubos transactions for this pawn ticket
+                                        $tubosFromPage = $pawnTicketTransactions->where('type', 'tubos');
+                                        $tubosFromCollection = ($pawnTicketNumber && isset($tubosForPawnTickets)) 
+                                            ? $tubosForPawnTickets->where('pawn_ticket_number', $pawnTicketNumber)
+                                            : collect();
+                                        
+                                        // Merge and deduplicate tubos
+                                        $tubosTransactions = $tubosFromPage->concat($tubosFromCollection)
+                                            ->unique('id');
+                                        
+                                        // Combine all child transactions (renewals and tubos) and sort in ascending order
+                                        $childTransactions = $renewalTransactions->concat($tubosTransactions)
                                             ->unique('id')
                                             ->sortBy('created_at');
+                                        
+                                        // Check if there are any non-voided tubos transactions
+                                        $hasTubosTransactions = $tubosTransactions->filter(function($tx) {
+                                            return !$tx->isVoided();
+                                        })->count() > 0;
                                         
                                         // Get first transaction for pawner info (for header)
                                         $firstTransaction = $sanglaTransactions->first() ?? $pawnTicketTransactions->first();
@@ -214,7 +233,7 @@
                                         @endphp
                                         {{-- Pawn Ticket Header Row --}}
                                         <tr 
-                                            class="bg-violet-100 border-t-2 border-gray-300 hover:bg-violet-200 transition-colors cursor-pointer pawn-ticket-row {{ $allSanglaTransactionsVoided ? 'opacity-40' : '' }}"
+                                            class="{{ $hasTubosTransactions ? 'bg-white' : 'bg-violet-100' }} border-t-2 border-gray-300 {{ $hasTubosTransactions ? 'hover:bg-gray-50' : 'hover:bg-violet-200' }} transition-colors cursor-pointer pawn-ticket-row {{ $allSanglaTransactionsVoided ? 'opacity-40' : '' }}"
                                             data-pawn-ticket-number="{{ $pawnTicketNumber }}"
                                             data-pawner-name="{{ $firstTransaction->pawner_name }}"
                                             data-pawner-image="{{ route('images.show', ['path' => $firstSanglaTransaction->pawner_id_image_path]) }}"
@@ -388,47 +407,66 @@
                                         </tr>
                                     @endforeach
 
-                                    {{-- Show all Renewal transactions at the bottom --}}
-                                    @foreach($renewalTransactions as $renewal)
+                                    {{-- Show all child transactions (renewals and tubos) in ascending order --}}
+                                    @foreach($childTransactions as $childTransaction)
                                         @php
-                                            $isVoided = $renewal->isVoided();
-                                            $voidedInfo = $renewal->voided;
+                                            $isVoided = $childTransaction->isVoided();
+                                            $voidedInfo = $childTransaction->voided;
                                             // Check if this is the latest child transaction
                                             $isLatestChild = true;
-                                            if ($renewal->pawn_ticket_number) {
-                                                $firstSangla = \App\Models\Transaction::where('pawn_ticket_number', $renewal->pawn_ticket_number)
+                                            if ($childTransaction->pawn_ticket_number) {
+                                                $firstSangla = \App\Models\Transaction::where('pawn_ticket_number', $childTransaction->pawn_ticket_number)
                                                     ->where('type', 'sangla')
                                                     ->orderBy('created_at', 'asc')
                                                     ->first();
                                                 
-                                                // Renewal is always a child, check if it's the latest
+                                                // Child transaction is always a child, check if it's the latest
                                                 if ($firstSangla) {
-                                                    $latestChild = \App\Models\Transaction::where('pawn_ticket_number', $renewal->pawn_ticket_number)
+                                                    $latestChild = \App\Models\Transaction::where('pawn_ticket_number', $childTransaction->pawn_ticket_number)
                                                         ->where('id', '!=', $firstSangla->id)
                                                         ->whereDoesntHave('voided')
                                                         ->orderBy('created_at', 'desc')
                                                         ->first();
-                                                    $isLatestChild = $latestChild && $renewal->id === $latestChild->id;
+                                                    $isLatestChild = $latestChild && $childTransaction->id === $latestChild->id;
                                                 }
                                             }
                                             // Check if transaction is older than 6 hours
-                                            $hoursSinceCreation = $renewal->created_at->diffInHours(now());
+                                            $hoursSinceCreation = $childTransaction->created_at->diffInHours(now());
                                             $isOlderThan6Hours = $hoursSinceCreation > 6;
+                                            
+                                            // Determine styling and content based on transaction type
+                                            $isRenewal = $childTransaction->type === 'renew';
+                                            $isTubos = $childTransaction->type === 'tubos';
+                                            $bgColor = $isRenewal ? 'bg-yellow-50 hover:bg-yellow-100' : ($isTubos ? 'bg-green-50 hover:bg-green-100' : 'bg-gray-50');
+                                            $textColor = $isRenewal ? 'text-yellow-900' : ($isTubos ? 'text-green-900' : 'text-gray-900');
+                                            $badgeColor = $isRenewal ? 'bg-yellow-100 text-yellow-800' : ($isTubos ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800');
+                                            $label = $isRenewal ? 'Renewal' : ($isTubos ? 'Tubos' : ucfirst($childTransaction->type));
+                                            $description = $isRenewal 
+                                                ? "Renewal of Pawn Ticket #{$childTransaction->pawn_ticket_number}" 
+                                                : ($isTubos 
+                                                    ? "Redemption of Pawn Ticket #{$childTransaction->pawn_ticket_number}"
+                                                    : "Transaction #{$childTransaction->transaction_number}");
+                                            $subDescription = $isRenewal 
+                                                ? "Interest payment to extend maturity and expiry dates."
+                                                : ($isTubos 
+                                                    ? "Principal + Service Charge + Additional Charge payment."
+                                                    : "");
+                                            $amountLabel = $isRenewal ? "Interest Paid:" : ($isTubos ? "Amount Paid:" : "Amount:");
                                         @endphp
                                         <tr 
-                                            class="bg-yellow-50 hover:bg-yellow-100 transition-colors cursor-pointer transaction-row {{ $isVoided ? 'opacity-40' : '' }}"
-                                            data-item-image="{{ route('images.show', ['path' => $renewal->item_image_path]) }}"
-                                            data-pawner-image="{{ route('images.show', ['path' => $renewal->pawner_id_image_path]) }}"
-                                            data-pawn-ticket-image="{{ $renewal->pawn_ticket_image_path ? route('images.show', ['path' => $renewal->pawn_ticket_image_path]) : '' }}"
-                                            data-transaction-id="{{ $renewal->id }}"
-                                            data-transaction-number="{{ $renewal->transaction_number }}"
-                                            data-pawn-ticket-number="{{ $renewal->pawn_ticket_number ?? '' }}"
-                                            data-item-type="{{ $renewal->itemType->name }}"
-                                            data-item-subtype="{{ $renewal->itemTypeSubtype ? $renewal->itemTypeSubtype->name : '' }}"
-                                            data-custom-item-type="{{ $renewal->custom_item_type ?? '' }}"
-                                            data-item-description="{{ $renewal->item_description }}"
-                                            data-item-tags="{{ $renewal->tags->pluck('name')->toJson() }}"
-                                            data-transaction-date="{{ $renewal->created_at->format('M d, Y') }} {{ $renewal->created_at->format('h:i A') }}"
+                                            class="{{ $bgColor }} transition-colors cursor-pointer transaction-row {{ $isVoided ? 'opacity-40' : '' }}"
+                                            data-item-image="{{ route('images.show', ['path' => $childTransaction->item_image_path]) }}"
+                                            data-pawner-image="{{ route('images.show', ['path' => $childTransaction->pawner_id_image_path]) }}"
+                                            data-pawn-ticket-image="{{ $childTransaction->pawn_ticket_image_path ? route('images.show', ['path' => $childTransaction->pawn_ticket_image_path]) : '' }}"
+                                            data-transaction-id="{{ $childTransaction->id }}"
+                                            data-transaction-number="{{ $childTransaction->transaction_number }}"
+                                            data-pawn-ticket-number="{{ $childTransaction->pawn_ticket_number ?? '' }}"
+                                            data-item-type="{{ $childTransaction->itemType->name }}"
+                                            data-item-subtype="{{ $childTransaction->itemTypeSubtype ? $childTransaction->itemTypeSubtype->name : '' }}"
+                                            data-custom-item-type="{{ $childTransaction->custom_item_type ?? '' }}"
+                                            data-item-description="{{ $childTransaction->item_description }}"
+                                            data-item-tags="{{ $childTransaction->tags->pluck('name')->toJson() }}"
+                                            data-transaction-date="{{ $childTransaction->created_at->format('M d, Y') }} {{ $childTransaction->created_at->format('h:i A') }}"
                                             data-is-voided="{{ $isVoided ? '1' : '0' }}"
                                             data-voided-by="{{ $voidedInfo && $voidedInfo->voidedBy ? $voidedInfo->voidedBy->name : '' }}"
                                             data-voided-at="{{ $voidedInfo && $voidedInfo->voided_at ? $voidedInfo->voided_at->format('M d, Y h:i A') : '' }}"
@@ -436,58 +474,60 @@
                                             data-has-child-transactions="0"
                                             data-is-latest-child="{{ $isLatestChild ? '1' : '0' }}"
                                             data-is-older-than-6-hours="{{ $isOlderThan6Hours ? '1' : '0' }}"
-                                            data-transaction-type="{{ $renewal->type }}"
-                                            data-maturity-date="{{ $renewal->maturity_date ? $renewal->maturity_date->format('M d, Y') : '' }}"
-                                            data-expiry-date="{{ $renewal->expiry_date ? $renewal->expiry_date->format('M d, Y') : '' }}"
-                                            data-auction-sale-date="{{ $renewal->auction_sale_date ? $renewal->auction_sale_date->format('M d, Y') : '' }}"
-                                            data-loan-amount="{{ number_format($renewal->loan_amount, 2) }}"
-                                            data-interest-rate="{{ number_format($renewal->interest_rate, 2) }}"
-                                            data-service-charge="{{ number_format($renewal->service_charge, 2) }}"
-                                            data-net-proceeds="{{ number_format($renewal->net_proceeds, 2) }}"
+                                            data-transaction-type="{{ $childTransaction->type }}"
+                                            data-maturity-date="{{ $childTransaction->maturity_date ? $childTransaction->maturity_date->format('M d, Y') : '' }}"
+                                            data-expiry-date="{{ $childTransaction->expiry_date ? $childTransaction->expiry_date->format('M d, Y') : '' }}"
+                                            data-auction-sale-date="{{ $childTransaction->auction_sale_date ? $childTransaction->auction_sale_date->format('M d, Y') : '' }}"
+                                            data-loan-amount="{{ number_format($childTransaction->loan_amount, 2) }}"
+                                            data-interest-rate="{{ number_format($childTransaction->interest_rate, 2) }}"
+                                            data-service-charge="{{ number_format($childTransaction->service_charge, 2) }}"
+                                            data-net-proceeds="{{ number_format($childTransaction->net_proceeds, 2) }}"
                                         >
                                             <td class="px-6 py-2 whitespace-nowrap {{ $pawnTicketNumber ? 'pl-12' : '' }}">
-                                                <div class="text-xs font-semibold text-yellow-900">
-                                                    Renewal
+                                                <div class="text-xs font-semibold {{ $textColor }}">
+                                                    {{ $label }}
                                                 </div>
                                                 <div class="text-[11px] text-gray-600 mt-1">
-                                                    {{ $renewal->transaction_number }}
+                                                    {{ $childTransaction->transaction_number }}
                                                 </div>
                                             </td>
                                             <td class="px-6 py-2 whitespace-nowrap">
                                                 <div class="text-xs text-gray-900">
-                                                    {{ $renewal->created_at->format('M d, Y') }}
+                                                    {{ $childTransaction->created_at->format('M d, Y') }}
                                                 </div>
                                                 <div class="text-[11px] text-gray-500">
-                                                    {{ $renewal->created_at->format('h:i A') }}
+                                                    {{ $childTransaction->created_at->format('h:i A') }}
                                                 </div>
                                             </td>
                                             <td class="px-6 py-2">
                                                 <div class="text-xs font-medium text-gray-900">
-                                                    Renewal of Pawn Ticket #{{ $renewal->pawn_ticket_number }}
+                                                    {{ $description }}
                                                 </div>
-                                                <div class="text-[11px] text-gray-500 mt-1">
-                                                    Interest payment to extend maturity and expiry dates.
-                                                </div>
+                                                @if($subDescription)
+                                                    <div class="text-[11px] text-gray-500 mt-1">
+                                                        {{ $subDescription }}
+                                                    </div>
+                                                @endif
                                             </td>
                                             <td class="px-6 py-2 whitespace-nowrap">
-                                                <span class="px-2 inline-flex text-[11px] leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                                                    Renew
+                                                <span class="px-2 inline-flex text-[11px] leading-5 font-semibold rounded-full {{ $badgeColor }}">
+                                                    {{ $isRenewal ? 'Renew' : ($isTubos ? 'Tubos' : ucfirst($childTransaction->type)) }}
                                                 </span>
                                             </td>
                                             <td class="px-6 py-2 whitespace-nowrap">
-                                                <div class="text-[11px] text-gray-500">Interest Paid:</div>
+                                                <div class="text-[11px] text-gray-500">{{ $amountLabel }}</div>
                                                 <div class="text-xs font-medium text-green-700">
-                                                    +₱{{ number_format($renewal->net_proceeds, 2) }}
+                                                    +₱{{ number_format($childTransaction->net_proceeds, 2) }}
                                                 </div>
                                             </td>
                                             <td class="px-6 py-2 whitespace-nowrap">
                                                 <div class="text-xs text-gray-900">
-                                                    {{ $renewal->branch->name }}
+                                                    {{ $childTransaction->branch->name }}
                                                 </div>
                                             </td>
                                             <td class="px-6 py-2 whitespace-nowrap">
                                                 <div class="text-xs text-gray-900">
-                                                    {{ $renewal->user->name }}
+                                                    {{ $childTransaction->user->name }}
                                                 </div>
                                             </td>
                                         </tr>

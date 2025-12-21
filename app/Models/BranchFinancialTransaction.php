@@ -97,6 +97,32 @@ class BranchFinancialTransaction extends Model
         return false;
     }
 
+    /**
+     * Determine if this "transaction" type row represents a Tubos (money IN).
+     *
+     * We identify tubos rows by the description starting with "Tubos" or "Redemption"
+     * or by checking if the associated transaction type is 'tubos'.
+     */
+    public function isTubosTransactionEntry(): bool
+    {
+        if (!$this->isTransaction()) {
+            return false;
+        }
+
+        // Check by description
+        $description = (string) $this->description;
+        if (str_starts_with($description, 'Tubos') || str_contains($description, 'Redemption')) {
+            return true;
+        }
+
+        // Check by associated transaction type
+        if ($this->transaction && $this->transaction->type === 'tubos') {
+            return true;
+        }
+
+        return false;
+    }
+
     public function voided(): HasOne
     {
         return $this->hasOne(VoidedBranchFinancialTransaction::class, 'branch_financial_transaction_id');

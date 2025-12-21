@@ -120,6 +120,8 @@
                     window.location.href = '{{ route("transactions.sangla.create") }}';
                 } else if (currentTransactionType === 'Renew') {
                     window.location.href = '{{ route("transactions.renewal.search") }}';
+                } else if (currentTransactionType === 'Tubos') {
+                    window.location.href = '{{ route("transactions.tubos.search") }}';
                 } else {
                     // TODO: Add other transaction types
                     console.log(`Process mode for ${currentTransactionType} - to be implemented`);
