@@ -16,9 +16,15 @@ class ConfigController extends Controller
     public function index(): View
     {
         $configs = Config::orderBy('label', 'asc')->get();
+        $additionalChargeConfigs = \App\Models\AdditionalChargeConfig::orderBy('transaction_type')
+            ->orderBy('type')
+            ->orderBy('start_day')
+            ->get()
+            ->groupBy('transaction_type');
 
         return view('configs.index', [
             'configs' => $configs,
+            'additionalChargeConfigs' => $additionalChargeConfigs,
         ]);
     }
 

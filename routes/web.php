@@ -75,6 +75,16 @@ Route::middleware('auth')->group(function () {
         // Configuration Management Routes
         Route::get('/configs', [ConfigController::class, 'index'])->name('configs.index');
         Route::put('/configs', [ConfigController::class, 'update'])->name('configs.update');
+        
+        // Additional Charge Configurations Routes
+        Route::resource('config/additional-charge-configs', \App\Http\Controllers\Config\AdditionalChargeConfigController::class)->names([
+            'index' => 'config.additional-charge-configs.index',
+            'create' => 'config.additional-charge-configs.create',
+            'store' => 'config.additional-charge-configs.store',
+            'edit' => 'config.additional-charge-configs.edit',
+            'update' => 'config.additional-charge-configs.update',
+            'destroy' => 'config.additional-charge-configs.destroy',
+        ]);
     });
 });
 
