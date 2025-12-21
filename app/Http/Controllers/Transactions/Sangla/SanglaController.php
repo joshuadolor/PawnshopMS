@@ -260,15 +260,16 @@ class SanglaController extends Controller
                 ->with('error', 'Pawn ticket number is required.');
         }
 
-        // Find the first transaction with this pawn ticket number
+        // Find the oldest non-voided transaction with this pawn ticket number
         $firstTransaction = Transaction::where('pawn_ticket_number', $pawnTicketNumber)
             ->where('type', 'sangla')
+            ->whereDoesntHave('voided')
             ->orderBy('created_at', 'asc')
             ->first();
 
         if (!$firstTransaction) {
             return redirect()->route('transactions.sangla.create')
-                ->with('error', 'No transaction found with the provided pawn ticket number.');
+                ->with('error', 'No active transaction found with the provided pawn ticket number. All transactions for this pawn ticket are voided.');
         }
 
         // Check if there are any child transactions (additional items or renewals) with this pawn ticket number
@@ -349,16 +350,17 @@ class SanglaController extends Controller
                 ->with('error', 'Pawn ticket number is required.');
         }
 
-        // Find the first transaction with this pawn ticket number
+        // Find the oldest non-voided transaction with this pawn ticket number
         $firstTransaction = Transaction::where('pawn_ticket_number', $pawnTicketNumber)
             ->where('type', 'sangla')
+            ->whereDoesntHave('voided')
             ->orderBy('created_at', 'asc')
             ->first();
 
         if (!$firstTransaction) {
             return redirect()->back()
                 ->withInput()
-                ->with('error', 'No transaction found with the provided pawn ticket number.');
+                ->with('error', 'No active transaction found with the provided pawn ticket number. All transactions for this pawn ticket are voided.');
         }
 
         // Check if there are any child transactions (additional items or renewals) with this pawn ticket number

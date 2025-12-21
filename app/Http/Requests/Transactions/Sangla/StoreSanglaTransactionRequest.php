@@ -67,6 +67,7 @@ class StoreSanglaTransactionRequest extends FormRequest
                     if (!$this->isAdditionalItem()) {
                         $exists = \App\Models\Transaction::where('pawn_ticket_number', $value)
                             ->where('type', 'sangla')
+                            ->whereDoesntHave('voided')
                             ->exists();
                         
                         if ($exists) {

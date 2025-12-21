@@ -35,6 +35,8 @@ Route::middleware('auth')->group(function () {
     Route::prefix('transactions')->name('transactions.')->group(function () {
         Route::get('/', [TransactionController::class, 'index'])->name('index');
         Route::post('/{transaction}/void', [TransactionController::class, 'void'])->name('void');
+        Route::post('/void-pawn-ticket/{pawnTicketNumber}', [TransactionController::class, 'voidPawnTicket'])->name('void-pawn-ticket');
+        Route::get('/related/{pawnTicketNumber}', [TransactionController::class, 'getRelatedTransactions'])->name('related');
         Route::get('/sangla/create', [SanglaController::class, 'create'])->name('sangla.create');
         Route::post('/sangla', [SanglaController::class, 'store'])->name('sangla.store');
         Route::get('/sangla/additional-item', [SanglaController::class, 'additionalItem'])->name('sangla.additional-item');

@@ -145,7 +145,17 @@
                                     <div class="space-y-3">
                                         @foreach($allTransactions as $tx)
                                             <div class="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                                                <div class="flex items-start justify-between">
+                                                <div class="flex items-start gap-4">
+                                                    @if($tx->item_image_path)
+                                                        <div class="flex-shrink-0">
+                                                            <img 
+                                                                src="{{ route('images.show', ['path' => $tx->item_image_path]) }}" 
+                                                                alt="Item Image" 
+                                                                class="w-24 h-24 object-cover rounded-lg border border-gray-300"
+                                                                onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'96\' height=\'96\'%3E%3Crect fill=\'%23e5e7eb\' width=\'96\' height=\'96\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'%239ca3af\' font-size=\'12\'%3ENo Image%3C/text%3E%3C/svg%3E'"
+                                                            />
+                                                        </div>
+                                                    @endif
                                                     <div class="flex-1">
                                                         <p class="text-sm font-medium text-gray-900">
                                                             {{ $tx->itemType->name }}
@@ -166,10 +176,51 @@
                                                                 @endforeach
                                                             </div>
                                                         @endif
+                                                        <p class="text-xs text-gray-500 mt-2">Transaction: {{ $tx->transaction_number }}</p>
                                                     </div>
                                                 </div>
                                             </div>
                                         @endforeach
+                                    </div>
+                                </div>
+                            @else
+                                {{-- Show single item with image if only one transaction --}}
+                                <div class="mt-4 pt-4 border-t border-gray-200">
+                                    <p class="text-xs text-gray-600 mb-2">Item Details:</p>
+                                    <div class="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                                        <div class="flex items-start gap-4">
+                                            @if($transaction->item_image_path)
+                                                <div class="flex-shrink-0">
+                                                    <img 
+                                                        src="{{ route('images.show', ['path' => $transaction->item_image_path]) }}" 
+                                                        alt="Item Image" 
+                                                        class="w-24 h-24 object-cover rounded-lg border border-gray-300"
+                                                        onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'96\' height=\'96\'%3E%3Crect fill=\'%23e5e7eb\' width=\'96\' height=\'96\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'%239ca3af\' font-size=\'12\'%3ENo Image%3C/text%3E%3C/svg%3E'"
+                                                    />
+                                                </div>
+                                            @endif
+                                            <div class="flex-1">
+                                                <p class="text-sm font-medium text-gray-900">
+                                                    {{ $transaction->itemType->name }}
+                                                    @if($transaction->itemTypeSubtype)
+                                                        <span class="text-gray-600">- {{ $transaction->itemTypeSubtype->name }}</span>
+                                                    @endif
+                                                    @if($transaction->custom_item_type)
+                                                        <span class="text-gray-600">- {{ $transaction->custom_item_type }}</span>
+                                                    @endif
+                                                </p>
+                                                <p class="text-sm text-gray-700 mt-1">{{ $transaction->item_description }}</p>
+                                                @if($transaction->tags && $transaction->tags->count() > 0)
+                                                    <div class="flex flex-wrap gap-1 mt-2">
+                                                        @foreach($transaction->tags as $tag)
+                                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800">
+                                                                {{ $tag->name }}
+                                                            </span>
+                                                        @endforeach
+                                                    </div>
+                                                @endif
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             @endif

@@ -146,14 +146,73 @@
 
                                     @if($pawnTicketNumber)
                                         @php
-                                            // Use the oldest transaction's values (not sum)
-                                            $oldestSanglaTransaction = $sanglaTransactions->sortBy('created_at')->first();
+                                            // Filter out voided transactions and get the oldest non-voided Sangla transaction
+                                            $nonVoidedSanglaTransactions = $sanglaTransactions->filter(function($tx) {
+                                                return !$tx->isVoided();
+                                            });
+                                            
+                                            // Use the oldest non-voided transaction's values (not sum)
+                                            $oldestSanglaTransaction = $nonVoidedSanglaTransactions->sortBy('created_at')->first();
                                             $principal = $oldestSanglaTransaction ? $oldestSanglaTransaction->loan_amount : 0;
                                             $netProceeds = $oldestSanglaTransaction ? $oldestSanglaTransaction->net_proceeds : 0;
+                                            
+                                            // Check if ALL Sangla transactions are voided (for opacity)
+                                            $allSanglaTransactionsVoided = $sanglaTransactions->count() > 0 && 
+                                                $sanglaTransactions->filter(function($tx) {
+                                                    return !$tx->isVoided();
+                                                })->count() === 0;
+                                            
+                                            // Check if pawn ticket has child transactions (renewals)
+                                            $hasChildTransactions = $renewalTransactions->filter(function($tx) {
+                                                return !$tx->isVoided();
+                                            })->count() > 0;
+                                            
+                                            // Check if oldest non-voided transaction is older than 6 hours
+                                            $hoursSinceCreation = $oldestSanglaTransaction ? $oldestSanglaTransaction->created_at->diffInHours(now()) : 0;
+                                            $isOlderThan6Hours = $hoursSinceCreation > 6;
+                                            
+                                            // Get first non-voided transaction for images and details
+                                            $firstSanglaTransaction = $nonVoidedSanglaTransactions->first() ?? $sanglaTransactions->first();
+                                            
+                                            // Get first transaction for pawner info (use non-voided if available)
+                                            $firstTransaction = $nonVoidedSanglaTransactions->first() ?? $sanglaTransactions->first() ?? $pawnTicketTransactions->first();
+                                            
+                                            // Get latest transaction for dates (prefer renewal, then latest sangla)
+                                            $latestRenewal = $renewalTransactions->filter(function($tx) {
+                                                return !$tx->isVoided();
+                                            })->sortByDesc('created_at')->first();
+                                            
+                                            $latestSangla = $nonVoidedSanglaTransactions->sortByDesc('created_at')->first();
+                                            
+                                            // Use latest renewal if exists, otherwise use latest sangla
+                                            $latestTransaction = $latestRenewal ?? $latestSangla;
+                                            
+                                            $latestMaturityDate = $latestTransaction && $latestTransaction->maturity_date 
+                                                ? $latestTransaction->maturity_date->format('M d, Y') 
+                                                : '-';
+                                            $latestExpiryDate = $latestTransaction && $latestTransaction->expiry_date 
+                                                ? $latestTransaction->expiry_date->format('M d, Y') 
+                                                : '-';
+                                            $latestAuctionSaleDate = $latestTransaction && $latestTransaction->auction_sale_date 
+                                                ? $latestTransaction->auction_sale_date->format('M d, Y') 
+                                                : '-';
                                         @endphp
                                         {{-- Pawn Ticket Header Row --}}
-                                        <tr class="bg-violet-100 border-t-2 border-gray-300">
-                                            <td colspan="4" class="px-6 py-3">
+                                        <tr 
+                                            class="bg-violet-100 border-t-2 border-gray-300 hover:bg-violet-200 transition-colors cursor-pointer pawn-ticket-row {{ $allSanglaTransactionsVoided ? 'opacity-40' : '' }}"
+                                            data-pawn-ticket-number="{{ $pawnTicketNumber }}"
+                                            data-pawner-name="{{ $firstTransaction->pawner_name }}"
+                                            data-pawner-image="{{ route('images.show', ['path' => $firstSanglaTransaction->pawner_id_image_path]) }}"
+                                            data-pawn-ticket-image="{{ $firstSanglaTransaction->pawn_ticket_image_path ? route('images.show', ['path' => $firstSanglaTransaction->pawn_ticket_image_path]) : '' }}"
+                                            data-has-voided-transactions="{{ $allSanglaTransactionsVoided ? '1' : '0' }}"
+                                            data-has-child-transactions="{{ $hasChildTransactions ? '1' : '0' }}"
+                                            data-is-older-than-6-hours="{{ $isOlderThan6Hours ? '1' : '0' }}"
+                                            data-sangla-count="{{ $sanglaTransactions->count() }}"
+                                            data-renewal-count="{{ $renewalTransactions->count() }}"
+                                            data-principal="{{ number_format($principal, 2) }}"
+                                            data-net-proceeds="{{ number_format($netProceeds, 2) }}"
+                                        >
+                                            <td class="px-6 py-3">
                                                 <div class="flex  flex-col justify-between">
                                                     <div>
                                                         <span class="text-sm font-bold text-gray-900">PAWN TICKET #{{ $pawnTicketNumber }}</span>
@@ -166,6 +225,14 @@
                                                         @endif
                                                     </div>
                                                 </div>
+                                            </td>
+                                            <td class="px-6 py-3 whitespace-nowrap" colspan="3">
+                                                <div class="text-xs text-gray-500">Maturity:</div>
+                                                <div class="text-xs font-medium text-gray-900">{{ $latestMaturityDate }}</div>
+                                                <div class="text-xs text-gray-500 mt-1">Expiry:</div>
+                                                <div class="text-xs font-medium text-gray-900">{{ $latestExpiryDate }}</div>
+                                                <div class="text-xs text-gray-500 mt-1">Auction:</div>
+                                                <div class="text-xs font-medium text-gray-900">{{ $latestAuctionSaleDate }}</div>
                                             </td>
                                             <td class="px-6 py-3 whitespace-nowrap">
                                                 <div class="text-xs text-gray-500">Principal:</div>
@@ -182,9 +249,20 @@
                                     @foreach($sanglaTransactions as $transaction)
                                         @php
                                             $isVoided = $transaction->isVoided();
+                                            // Check if this Sangla transaction has child transactions (additional items or renewals)
+                                            $hasChildTransactions = false;
+                                            if ($transaction->type === 'sangla' && $transaction->pawn_ticket_number) {
+                                                $hasChildTransactions = \App\Models\Transaction::where('pawn_ticket_number', $transaction->pawn_ticket_number)
+                                                    ->where('id', '!=', $transaction->id)
+                                                    ->whereDoesntHave('voided')
+                                                    ->exists();
+                                            }
+                                            // Check if transaction is older than 6 hours
+                                            $hoursSinceCreation = $transaction->created_at->diffInHours(now());
+                                            $isOlderThan6Hours = $hoursSinceCreation > 6;
                                         @endphp
                                         <tr 
-                                            class="hover:bg-gray-50 transition-colors cursor-pointer transaction-row {{ $isVoided ? 'opacity-40' : '' }} {{ $pawnTicketNumber ? 'bg-gray-50' : '' }}"
+                                            class="hover:bg-gray-50 transition-colors transaction-row {{ $isVoided ? 'opacity-40' : '' }} {{ $pawnTicketNumber ? 'bg-gray-50' : '' }}"
                                             data-item-image="{{ route('images.show', ['path' => $transaction->item_image_path]) }}"
                                             data-pawner-image="{{ route('images.show', ['path' => $transaction->pawner_id_image_path]) }}"
                                             data-pawn-ticket-image="{{ $transaction->pawn_ticket_image_path ? route('images.show', ['path' => $transaction->pawn_ticket_image_path]) : '' }}"
@@ -193,9 +271,14 @@
                                             data-pawn-ticket-number="{{ $transaction->pawn_ticket_number ?? '' }}"
                                             data-item-type="{{ $transaction->itemType->name }}"
                                             data-item-subtype="{{ $transaction->itemTypeSubtype ? $transaction->itemTypeSubtype->name : '' }}"
+                                            data-custom-item-type="{{ $transaction->custom_item_type ?? '' }}"
                                             data-item-description="{{ $transaction->item_description }}"
+                                            data-item-tags="{{ $transaction->tags->pluck('name')->toJson() }}"
                                             data-transaction-date="{{ $transaction->created_at->format('M d, Y') }} {{ $transaction->created_at->format('h:i A') }}"
                                             data-is-voided="{{ $isVoided ? '1' : '0' }}"
+                                            data-has-child-transactions="{{ $hasChildTransactions ? '1' : '0' }}"
+                                            data-is-older-than-6-hours="{{ $isOlderThan6Hours ? '1' : '0' }}"
+                                            data-transaction-type="{{ $transaction->type }}"
                                             data-maturity-date="{{ $transaction->maturity_date ? $transaction->maturity_date->format('M d, Y') : '' }}"
                                             data-expiry-date="{{ $transaction->expiry_date ? $transaction->expiry_date->format('M d, Y') : '' }}"
                                             data-auction-sale-date="{{ $transaction->auction_sale_date ? $transaction->auction_sale_date->format('M d, Y') : '' }}"
@@ -262,9 +345,14 @@
                                             data-pawn-ticket-number="{{ $renewal->pawn_ticket_number ?? '' }}"
                                             data-item-type="{{ $renewal->itemType->name }}"
                                             data-item-subtype="{{ $renewal->itemTypeSubtype ? $renewal->itemTypeSubtype->name : '' }}"
+                                            data-custom-item-type="{{ $renewal->custom_item_type ?? '' }}"
                                             data-item-description="{{ $renewal->item_description }}"
+                                            data-item-tags="{{ $renewal->tags->pluck('name')->toJson() }}"
                                             data-transaction-date="{{ $renewal->created_at->format('M d, Y') }} {{ $renewal->created_at->format('h:i A') }}"
                                             data-is-voided="{{ $isVoided ? '1' : '0' }}"
+                                            data-has-child-transactions="0"
+                                            data-is-older-than-6-hours="{{ $isOlderThan6Hours ? '1' : '0' }}"
+                                            data-transaction-type="{{ $renewal->type }}"
                                             data-maturity-date="{{ $renewal->maturity_date ? $renewal->maturity_date->format('M d, Y') : '' }}"
                                             data-expiry-date="{{ $renewal->expiry_date ? $renewal->expiry_date->format('M d, Y') : '' }}"
                                             data-auction-sale-date="{{ $renewal->auction_sale_date ? $renewal->auction_sale_date->format('M d, Y') : '' }}"
@@ -291,10 +379,7 @@
                                             </td>
                                             <td class="px-6 py-2">
                                                 <div class="text-xs font-medium text-gray-900">
-                                                    Renewal of {{ $renewal->itemType->name }}
-                                                    @if($renewal->itemTypeSubtype)
-                                                        <span class="text-gray-500">- {{ $renewal->itemTypeSubtype->name }}</span>
-                                                    @endif
+                                                    Renewal of Pawn Ticket #{{ $renewal->pawn_ticket_number }}
                                                 </div>
                                                 <div class="text-[11px] text-gray-500 mt-1">
                                                     Interest payment to extend maturity and expiry dates.
@@ -329,6 +414,17 @@
                                         @foreach($pawnTicketTransactions as $transaction)
                                             @php
                                                 $isVoided = $transaction->isVoided();
+                                                // Check if this Sangla transaction has child transactions
+                                                $hasChildTransactions = false;
+                                                if ($transaction->type === 'sangla' && $transaction->pawn_ticket_number) {
+                                                    $hasChildTransactions = \App\Models\Transaction::where('pawn_ticket_number', $transaction->pawn_ticket_number)
+                                                        ->where('id', '!=', $transaction->id)
+                                                        ->whereDoesntHave('voided')
+                                                        ->exists();
+                                                }
+                                                // Check if transaction is older than 6 hours
+                                                $hoursSinceCreation = $transaction->created_at->diffInHours(now());
+                                                $isOlderThan6Hours = $hoursSinceCreation > 6;
                                             @endphp
                                         <tr 
                                             class="hover:bg-gray-50 transition-colors cursor-pointer transaction-row {{ $isVoided ? 'opacity-40' : '' }}"
@@ -340,9 +436,14 @@
                                             data-pawn-ticket-number="{{ $transaction->pawn_ticket_number ?? '' }}"
                                             data-item-type="{{ $transaction->itemType->name }}"
                                             data-item-subtype="{{ $transaction->itemTypeSubtype ? $transaction->itemTypeSubtype->name : '' }}"
+                                            data-custom-item-type="{{ $transaction->custom_item_type ?? '' }}"
                                             data-item-description="{{ $transaction->item_description }}"
+                                            data-item-tags="{{ $transaction->tags->pluck('name')->toJson() }}"
                                             data-transaction-date="{{ $transaction->created_at->format('M d, Y') }} {{ $transaction->created_at->format('h:i A') }}"
                                             data-is-voided="{{ $isVoided ? '1' : '0' }}"
+                                            data-has-child-transactions="{{ $hasChildTransactions ? '1' : '0' }}"
+                                            data-is-older-than-6-hours="{{ $isOlderThan6Hours ? '1' : '0' }}"
+                                            data-transaction-type="{{ $transaction->type }}"
                                             data-maturity-date="{{ $transaction->maturity_date ? $transaction->maturity_date->format('M d, Y') : '' }}"
                                             data-expiry-date="{{ $transaction->expiry_date ? $transaction->expiry_date->format('M d, Y') : '' }}"
                                             data-auction-sale-date="{{ $transaction->auction_sale_date ? $transaction->auction_sale_date->format('M d, Y') : '' }}"
@@ -451,14 +552,21 @@
                             <p id="modalPawnTicketNumber" class="text-sm font-medium text-gray-900 mt-1">-</p>
                         </div>
                     </div>
-                    <div class="mb-4">
+                    <div id="itemDetailsSection" class="mb-4">
                         <p class="text-xs text-gray-500 uppercase tracking-wide mb-2">Item Details</p>
                         <div class="bg-gray-50 rounded-lg p-4">
                             <p class="text-sm font-medium text-gray-900">
+                                <span class="text-gray-600">Category:</span> 
                                 <span id="modalItemType">-</span>
                                 <span id="modalItemSubtype" class="text-gray-600"></span>
+                                <span id="modalCustomItemType" class="text-gray-600"></span>
                             </p>
-                            <p id="modalItemDescription" class="text-sm text-gray-700 mt-2">-</p>
+                            <p class="text-sm text-gray-600 mt-2">Description:</p>
+                            <p id="modalItemDescription" class="text-sm text-gray-700 mt-1">-</p>
+                            <p class="text-sm text-gray-600 mt-2">Tags:</p>
+                            <div id="modalItemTags" class="mt-1 flex flex-wrap gap-1">
+                                <!-- Tags will be inserted here -->
+                            </div>
                         </div>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -505,6 +613,14 @@
                     </div>
                 </div>
 
+                <!-- All Items Section (for Renewal transactions) -->
+                <div id="allItemsSection" class="mb-6 hidden">
+                    <h4 class="text-md font-semibold text-gray-900 mb-4">All Items in this Pawn Ticket</h4>
+                    <div id="allItemsContainer" class="space-y-4">
+                        <!-- Items will be dynamically inserted here -->
+                    </div>
+                </div>
+
                 <!-- Images Section -->
                 <div>
                     <h4 class="text-md font-semibold text-gray-900 mb-4">Images</h4>
@@ -519,6 +635,14 @@
                                     alt="Item Image" 
                                     class="w-auto h-full"
                                 />
+                            </div>
+                        </div>
+                        
+                        <!-- All Item Images (for Renewal transactions) -->
+                        <div id="allItemImagesSection" class="hidden">
+                            <h5 class="text-sm font-medium text-gray-700 mb-2">All Item Images</h5>
+                            <div id="allItemImagesContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <!-- Item images will be dynamically inserted here -->
                             </div>
                         </div>
                         
@@ -621,7 +745,43 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // Add click handler to transaction rows
+            // Add click handler to pawn ticket rows
+            document.querySelectorAll('.pawn-ticket-row').forEach(function(row) {
+                row.addEventListener('click', function(e) {
+                    // Don't trigger if clicking on a link, button, or other interactive element
+                    if (e.target.closest('a, button, input, select, textarea')) {
+                        return;
+                    }
+                    
+                    const pawnTicketNumber = this.getAttribute('data-pawn-ticket-number');
+                    const pawnerName = this.getAttribute('data-pawner-name');
+                    const pawnerImageUrl = this.getAttribute('data-pawner-image');
+                    const pawnTicketImageUrl = this.getAttribute('data-pawn-ticket-image');
+                    const hasVoidedTransactions = this.getAttribute('data-has-voided-transactions') === '1';
+                    const hasChildTransactions = this.getAttribute('data-has-child-transactions') === '1';
+                    const isOlderThan6Hours = this.getAttribute('data-is-older-than-6-hours') === '1';
+                    const sanglaCount = this.getAttribute('data-sangla-count');
+                    const renewalCount = this.getAttribute('data-renewal-count');
+                    const principal = this.getAttribute('data-principal');
+                    const netProceeds = this.getAttribute('data-net-proceeds');
+                    
+                    showPawnTicketDetails({
+                        pawnTicketNumber,
+                        pawnerName,
+                        pawnerImageUrl,
+                        pawnTicketImageUrl,
+                        hasVoidedTransactions,
+                        hasChildTransactions,
+                        isOlderThan6Hours,
+                        sanglaCount,
+                        renewalCount,
+                        principal,
+                        netProceeds
+                    });
+                });
+            });
+            
+            // Add click handler to transaction rows (for non-pawn-ticket transactions)
             document.querySelectorAll('.transaction-row').forEach(function(row) {
                 row.addEventListener('click', function(e) {
                     // Don't trigger if clicking on a link, button, or other interactive element
@@ -637,9 +797,15 @@
                     const pawnTicketNumber = this.getAttribute('data-pawn-ticket-number');
                     const itemType = this.getAttribute('data-item-type');
                     const itemSubtype = this.getAttribute('data-item-subtype');
+                    const customItemType = this.getAttribute('data-custom-item-type');
                     const itemDescription = this.getAttribute('data-item-description');
+                    const itemTagsJson = this.getAttribute('data-item-tags');
+                    const itemTags = itemTagsJson ? JSON.parse(itemTagsJson) : [];
                     const transactionDate = this.getAttribute('data-transaction-date');
                     const isVoided = this.getAttribute('data-is-voided') === '1';
+                    const hasChildTransactions = this.getAttribute('data-has-child-transactions') === '1';
+                    const isOlderThan6Hours = this.getAttribute('data-is-older-than-6-hours') === '1';
+                    const transactionType = this.getAttribute('data-transaction-type') || '';
                     const maturityDate = this.getAttribute('data-maturity-date');
                     const expiryDate = this.getAttribute('data-expiry-date');
                     const auctionSaleDate = this.getAttribute('data-auction-sale-date');
@@ -657,9 +823,14 @@
                         pawnTicketNumber,
                         itemType,
                         itemSubtype,
+                        customItemType,
                         itemDescription,
+                        itemTags,
                         transactionDate,
                         isVoided,
+                        hasChildTransactions: hasChildTransactions || false,
+                        isOlderThan6Hours: isOlderThan6Hours || false,
+                        transactionType: transactionType,
                         maturityDate,
                         expiryDate,
                         auctionSaleDate,
@@ -673,10 +844,72 @@
         });
 
         let currentTransactionId = null;
+        let currentPawnTicketNumber = null;
+
+        function showPawnTicketDetails(data) {
+            const modal = document.getElementById('transactionImagesModal');
+            currentPawnTicketNumber = data.pawnTicketNumber;
+            currentTransactionId = null; // Clear transaction ID for pawn ticket voiding
+            
+            // Set transaction number to pawn ticket number
+            document.getElementById('modalTransactionNumber').textContent = `PAWN TICKET #${data.pawnTicketNumber}`;
+            
+            // Set transaction date (use current date or first transaction date)
+            document.getElementById('modalTransactionDate').textContent = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            
+            // Set pawn ticket number
+            document.getElementById('modalPawnTicketNumber').textContent = data.pawnTicketNumber || '-';
+            
+            // Hide item details section (we'll show all items instead)
+            document.getElementById('itemDetailsSection').classList.add('hidden');
+            
+            // Hide transaction summary for pawn tickets
+            const summarySection = document.querySelector('.mb-6:has(#modalPrincipal)');
+            if (summarySection) {
+                summarySection.style.display = 'none';
+            }
+            
+            // Set pawner image
+            document.getElementById('modalPawnerImage').src = data.pawnerImageUrl;
+            
+            // Handle pawn ticket image
+            const pawnTicketImage = document.getElementById('modalPawnTicketImage');
+            const pawnTicketPlaceholder = document.getElementById('modalPawnTicketPlaceholder');
+            if (data.pawnTicketImageUrl && data.pawnTicketImageUrl.trim() !== '') {
+                pawnTicketImage.src = data.pawnTicketImageUrl;
+                pawnTicketImage.classList.remove('hidden');
+                pawnTicketPlaceholder.classList.add('hidden');
+            } else {
+                pawnTicketImage.classList.add('hidden');
+                pawnTicketPlaceholder.classList.remove('hidden');
+            }
+            
+            // Fetch and display all related items
+            fetchRelatedItems(data.pawnTicketNumber);
+            
+            // Show/hide void button based on voided status, child transactions, and 6-hour rule
+            const voidBtn = document.getElementById('voidTransactionBtn');
+            const isVoided = data.hasVoidedTransactions === '1' || data.hasVoidedTransactions === true || data.hasVoidedTransactions === 1;
+            const hasChildTransactions = data.hasChildTransactions === true || data.hasChildTransactions === 1 || data.hasChildTransactions === '1';
+            const isOlderThan6Hours = data.isOlderThan6Hours === true || data.isOlderThan6Hours === 1 || data.isOlderThan6Hours === '1';
+            
+            // Hide void button if:
+            // 1. Any transaction is voided, OR
+            // 2. Has child transactions (renewals), OR
+            // 3. Oldest transaction is older than 6 hours
+            if (isVoided || hasChildTransactions || isOlderThan6Hours) {
+                voidBtn.classList.add('hidden');
+            } else {
+                voidBtn.classList.remove('hidden');
+            }
+            
+            modal.showModal();
+        }
 
         function showTransactionDetails(data) {
             const modal = document.getElementById('transactionImagesModal');
             currentTransactionId = data.transactionId;
+            currentPawnTicketNumber = null; // Clear pawn ticket number for individual transactions
             
             // Set transaction number
             document.getElementById('modalTransactionNumber').textContent = data.transactionNumber;
@@ -690,7 +923,9 @@
             // Set item details
             const itemTypeEl = document.getElementById('modalItemType');
             const itemSubtypeEl = document.getElementById('modalItemSubtype');
+            const customItemTypeEl = document.getElementById('modalCustomItemType');
             const itemDescriptionEl = document.getElementById('modalItemDescription');
+            const itemTagsEl = document.getElementById('modalItemTags');
             
             if (itemTypeEl) {
                 itemTypeEl.textContent = data.itemType || '-';
@@ -704,13 +939,64 @@
                     itemSubtypeEl.style.display = 'none';
                 }
             }
+            if (customItemTypeEl) {
+                if (data.customItemType && data.customItemType.trim() !== '') {
+                    customItemTypeEl.textContent = ' - ' + data.customItemType;
+                    customItemTypeEl.style.display = 'inline';
+                } else {
+                    customItemTypeEl.textContent = '';
+                    customItemTypeEl.style.display = 'none';
+                }
+            }
             if (itemDescriptionEl) {
                 itemDescriptionEl.textContent = data.itemDescription || '-';
             }
+            if (itemTagsEl) {
+                itemTagsEl.innerHTML = '';
+                if (data.itemTags && Array.isArray(data.itemTags) && data.itemTags.length > 0) {
+                    data.itemTags.forEach(tag => {
+                        const tagSpan = document.createElement('span');
+                        tagSpan.className = 'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800';
+                        tagSpan.textContent = tag;
+                        itemTagsEl.appendChild(tagSpan);
+                    });
+                } else {
+                    itemTagsEl.innerHTML = '<span class="text-xs text-gray-400">No tags</span>';
+                }
+            }
+
+            // Show transaction summary
+            const summarySection = document.querySelector('.mb-6:has(#modalPrincipal)');
+            if (summarySection) {
+                summarySection.style.display = 'block';
+            }
             
-            // Show/hide void button based on voided status
+            // If this is a renewal transaction, fetch and display all related items
+            if (data.transactionType === 'renew' && data.pawnTicketNumber) {
+                // Hide item details section for renewal transactions (we show "All Items" instead)
+                document.getElementById('itemDetailsSection').classList.add('hidden');
+                fetchRelatedItems(data.pawnTicketNumber);
+            } else {
+                // Show item details section for non-renewal transactions
+                document.getElementById('itemDetailsSection').classList.remove('hidden');
+                // Hide all items section for non-renewal transactions
+                document.getElementById('allItemsSection').classList.add('hidden');
+                document.getElementById('allItemImagesSection').classList.add('hidden');
+                document.getElementById('modalItemImage').parentElement.style.display = 'block';
+            }
+            
+            // Show/hide void button based on voided status, child transactions, and 6-hour rule
             const voidBtn = document.getElementById('voidTransactionBtn');
-            if (data.isVoided === '1' || data.isVoided === true || data.isVoided === 1) {
+            const isVoided = data.isVoided === '1' || data.isVoided === true || data.isVoided === 1;
+            const hasChildTransactions = data.hasChildTransactions === true || data.hasChildTransactions === 1 || data.hasChildTransactions === '1';
+            const isOlderThan6Hours = data.isOlderThan6Hours === true || data.isOlderThan6Hours === 1 || data.isOlderThan6Hours === '1';
+            const isSangla = data.transactionType === 'sangla';
+            
+            // Hide void button if:
+            // 1. Transaction is already voided, OR
+            // 2. It's a Sangla transaction with child transactions, OR
+            // 3. Transaction is older than 6 hours
+            if (isVoided || (isSangla && hasChildTransactions) || isOlderThan6Hours) {
                 voidBtn.classList.add('hidden');
             } else {
                 voidBtn.classList.remove('hidden');
@@ -753,6 +1039,111 @@
             modal.showModal();
         }
 
+        function fetchRelatedItems(pawnTicketNumber) {
+            const url = `{{ url('/transactions/related') }}/${encodeURIComponent(pawnTicketNumber)}`;
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    const allItemsContainer = document.getElementById('allItemsContainer');
+                    const allItemImagesContainer = document.getElementById('allItemImagesContainer');
+                    const allItemsSection = document.getElementById('allItemsSection');
+                    const allItemImagesSection = document.getElementById('allItemImagesSection');
+                    const singleItemImageSection = document.getElementById('modalItemImage').parentElement;
+
+                    // Clear previous content
+                    allItemsContainer.innerHTML = '';
+                    allItemImagesContainer.innerHTML = '';
+
+                    if (data.items && data.items.length > 0) {
+                        // Show all items section
+                        allItemsSection.classList.remove('hidden');
+                        allItemImagesSection.classList.remove('hidden');
+                        singleItemImageSection.style.display = 'none';
+
+                        // Display all items
+                        data.items.forEach((item, index) => {
+                            let itemTypeText = item.item_type;
+                            if (item.item_subtype) {
+                                itemTypeText += ` - ${item.item_subtype}`;
+                            }
+                            if (item.custom_item_type) {
+                                itemTypeText += ` - ${item.custom_item_type}`;
+                            }
+
+                            let tagsHtml = '';
+                            if (item.tags && item.tags.length > 0) {
+                                tagsHtml = `<div class="mt-2 flex flex-wrap gap-1">
+                                    ${item.tags.map(tag => `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">${tag}</span>`).join('')}
+                                </div>`;
+                            }
+
+                            // Create item card for "All Items in this Pawn Ticket" section
+                            const itemCard = document.createElement('div');
+                            itemCard.className = 'bg-gray-50 rounded-lg p-4 border border-gray-200';
+                            itemCard.innerHTML = `
+                                <div class="flex items-start justify-between">
+                                    <div class="flex-1">
+                                        <p class="text-sm font-medium text-gray-900">
+                                            <span class="text-gray-600">Category:</span> ${itemTypeText}
+                                        </p>
+                                        <p class="text-sm text-gray-700 mt-1">${item.item_description || '-'}</p>
+                                        ${tagsHtml}
+                                        <p class="text-xs text-gray-500 mt-2">Transaction: ${item.transaction_number}</p>
+                                    </div>
+                                </div>
+                            `;
+                            allItemsContainer.appendChild(itemCard);
+
+                            // Create item image card
+                            if (item.item_image_path) {
+                                const imageCard = document.createElement('div');
+                                imageCard.className = 'border-2 border-gray-200 rounded-lg overflow-hidden';
+                                
+                                let imageTagsHtml = '';
+                                if (item.tags && item.tags.length > 0) {
+                                    imageTagsHtml = `<div class="p-2 bg-gray-50 border-t border-gray-200">
+                                        <div class="flex flex-wrap gap-1">
+                                            ${item.tags.map(tag => `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-800">${tag}</span>`).join('')}
+                                        </div>
+                                    </div>`;
+                                }
+                                
+                                imageCard.innerHTML = `
+                                    <div class="p-2 bg-gray-50 border-b border-gray-200">
+                                        <p class="text-xs font-medium text-gray-700">
+                                            <span class="text-gray-500">Category:</span> ${itemTypeText}
+                                        </p>
+                                        <p class="text-xs text-gray-500 mt-0.5">Transaction: ${item.transaction_number}</p>
+                                    </div>
+                                    <img 
+                                        src="${item.item_image_path}" 
+                                        alt="Item ${index + 1}" 
+                                        class="w-full h-auto"
+                                        onerror="this.parentElement.innerHTML='<div class=\\'p-8 text-center text-gray-400\\'><p class=\\'text-sm\\'>Image not available</p></div>'"
+                                    />
+                                    ${imageTagsHtml}
+                                `;
+                                allItemImagesContainer.appendChild(imageCard);
+                            }
+                        });
+                    } else {
+                        // Hide sections if no items found
+                        allItemsSection.classList.add('hidden');
+                        allItemImagesSection.classList.add('hidden');
+                        singleItemImageSection.style.display = 'block';
+                        document.getElementById('itemDetailsSection').classList.remove('hidden');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching related items:', error);
+                    // Hide sections on error
+                    document.getElementById('allItemsSection').classList.add('hidden');
+                    document.getElementById('allItemImagesSection').classList.add('hidden');
+                    document.getElementById('modalItemImage').parentElement.style.display = 'block';
+                    document.getElementById('itemDetailsSection').classList.remove('hidden');
+                });
+        }
+
         function closeTransactionImagesModal() {
             document.getElementById('transactionImagesModal').close();
         }
@@ -766,13 +1157,18 @@
 
         // Void transaction functions
         function openVoidDialog() {
-            if (!currentTransactionId) {
-                alert('Transaction ID not found');
+            const form = document.getElementById('voidTransactionForm');
+            
+            // If we have a pawn ticket number, void all Sangla transactions for that pawn ticket
+            if (currentPawnTicketNumber) {
+                form.action = `/transactions/void-pawn-ticket/${encodeURIComponent(currentPawnTicketNumber)}`;
+            } else if (currentTransactionId) {
+                form.action = `/transactions/${currentTransactionId}/void`;
+            } else {
+                alert('Transaction ID or Pawn Ticket Number not found');
                 return;
             }
             
-            const form = document.getElementById('voidTransactionForm');
-            form.action = `/transactions/${currentTransactionId}/void`;
             document.getElementById('void_reason').value = '';
             document.getElementById('voidTransactionModal').showModal();
         }
