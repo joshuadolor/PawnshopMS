@@ -277,6 +277,7 @@ class TubosController extends Controller
                 'service_charge' => $serviceCharge,
                 'net_proceeds' => $totalAmount, // Total amount paid (principal + service charge + additional charge)
                 'status' => 'redeemed', // Mark as redeemed
+                'note' => $request->input('note'),
             ]);
 
             // Create financial transaction for the tubos payment

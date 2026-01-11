@@ -399,6 +399,7 @@
                                             data-orcr-serial="{{ $transaction->orcr_serial ?? '' }}"
                                             data-grams="{{ $transaction->grams ? number_format($transaction->grams, 1) : '' }}"
                                             data-back-date="{{ $transaction->back_date ? '1' : '0' }}"
+                                            data-note="{{ $transaction->note ?? '' }}"
                                         >
                                             <td class="px-6 py-4 whitespace-nowrap {{ $pawnTicketNumber ? 'pl-12' : '' }}">
                                                 <div class="text-xs text-gray-500">Transaction #</div>
@@ -526,6 +527,7 @@
                                             data-net-proceeds="{{ number_format($childTransaction->net_proceeds, 2) }}"
                                             data-late-days-charge="{{ number_format($childTransaction->late_days_charge ?? 0, 2) }}"
                                             data-back-date="{{ $childTransaction->back_date ? '1' : '0' }}"
+                                            data-note="{{ $childTransaction->note ?? '' }}"
                                             data-orcr-serial="{{ $childTransaction->orcr_serial ?? '' }}"
                                             data-grams="{{ $childTransaction->grams ? number_format($childTransaction->grams, 1) : '' }}"
                                         >
@@ -629,6 +631,7 @@
                                             data-orcr-serial="{{ $transaction->orcr_serial ?? '' }}"
                                             data-grams="{{ $transaction->grams ? number_format($transaction->grams, 1) : '' }}"
                                             data-back-date="{{ $transaction->back_date ? '1' : '0' }}"
+                                            data-note="{{ $transaction->note ?? '' }}"
                                         >
                                                 <td class="px-6 py-4 whitespace-nowrap">
                                                     <div class="text-xs text-gray-500">Transaction #</div>
@@ -845,6 +848,15 @@
                                 </tr>
                             </tbody>
                         </table>
+                    </div>
+                </div>
+
+                <!-- Note Section -->
+                <div id="noteSection" class="mb-6 hidden">
+                    <h4 class="text-md font-semibold text-gray-900 mb-4">Note</h4>
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <p class="text-sm text-gray-700 whitespace-pre-wrap" id="modalNote">-</p>
+                        <p class="mt-2 text-xs text-gray-500">Optional notes added by staff for reference.</p>
                     </div>
                 </div>
 
@@ -1088,6 +1100,7 @@
                     const lateDaysCharge = this.getAttribute('data-late-days-charge') || '0';
                     const orcrSerial = this.getAttribute('data-orcr-serial') || '';
                     const grams = this.getAttribute('data-grams') || '';
+                    const note = this.getAttribute('data-note') || '';
                     const backDateAttr = this.getAttribute('data-back-date');
                     const backDate = backDateAttr === '1';
                     console.log('Reading backDate attribute:', { backDateAttr, backDate, type: typeof backDate });
@@ -1124,6 +1137,7 @@
                         lateDaysCharge: lateDaysCharge || '0',
                         orcrSerial,
                         grams,
+                        note: note || '',
                         backDate: backDate
                     });
                 });
@@ -1146,6 +1160,12 @@
             
             // Set pawn ticket number
             document.getElementById('modalPawnTicketNumber').textContent = data.pawnTicketNumber || '-';
+            
+            // Hide note section for pawn ticket view (notes are per transaction)
+            const noteSection = document.getElementById('noteSection');
+            if (noteSection) {
+                noteSection.classList.add('hidden');
+            }
             
             // Hide item details section (we'll show all items instead)
             document.getElementById('itemDetailsSection').classList.add('hidden');
@@ -1283,6 +1303,19 @@
             
             // Set pawn ticket number
             document.getElementById('modalPawnTicketNumber').textContent = data.pawnTicketNumber || '-';
+            
+            // Show/hide note section
+            const noteSection = document.getElementById('noteSection');
+            const modalNote = document.getElementById('modalNote');
+            if (noteSection && modalNote) {
+                if (data.note && data.note.trim() !== '') {
+                    noteSection.classList.remove('hidden');
+                    modalNote.textContent = data.note;
+                } else {
+                    noteSection.classList.add('hidden');
+                    modalNote.textContent = '-';
+                }
+            }
             
             // Set item details
             const itemTypeEl = document.getElementById('modalItemType');

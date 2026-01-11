@@ -60,7 +60,7 @@
 
                         <!-- Pawn Ticket No. -->
                         <div class="mb-6">
-                            <x-input-label for="pawn_ticket_number" value="Pawn Ticket No." />
+                            <x-input-label for="pawn_ticket_number" value="Pawn Ticket No. *" />
                             <x-text-input 
                                 id="pawn_ticket_number" 
                                 name="pawn_ticket_number" 
@@ -75,7 +75,7 @@
                         <!-- Branch Selection (only show if user has multiple branches) -->
                         @if($showBranchSelection)
                             <div class="mb-6">
-                                <x-input-label for="branch_id" value="Branch" />
+                                <x-input-label for="branch_id" value="Branch *" />
                                 <select id="branch_id" name="branch_id" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500" required>
                                     <option value="">Select a branch</option>
                                     @foreach($userBranches as $branch)
@@ -95,49 +95,49 @@
 
                         <!-- First Name -->
                         <div>
-                            <x-input-label for="first_name" value="First Name" />
+                            <x-input-label for="first_name" value="First Name *" />
                             <x-text-input id="first_name" name="first_name" type="text" class="mt-1 block w-full" :value="old('first_name')" required autofocus />
                             <x-input-error :messages="$errors->get('first_name')" class="mt-2" />
                         </div>
 
                         <!-- Last Name -->
                         <div class="mt-4">
-                            <x-input-label for="last_name" value="Last Name" />
+                            <x-input-label for="last_name" value="Last Name *" />
                             <x-text-input id="last_name" name="last_name" type="text" class="mt-1 block w-full" :value="old('last_name')" required />
                             <x-input-error :messages="$errors->get('last_name')" class="mt-2" />
                         </div>
 
                         <!-- Address -->
                         <div class="mt-4">
-                            <x-input-label for="address" value="Address" />
+                            <x-input-label for="address" value="Address *" />
                             <textarea id="address" name="address" rows="3" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500" required>{{ old('address') }}</textarea>
                             <x-input-error :messages="$errors->get('address')" class="mt-2" />
                         </div>
 
                         <!-- Appraised Value -->
                         <div class="mt-4">
-                            <x-input-label for="appraised_value" value="Appraised Value" />
+                            <x-input-label for="appraised_value" value="Appraised Value *" />
                             <x-text-input id="appraised_value" name="appraised_value" type="number" step="0.01" min="0" class="mt-1 block w-full" :value="old('appraised_value')" required />
                             <x-input-error :messages="$errors->get('appraised_value')" class="mt-2" />
                         </div>
 
                         <!-- Loan Amount -->
                         <div class="mt-4">
-                            <x-input-label for="loan_amount" value="Loan Amount" />
+                            <x-input-label for="loan_amount" value="Loan Amount *" />
                             <x-text-input id="loan_amount" name="loan_amount" type="number" step="0.01" min="0" class="mt-1 block w-full" :value="old('loan_amount')" required />
                             <x-input-error :messages="$errors->get('loan_amount')" class="mt-2" />
                         </div>
 
                         <!-- Interest Rate -->
                         <div class="mt-4">
-                            <x-input-label for="interest_rate" value="Interest Rate (%)" />
+                            <x-input-label for="interest_rate" value="Interest Rate (%) *" />
                             <x-text-input id="interest_rate" name="interest_rate" type="number" step="0.01" min="0" max="100" class="mt-1 block w-full" :value="old('interest_rate')" required />
                             <x-input-error :messages="$errors->get('interest_rate')" class="mt-2" />
                         </div>
 
                         <!-- Interest Rate Period -->
                         <div class="mt-4">
-                            <x-input-label value="Interest Rate Period" />
+                            <x-input-label value="Interest Rate Period *" />
                             <div class="mt-2 flex flex-wrap gap-2">
                                 @php
                                     $selectedPeriod = old('interest_rate_period', $interestPeriod);
@@ -160,7 +160,7 @@
 
                         <!-- Maturity Date -->
                         <div class="mt-4">
-                            <x-input-label for="maturity_date" value="Maturity Date" />
+                            <x-input-label for="maturity_date" value="Maturity Date *" />
                             <x-text-input 
                                 id="maturity_date" 
                                 name="maturity_date" 
@@ -174,7 +174,7 @@
 
                         <!-- Expiry Date of Redemption -->
                         <div class="mt-4">
-                            <x-input-label for="expiry_date" value="Expiry Date of Redemption" />
+                            <x-input-label for="expiry_date" value="Expiry Date of Redemption *" />
                             <x-text-input 
                                 id="expiry_date" 
                                 name="expiry_date" 
@@ -234,7 +234,7 @@
 
                         <!-- Item Type -->
                         <div class="mt-4">
-                            <x-input-label for="item_type" value="Item Type" />
+                            <x-input-label for="item_type" value="Item Type *" />
                             <select id="item_type" name="item_type" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500" required>
                                 <option value="">Select Item Type</option>
                                 @foreach($itemTypes as $itemType)
@@ -254,7 +254,7 @@
 
                         <!-- Item Type Subtype (shown when item type has subtypes) -->
                         <div id="item_type_subtype_container" class="mt-4 hidden">
-                            <x-input-label for="item_type_subtype" value="Subtype" />
+                            <x-input-label for="item_type_subtype" value="Subtype *" />
                             <select id="item_type_subtype" name="item_type_subtype" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                                 <option value="">Select a subtype</option>
                             </select>
@@ -272,7 +272,7 @@
 
                         <!-- Custom Item Type (shown when "Other" is selected) -->
                         <div id="custom_item_type_container" class="mt-4 hidden">
-                            <x-input-label for="custom_item_type" value="Custom Item Type" />
+                            <x-input-label for="custom_item_type" value="Custom Item Type *" />
                             <x-text-input 
                                 id="custom_item_type" 
                                 name="custom_item_type" 
@@ -288,7 +288,7 @@
 
                         <!-- Grams (shown when "Jewelry" is selected) -->
                         <div id="grams_container" class="mt-4 hidden">
-                            <x-input-label for="grams" value="Grams" />
+                            <x-input-label for="grams" value="Grams *" />
                             <x-text-input 
                                 id="grams" 
                                 name="grams" 
@@ -305,7 +305,7 @@
 
                         <!-- OR&CR/Serial (shown when "Vehicles" is selected) -->
                         <div id="orcr_serial_container" class="mt-4 hidden">
-                            <x-input-label for="orcr_serial" value="OR&CR/Serial" />
+                            <x-input-label for="orcr_serial" value="OR&CR/Serial *" />
                             <x-text-input 
                                 id="orcr_serial" 
                                 name="orcr_serial" 
@@ -319,7 +319,7 @@
 
                         <!-- Item Description -->
                         <div class="mt-4">
-                            <x-input-label for="item_description" value="Item Description" />
+                            <x-input-label for="item_description" value="Item Description *" />
                             <textarea id="item_description" name="item_description" rows="4" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500" required>{{ old('item_description') }}</textarea>
                             <x-input-error :messages="$errors->get('item_description')" class="mt-2" />
                         </div>
@@ -329,6 +329,7 @@
                             name="item_image" 
                             label="Item Image" 
                             :value="old('item_image')" 
+                            :required="true"
                         />
 
                         <!-- Pawner ID/Photo -->
@@ -336,6 +337,7 @@
                             name="pawner_id_image" 
                             label="Pawner ID/Photo" 
                             :value="old('pawner_id_image')" 
+                            :required="true"
                         />
 
                         <!-- Pawn Ticket Image -->
@@ -343,7 +345,22 @@
                             name="pawn_ticket_image" 
                             label="Pawn Ticket Image" 
                             :value="old('pawn_ticket_image')" 
+                            :required="true"
                         />
+
+                        <!-- Note -->
+                        <div class="mt-6">
+                            <x-input-label for="note" value="Note" />
+                            <textarea 
+                                id="note" 
+                                name="note" 
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" 
+                                rows="3"
+                                placeholder="Add any additional notes or comments about this transaction..."
+                            >{{ old('note') }}</textarea>
+                            <p class="mt-1 text-xs text-gray-500">Optional: Add any notes or comments for staff reference.</p>
+                            <x-input-error :messages="$errors->get('note')" class="mt-2" />
+                        </div>
 
                         <div class="flex items-center justify-end mt-6 gap-4">
                             <a href="{{ route('dashboard') }}" class="text-gray-600 hover:text-gray-900 font-medium">

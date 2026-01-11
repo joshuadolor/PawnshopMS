@@ -163,6 +163,7 @@ class SanglaController extends Controller
                 'service_charge' => $serviceCharge,
                 'net_proceeds' => max(0, $netProceeds), // Ensure non-negative
                 'status' => 'active',
+                'note' => $request->input('note'),
             ];
             
             $transaction = Transaction::create($transactionData);
@@ -487,6 +488,7 @@ class SanglaController extends Controller
                 'service_charge' => $serviceCharge, // No service charge
                 'net_proceeds' => $netProceeds, // 0 for additional items (first transaction is the summary)
                 'status' => 'active',
+                'note' => $request->input('note'),
             ];
             
             $transaction = Transaction::create($transactionData);

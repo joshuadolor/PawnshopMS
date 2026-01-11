@@ -377,6 +377,7 @@ class PartialController extends Controller
                 'service_charge' => $serviceCharge,
                 'net_proceeds' => $partialAmount, // Total amount paid
                 'status' => 'active',
+                'note' => $request->input('note'),
             ]);
 
             // Create financial transaction for the partial payment

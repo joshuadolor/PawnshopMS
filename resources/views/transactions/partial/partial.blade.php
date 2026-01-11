@@ -387,6 +387,20 @@
                             </div>
                         </div>
 
+                        <!-- Note -->
+                        <div class="mt-6">
+                            <x-input-label for="note" value="Note" />
+                            <textarea 
+                                id="note" 
+                                name="note" 
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" 
+                                rows="3"
+                                placeholder="Add any additional notes or comments about this partial payment..."
+                            >{{ old('note') }}</textarea>
+                            <p class="mt-1 text-xs text-gray-500">Optional: Add any notes or comments for staff reference.</p>
+                            <x-input-error :messages="$errors->get('note')" class="mt-2" />
+                        </div>
+
                         <div class="flex items-center justify-end mt-6 gap-4">
                             <a href="{{ route('transactions.partial.search') }}" class="text-gray-600 hover:text-gray-900 font-medium">
                                 Cancel

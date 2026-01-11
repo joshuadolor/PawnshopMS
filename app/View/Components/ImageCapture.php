@@ -10,15 +10,17 @@ class ImageCapture extends Component
     public string $name;
     public string $label;
     public ?string $value;
+    public bool $required;
 
     /**
      * Create a new component instance.
      */
-    public function __construct(string $name, string $label, ?string $value = null)
+    public function __construct(string $name, string $label, ?string $value = null, bool $required = false)
     {
         $this->name = $name;
         $this->label = $label;
         $this->value = $value;
+        $this->required = $required;
     }
 
     /**

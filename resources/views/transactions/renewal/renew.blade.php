@@ -363,7 +363,7 @@
 
                             <!-- Maturity Date -->
                             <div>
-                                <x-input-label for="maturity_date" value="New Maturity Date" />
+                                <x-input-label for="maturity_date" value="New Maturity Date *" />
                                 <x-text-input 
                                     id="maturity_date" 
                                     name="maturity_date" 
@@ -379,7 +379,7 @@
 
                             <!-- Expiry Date of Redemption -->
                             <div>
-                                <x-input-label for="expiry_date" value="New Expiry Date of Redemption" />
+                                <x-input-label for="expiry_date" value="New Expiry Date of Redemption *" />
                                 <x-text-input 
                                     id="expiry_date" 
                                     name="expiry_date" 
@@ -410,7 +410,7 @@
 
                             <!-- Interest Amount (Readonly, calculated) -->
                             <div>
-                                <x-input-label for="interest_amount" value="Interest Amount to Pay" />
+                                <x-input-label for="interest_amount" value="Interest Amount to Pay *" />
                                 <x-text-input 
                                     id="interest_amount" 
                                     name="interest_amount" 
@@ -428,7 +428,7 @@
 
                             <!-- Service Charge (Readonly, calculated) -->
                             <div>
-                                <x-input-label for="service_charge" value="Service Charge" />
+                                <x-input-label for="service_charge" value="Service Charge *" />
                                 <x-text-input 
                                     id="service_charge" 
                                     name="service_charge" 
@@ -518,6 +518,20 @@
                             
                             <!-- Hidden input for late days charge amount -->
                             <input type="hidden" name="late_days_charge_amount" value="{{ number_format($lateDaysCharge, 2, '.', '') }}">
+                        </div>
+
+                        <!-- Note -->
+                        <div class="mt-6">
+                            <x-input-label for="note" value="Note" />
+                            <textarea 
+                                id="note" 
+                                name="note" 
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" 
+                                rows="3"
+                                placeholder="Add any additional notes or comments about this renewal..."
+                            >{{ old('note') }}</textarea>
+                            <p class="mt-1 text-xs text-gray-500">Optional: Add any notes or comments for staff reference.</p>
+                            <x-input-error :messages="$errors->get('note')" class="mt-2" />
                         </div>
 
                         <div class="flex items-center justify-end mt-6 gap-4">

@@ -1,7 +1,7 @@
-@props(['name', 'label', 'value' => null])
+@props(['name', 'label', 'value' => null, 'required' => false])
 
 <div class="mt-4">
-    <x-input-label :for="$name" :value="$label" />
+    <x-input-label :for="$name" :value="$label . ($required ? ' *' : '')" />
     <p class="mt-1 text-xs text-gray-500">Maximum file size: 5MB (JPEG or PNG only)</p>
     
     <div class="mt-2">

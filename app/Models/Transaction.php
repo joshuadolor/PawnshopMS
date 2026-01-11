@@ -40,6 +40,7 @@ class Transaction extends Model
         'back_date',
         'net_proceeds',
         'status',
+        'note',
     ];
 
     protected $casts = [

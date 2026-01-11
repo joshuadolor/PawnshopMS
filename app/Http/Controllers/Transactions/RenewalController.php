@@ -367,6 +367,7 @@ class RenewalController extends Controller
                 'back_date' => $backDate, // Back date flag
                 'net_proceeds' => $totalAmount, // For renewals, net_proceeds is the total amount paid (interest + service charge + additional charge + late days charge)
                 'status' => 'active',
+                'note' => $request->input('note'),
             ]);
 
             // Create financial transaction for the renewal payment (interest + service charge)

@@ -269,7 +269,7 @@
                         <div class="space-y-6">
                             <!-- Principal Amount (Readonly, calculated) -->
                             <div>
-                                <x-input-label for="principal_amount" value="Principal Amount to Pay" />
+                                <x-input-label for="principal_amount" value="Principal Amount to Pay *" />
                                 <x-text-input 
                                     id="principal_amount" 
                                     name="principal_amount" 
@@ -287,7 +287,7 @@
 
                             <!-- Service Charge (Readonly, calculated) -->
                             <div>
-                                <x-input-label for="service_charge" value="Service Charge" />
+                                <x-input-label for="service_charge" value="Service Charge *" />
                                 <x-text-input 
                                     id="service_charge" 
                                     name="service_charge" 
@@ -375,6 +375,20 @@
                             </div>
                             <input type="hidden" name="signature" id="signatureData">
                             <x-input-error :messages="$errors->get('signature')" class="mt-2" />
+                        </div>
+
+                        <!-- Note -->
+                        <div class="mt-6">
+                            <x-input-label for="note" value="Note" />
+                            <textarea 
+                                id="note" 
+                                name="note" 
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" 
+                                rows="3"
+                                placeholder="Add any additional notes or comments about this redemption..."
+                            >{{ old('note') }}</textarea>
+                            <p class="mt-1 text-xs text-gray-500">Optional: Add any notes or comments for staff reference.</p>
+                            <x-input-error :messages="$errors->get('note')" class="mt-2" />
                         </div>
 
                         <div class="flex items-center justify-end mt-6 gap-4">
