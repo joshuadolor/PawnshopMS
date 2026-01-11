@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Transactions;
 
 use App\Http\Controllers\Controller;
+use App\Services\ImageProcessingService;
 use App\Models\Transaction;
 use App\Models\Config;
 use App\Models\AdditionalChargeConfig;
@@ -17,6 +18,10 @@ use Carbon\Carbon;
 
 class TubosController extends Controller
 {
+    public function __construct(
+        private ImageProcessingService $imageService
+    ) {
+    }
     /**
      * Show the tubos search page.
      */
@@ -198,7 +203,8 @@ class TubosController extends Controller
             'late_days_charge_amount' => ['nullable', 'numeric', 'min:0'],
             'apply_additional_charge' => ['nullable', 'boolean'],
             'transaction_pawn_ticket' => ['required', 'string', 'max:100'],
-            'signature' => ['required', 'string'],
+            'signature_photo' => ['nullable', 'image', 'mimes:jpeg,png,jpg', 'max:5120'], // 5MB max
+            'signature_canvas' => ['nullable', 'string'],
         ]);
 
         $pawnTicketNumber = $request->input('pawn_ticket_number');
@@ -241,31 +247,49 @@ class TubosController extends Controller
         // Combine all item descriptions for the tubos transaction
         $combinedDescriptions = $allTransactions->pluck('item_description')->filter()->unique()->values()->implode('; ');
 
-        // Process signature (base64 to image file)
+        // Process signature - either photo file or canvas base64
         $signaturePath = null;
         $branch = $oldestTransaction->branch;
         $branchName = $branch->name;
         
         try {
-            $signatureData = $request->input('signature');
-            if ($signatureData && strpos($signatureData, 'data:image') === 0) {
-                // Extract base64 data
-                list($type, $data) = explode(';', $signatureData);
-                list(, $data) = explode(',', $data);
-                $imageData = base64_decode($data);
-                
-                // Create directory structure: transactions/signatures/YYYY-MM-DD/branch-name/
-                $dateFolder = now()->format('Y-m-d');
-                $sanitizedBranchName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $branchName);
-                $directory = "transactions/signatures/{$dateFolder}/{$sanitizedBranchName}";
-                
-                // Generate unique filename
-                $filename = 'signature_' . uniqid() . '_' . time() . '.png';
-                $filePath = "{$directory}/{$filename}";
-                
-                // Store the image
-                Storage::disk('local')->put($filePath, $imageData);
-                $signaturePath = $filePath;
+            // Check if photo signature is provided
+            if ($request->hasFile('signature_photo')) {
+                $signaturePath = $this->imageService->processAndStore(
+                    $request->file('signature_photo'),
+                    'transactions/signatures',
+                    $branchName
+                );
+            }
+            // Check if canvas signature is provided (base64)
+            elseif ($request->has('signature_canvas') && $request->input('signature_canvas')) {
+                $signatureData = $request->input('signature_canvas');
+                if ($signatureData && strpos($signatureData, 'data:image') === 0) {
+                    // Extract base64 data
+                    list($type, $data) = explode(';', $signatureData);
+                    list(, $data) = explode(',', $data);
+                    $imageData = base64_decode($data);
+                    
+                    // Create directory structure: transactions/signatures/YYYY-MM-DD/branch-name/
+                    $dateFolder = now()->format('Y-m-d');
+                    $sanitizedBranchName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $branchName);
+                    $directory = "transactions/signatures/{$dateFolder}/{$sanitizedBranchName}";
+                    
+                    // Generate unique filename
+                    $filename = 'signature_' . uniqid() . '_' . time() . '.png';
+                    $filePath = "{$directory}/{$filename}";
+                    
+                    // Store the image
+                    Storage::disk('local')->put($filePath, $imageData);
+                    $signaturePath = $filePath;
+                }
+            }
+            
+            // Validate that at least one signature method was provided
+            if (!$signaturePath) {
+                return redirect()->back()
+                    ->withInput()
+                    ->with('error', 'Please provide a signature either by taking/choosing a photo or drawing on the canvas.');
             }
         } catch (\Exception $e) {
             return redirect()->back()

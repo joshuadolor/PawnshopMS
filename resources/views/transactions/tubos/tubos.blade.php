@@ -271,7 +271,7 @@
                         </div>
                     </div>
 
-                    <form method="POST" action="{{ route('transactions.tubos.store') }}">
+                    <form method="POST" action="{{ route('transactions.tubos.store') }}" enctype="multipart/form-data">
                         @csrf
                         <input type="hidden" name="pawn_ticket_number" value="{{ $pawnTicketNumber }}">
 
@@ -397,28 +397,45 @@
 
                         <!-- Signature Section -->
                         <div class="mt-8 border-t pt-6">
-                            <x-input-label for="signature" value="Pawner Signature *" class="text-base font-semibold" />
-                            <p class="mt-1 text-sm text-gray-500 mb-4">Please sign below to confirm the redemption of this pawn ticket.</p>
+                            <x-input-label value="Pawner Signature *" class="text-base font-semibold" />
+                            <p class="mt-1 text-sm text-gray-500 mb-4">Please provide a signature by either taking/choosing a photo or drawing below.</p>
                             
-                            <div class="bg-white border-2 border-gray-300 rounded-lg p-4">
-                                <canvas 
-                                    id="signatureCanvas" 
-                                    class="border border-gray-300 rounded cursor-crosshair touch-none"
-                                    width="600"
-                                    height="200"
-                                    style="max-width: 100%; height: auto; display: block;"
-                                ></canvas>
-                                <div class="mt-3 flex gap-2">
-                                    <button 
-                                        type="button" 
-                                        id="clearSignature" 
-                                        class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 text-sm font-medium"
-                                    >
-                                        Clear Signature
-                                    </button>
-                                </div>
+                            <!-- Option 1: Photo Signature -->
+                            <div class="mb-6">
+                                <x-input-label for="signature_photo" value="Option 1: Photo Signature" class="text-sm font-medium" />
+                                <x-image-capture 
+                                    name="signature_photo" 
+                                    label="" 
+                                    :value="old('signature_photo')" 
+                                    :required="false"
+                                />
                             </div>
-                            <input type="hidden" name="signature" id="signatureData">
+                            
+                            <!-- Option 2: Canvas Signature -->
+                            <div class="mt-6">
+                                <x-input-label for="signature_canvas" value="Option 2: Draw Signature" class="text-sm font-medium" />
+                                <div class="bg-white border-2 border-gray-300 rounded-lg p-4 mt-2">
+                                    <canvas 
+                                        id="signatureCanvas" 
+                                        class="border border-gray-300 rounded cursor-crosshair touch-none"
+                                        width="600"
+                                        height="200"
+                                        style="max-width: 100%; height: auto; display: block;"
+                                    ></canvas>
+                                    <div class="mt-3 flex gap-2">
+                                        <button 
+                                            type="button" 
+                                            id="clearSignature" 
+                                            class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 text-sm font-medium"
+                                        >
+                                            Clear Signature
+                                        </button>
+                                    </div>
+                                </div>
+                                <input type="hidden" name="signature_canvas" id="signatureData">
+                                <p class="mt-1 text-xs text-gray-500">Draw your signature in the box above.</p>
+                            </div>
+                            
                             <x-input-error :messages="$errors->get('signature')" class="mt-2" />
                         </div>
 
@@ -468,106 +485,183 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            const canvas = document.getElementById('signatureCanvas');
-            const ctx = canvas.getContext('2d');
-            const signatureInput = document.getElementById('signatureData');
-            const clearBtn = document.getElementById('clearSignature');
-            const form = document.querySelector('form');
-            
-            let isDrawing = false;
-            let lastX = 0;
-            let lastY = 0;
-
-            // Set canvas background to white
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.strokeStyle = '#000000';
-            ctx.lineWidth = 2;
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-
-            // Mouse events
-            canvas.addEventListener('mousedown', startDrawing);
-            canvas.addEventListener('mousemove', draw);
-            canvas.addEventListener('mouseup', stopDrawing);
-            canvas.addEventListener('mouseout', stopDrawing);
-
-            // Touch events for mobile
-            canvas.addEventListener('touchstart', handleTouch);
-            canvas.addEventListener('touchmove', handleTouch);
-            canvas.addEventListener('touchend', stopDrawing);
-
-            function startDrawing(e) {
-                isDrawing = true;
-                const rect = canvas.getBoundingClientRect();
-                lastX = e.clientX - rect.left;
-                lastY = e.clientY - rect.top;
-            }
-
-            function draw(e) {
-                if (!isDrawing) return;
-                
-                const rect = canvas.getBoundingClientRect();
-                const currentX = e.clientX - rect.left;
-                const currentY = e.clientY - rect.top;
-
-                ctx.beginPath();
-                ctx.moveTo(lastX, lastY);
-                ctx.lineTo(currentX, currentY);
-                ctx.stroke();
-
-                lastX = currentX;
-                lastY = currentY;
-                updateSignatureData();
-            }
-
-            function handleTouch(e) {
-                e.preventDefault();
-                const touch = e.touches[0] || e.changedTouches[0];
-                const rect = canvas.getBoundingClientRect();
-                const x = touch.clientX - rect.left;
-                const y = touch.clientY - rect.top;
-
-                if (e.type === 'touchstart') {
-                    isDrawing = true;
-                    lastX = x;
-                    lastY = y;
-                } else if (e.type === 'touchmove' && isDrawing) {
-                    ctx.beginPath();
-                    ctx.moveTo(lastX, lastY);
-                    ctx.lineTo(x, y);
-                    ctx.stroke();
-                    lastX = x;
-                    lastY = y;
-                    updateSignatureData();
+            // Image capture functions - use event delegation to avoid timing issues
+            // Handle image capture button clicks using event delegation
+            document.addEventListener('click', function(e) {
+                if (e.target.closest('.image-capture-btn')) {
+                    const btn = e.target.closest('.image-capture-btn');
+                    const action = btn.getAttribute('data-action');
+                    const fieldName = btn.getAttribute('data-field');
+                    
+                    if (action === 'camera') {
+                        const input = document.getElementById(fieldName + '_input');
+                        if (input) {
+                            input.setAttribute('capture', 'environment');
+                            input.click();
+                        }
+                    } else if (action === 'select') {
+                        const input = document.getElementById(fieldName + '_input');
+                        if (input) {
+                            input.removeAttribute('capture');
+                            input.click();
+                        }
+                    } else if (action === 'remove') {
+                        const input = document.getElementById(fieldName + '_input');
+                        const preview = document.getElementById(fieldName + '_preview');
+                        const previewContainer = document.getElementById(fieldName + '_preview_container');
+                        const removeBtn = document.getElementById(fieldName + '_remove_btn');
+                        
+                        if (input) input.value = '';
+                        if (preview) preview.src = '';
+                        if (previewContainer) previewContainer.classList.add('hidden');
+                        if (removeBtn) removeBtn.classList.add('hidden');
+                    }
                 }
-            }
+            });
 
-            function stopDrawing() {
-                isDrawing = false;
-                updateSignatureData();
-            }
+            // Handle file input change to show preview
+            document.addEventListener('change', function(e) {
+                if (e.target.type === 'file' && e.target.id && e.target.id.endsWith('_input')) {
+                    const input = e.target;
+                    const fieldName = input.id.replace('_input', '');
+                    const preview = document.getElementById(fieldName + '_preview');
+                    const previewContainer = document.getElementById(fieldName + '_preview_container');
+                    const removeBtn = document.getElementById(fieldName + '_remove_btn');
+                    
+                    if (input.files && input.files[0]) {
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            if (preview) {
+                                preview.src = e.target.result;
+                            }
+                            if (previewContainer) {
+                                previewContainer.classList.remove('hidden');
+                            }
+                            if (removeBtn) {
+                                removeBtn.classList.remove('hidden');
+                            }
+                        };
+                        reader.readAsDataURL(input.files[0]);
+                    }
+                }
+            });
 
-            function updateSignatureData() {
-                // Convert canvas to base64 data URL
-                const dataURL = canvas.toDataURL('image/png');
-                signatureInput.value = dataURL;
-            }
+            // Canvas signature functionality
+            const canvas = document.getElementById('signatureCanvas');
+            if (canvas) {
+                const ctx = canvas.getContext('2d');
+                const signatureInput = document.getElementById('signatureData');
+                const clearBtn = document.getElementById('clearSignature');
+                const form = document.querySelector('form');
 
-            clearBtn.addEventListener('click', function() {
+                let isDrawing = false;
+                let lastX = 0;
+                let lastY = 0;
+
+                // Set canvas background to white
                 ctx.fillStyle = '#ffffff';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
-                signatureInput.value = '';
-            });
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 2;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
 
-            // Validate signature before form submission
-            form.addEventListener('submit', function(e) {
-                if (!signatureInput.value || signatureInput.value.trim() === '') {
-                    e.preventDefault();
-                    alert('Please provide a signature before submitting.');
-                    return false;
+                // Mouse events
+                canvas.addEventListener('mousedown', startDrawing);
+                canvas.addEventListener('mousemove', draw);
+                canvas.addEventListener('mouseup', stopDrawing);
+                canvas.addEventListener('mouseout', stopDrawing);
+
+                // Touch events for mobile
+                canvas.addEventListener('touchstart', handleTouch);
+                canvas.addEventListener('touchmove', handleTouch);
+                canvas.addEventListener('touchend', stopDrawing);
+
+                function startDrawing(e) {
+                    isDrawing = true;
+                    const rect = canvas.getBoundingClientRect();
+                    lastX = e.clientX - rect.left;
+                    lastY = e.clientY - rect.top;
                 }
-            });
+
+                function draw(e) {
+                    if (!isDrawing) return;
+                    
+                    const rect = canvas.getBoundingClientRect();
+                    const currentX = e.clientX - rect.left;
+                    const currentY = e.clientY - rect.top;
+
+                    ctx.beginPath();
+                    ctx.moveTo(lastX, lastY);
+                    ctx.lineTo(currentX, currentY);
+                    ctx.stroke();
+
+                    lastX = currentX;
+                    lastY = currentY;
+                    updateSignatureData();
+                }
+
+                function handleTouch(e) {
+                    e.preventDefault();
+                    const touch = e.touches[0] || e.changedTouches[0];
+                    const rect = canvas.getBoundingClientRect();
+                    const x = touch.clientX - rect.left;
+                    const y = touch.clientY - rect.top;
+
+                    if (e.type === 'touchstart') {
+                        isDrawing = true;
+                        lastX = x;
+                        lastY = y;
+                    } else if (e.type === 'touchmove' && isDrawing) {
+                        ctx.beginPath();
+                        ctx.moveTo(lastX, lastY);
+                        ctx.lineTo(x, y);
+                        ctx.stroke();
+                        lastX = x;
+                        lastY = y;
+                        updateSignatureData();
+                    }
+                }
+
+                function stopDrawing() {
+                    isDrawing = false;
+                    updateSignatureData();
+                }
+
+                function updateSignatureData() {
+                    // Convert canvas to base64 data URL
+                    const dataURL = canvas.toDataURL('image/png');
+                    if (signatureInput) {
+                        signatureInput.value = dataURL;
+                    }
+                }
+
+                if (clearBtn) {
+                    clearBtn.addEventListener('click', function() {
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        if (signatureInput) {
+                            signatureInput.value = '';
+                        }
+                    });
+                }
+
+                // Validate signature before form submission
+                if (form) {
+                    form.addEventListener('submit', function(e) {
+                        const signaturePhoto = document.querySelector('input[name="signature_photo"]');
+                        const signatureCanvas = document.getElementById('signatureData');
+                        const hasPhoto = signaturePhoto && signaturePhoto.files && signaturePhoto.files.length > 0;
+                        const hasCanvas = signatureCanvas && signatureCanvas.value && signatureCanvas.value.trim() !== '';
+                        
+                        if (!hasPhoto && !hasCanvas) {
+                            e.preventDefault();
+                            alert('Please provide a signature either by taking/choosing a photo or drawing on the canvas.');
+                            return false;
+                        }
+                    });
+                }
+            }
 
             // Handle additional charge toggle
             const applyAdditionalChargeCheckbox = document.getElementById('apply_additional_charge');
