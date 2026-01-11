@@ -363,12 +363,8 @@ class PartialController extends Controller
 
         $minimumRenewalAmount = $totalInterest + $serviceCharge + $additionalChargeAmount + $lateDaysCharge;
 
-        // Validate that partial amount is at least the minimum renewal amount (only if positive)
-        if ($partialAmount >= 0 && $partialAmount < $minimumRenewalAmount) {
-            return redirect()->route('transactions.partial.find', ['pawn_ticket_number' => $pawnTicketNumber])
-                ->withInput()
-                ->withErrors(['partial_amount' => "Partial amount must be at least the minimum renewal amount (₱" . number_format($minimumRenewalAmount, 2) . ")."]);
-        }
+        // Minimum renewal amount is just a guide, not a hard validation
+        // Allow any value (positive or negative) - negative values increase principal
 
         // Calculate new principal amount
         // If partial amount is negative, it increases the principal (pawner adds more money)
@@ -453,19 +449,31 @@ class PartialController extends Controller
 
             // Create financial transaction for the partial payment
             // Type: "transaction" (same family as Sangla), but this one is an ADD (money coming in)
-            // If partial amount is negative, it's money going out (pawner adding to principal)
+            // If partial amount is negative, it's money going out (pawner adding to principal) - treat as expense
             // If partial amount is positive, it's money coming in (pawner paying)
-            BranchFinancialTransaction::create([
-                'branch_id' => $branchId,
-                'user_id' => $request->user()->id,
-                'transaction_id' => $partialTransaction->id,
-                'type' => 'transaction',
-                'description' => $partialAmount >= 0 
-                    ? "Partial payment - Pawn Ticket #{$pawnTicketNumber}" 
-                    : "Principal increase - Pawn Ticket #{$pawnTicketNumber}",
-                'amount' => $partialAmount, // Can be positive (payment) or negative (increase)
-                'transaction_date' => now()->toDateString(),
-            ]);
+            if ($partialAmount >= 0) {
+                // Positive: Payment (money coming in)
+                BranchFinancialTransaction::create([
+                    'branch_id' => $branchId,
+                    'user_id' => $request->user()->id,
+                    'transaction_id' => $partialTransaction->id,
+                    'type' => 'transaction',
+                    'description' => "Partial payment - Pawn Ticket #{$pawnTicketNumber}",
+                    'amount' => $partialAmount, // Positive amount
+                    'transaction_date' => now()->toDateString(),
+                ]);
+            } else {
+                // Negative: Principal increase (money going out) - treat as expense
+                BranchFinancialTransaction::create([
+                    'branch_id' => $branchId,
+                    'user_id' => $request->user()->id,
+                    'transaction_id' => $partialTransaction->id,
+                    'type' => 'expense',
+                    'description' => "Principal increase - Pawn Ticket #{$pawnTicketNumber}",
+                    'amount' => abs($partialAmount), // Store as positive for expense
+                    'transaction_date' => now()->toDateString(),
+                ]);
+            }
 
             // Update branch balance (add the partial amount - negative values will decrease balance)
             BranchBalance::updateBalance($branchId, $partialAmount);

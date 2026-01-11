@@ -111,13 +111,13 @@
                             </div>
                             @endif
                             
-                            <!-- Minimum Renewal Amount -->
+                            <!-- Minimum Renewal Amount (Reference Guide) -->
                             <div class="border-t-2 border-yellow-400 pt-3 mt-3">
                                 <div class="flex justify-between items-center">
-                                    <span class="text-lg font-semibold text-yellow-900">Minimum Renewal Amount:</span>
+                                    <span class="text-lg font-semibold text-yellow-900">Minimum Renewal Amount (Reference):</span>
                                     <span class="text-lg font-bold text-yellow-900">₱{{ number_format($minimumRenewalAmount, 2) }}</span>
                                 </div>
-                                <p class="text-xs text-yellow-700 mt-1">Partial payment must be at least this amount. The payment will directly reduce the principal amount.</p>
+                                <p class="text-xs text-yellow-700 mt-1">This is a reference guide only. You can enter any amount (positive or negative). Positive values reduce principal, negative values increase principal.</p>
                             </div>
                         </div>
                     </div>
@@ -298,8 +298,6 @@
                                     name="partial_amount" 
                                     type="number" 
                                     step="0.01" 
-                                    min="{{ number_format($minimumRenewalAmount, 2, '.', '') }}" 
-                                    max="{{ number_format($currentPrincipalAmount, 2, '.', '') }}"
                                     class="mt-1 block w-full" 
                                     :value="old('partial_amount')" 
                                     required 
@@ -307,7 +305,10 @@
                                 />
                                 <x-input-error :messages="$errors->get('partial_amount')" class="mt-2" />
                                 <p class="mt-1 text-xs text-gray-500">
-                                    Minimum: <strong>₱{{ number_format($minimumRenewalAmount, 2) }}</strong> | Maximum: <strong>₱{{ number_format($currentPrincipalAmount, 2) }}</strong>
+                                    Positive: Payment (reduces principal) | Negative: Increase principal (pawner adds money)
+                                </p>
+                                <p class="mt-1 text-xs text-gray-400">
+                                    Reference: Minimum renewal amount is ₱{{ number_format($minimumRenewalAmount, 2) }} (for guidance only)
                                 </p>
                                 <p class="mt-1 text-xs text-blue-600" id="newPrincipalInfo">
                                     <!-- Will be populated by JavaScript -->
@@ -610,26 +611,27 @@
                     newPrincipalInfo.classList.remove('hidden');
                     newPrincipalInfo.classList.remove('text-red-600');
                     newPrincipalInfo.classList.add('text-green-600');
-                } else if (partialAmount >= minimumRenewal && partialAmount <= currentPrincipal) {
+                } else if (partialAmount > 0) {
+                    // Positive values (payment)
                     const finalPrincipal = newPrincipal < 0 ? 0 : newPrincipal;
                     newPrincipalInput.value = '₱' + finalPrincipal.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-                    newPrincipalInfo.textContent = `Partial payment of ₱${partialAmount.toFixed(2)} will reduce the principal from ₱${currentPrincipal.toFixed(2)} to ₱${finalPrincipal.toFixed(2)}.`;
-                    newPrincipalInfo.classList.remove('hidden');
-                    newPrincipalInfo.classList.remove('text-red-600');
-                    newPrincipalInfo.classList.remove('text-green-600');
-                } else if (partialAmount >= 0 && partialAmount < minimumRenewal) {
-                    newPrincipalInput.value = '₱' + currentPrincipal.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-                    newPrincipalInfo.textContent = `Warning: Partial amount must be at least ₱${minimumRenewal.toFixed(2)} (minimum renewal amount).`;
-                    newPrincipalInfo.classList.remove('hidden');
-                    newPrincipalInfo.classList.add('text-red-600');
-                    newPrincipalInfo.classList.remove('text-green-600');
-                } else if (partialAmount > currentPrincipal) {
-                    newPrincipalInput.value = '₱0.00';
-                    newPrincipalInfo.textContent = `Warning: Partial amount exceeds current principal. Maximum allowed: ₱${currentPrincipal.toFixed(2)}.`;
-                    newPrincipalInfo.classList.remove('hidden');
-                    newPrincipalInfo.classList.add('text-red-600');
-                    newPrincipalInfo.classList.remove('text-green-600');
+                    
+                    // Show informational message about minimum (as a guide, not a requirement)
+                    if (partialAmount < minimumRenewal) {
+                        newPrincipalInfo.textContent = `Partial payment of ₱${partialAmount.toFixed(2)} will reduce the principal from ₱${currentPrincipal.toFixed(2)} to ₱${finalPrincipal.toFixed(2)}. Note: Minimum renewal amount is ₱${minimumRenewal.toFixed(2)} (for reference only).`;
+                        newPrincipalInfo.classList.remove('hidden');
+                        newPrincipalInfo.classList.remove('text-red-600');
+                        newPrincipalInfo.classList.remove('text-green-600');
+                        newPrincipalInfo.classList.add('text-yellow-600');
+                    } else {
+                        newPrincipalInfo.textContent = `Partial payment of ₱${partialAmount.toFixed(2)} will reduce the principal from ₱${currentPrincipal.toFixed(2)} to ₱${finalPrincipal.toFixed(2)}.`;
+                        newPrincipalInfo.classList.remove('hidden');
+                        newPrincipalInfo.classList.remove('text-red-600');
+                        newPrincipalInfo.classList.remove('text-green-600');
+                        newPrincipalInfo.classList.remove('text-yellow-600');
+                    }
                 } else {
+                    // Zero or empty
                     newPrincipalInput.value = '₱' + currentPrincipal.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
                     newPrincipalInfo.textContent = '';
                     newPrincipalInfo.classList.add('hidden');

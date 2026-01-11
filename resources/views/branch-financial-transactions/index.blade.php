@@ -266,19 +266,33 @@
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         @php
                                             // Determine sign based on money direction
-                                            // + for Replenish, Renewal, Tubos, and Partial (transaction IN)
-                                            // - for Expense and Sangla (transaction OUT)
+                                            // + for Replenish, Renewal, Tubos, and Partial payment (transaction IN)
+                                            // - for Expense, Sangla, and Principal increase (transaction OUT)
+                                            
+                                            // Check if it's a principal increase (negative partial amount)
+                                            $isPrincipalIncrease = $transaction->isPartialTransactionEntry() 
+                                                && str_contains($transaction->description, 'Principal increase');
+                                            
                                             $isIncoming = $transaction->isReplenish() 
                                                 || $transaction->isRenewalTransactionEntry() 
                                                 || $transaction->isTubosTransactionEntry() 
-                                                || $transaction->isPartialTransactionEntry();
+                                                || ($transaction->isPartialTransactionEntry() && !$isPrincipalIncrease);
+                                            
+                                            // For principal increase or negative amounts, treat as outgoing
+                                            if ($isPrincipalIncrease || $transaction->amount < 0) {
+                                                $isIncoming = false;
+                                            }
+                                            
                                             $sign = $isIncoming ? '+' : '-';
+                                            
+                                            // Use absolute value for display to avoid double negatives
+                                            $displayAmount = abs($transaction->amount);
 
                                             // Always show positive amounts in green, negative in red
                                             $amountClass = $isIncoming ? 'text-green-600' : 'text-red-600';
                                         @endphp
                                         <div class="text-sm font-semibold {{ $amountClass }}">
-                                            {{ $sign }}₱{{ number_format($transaction->amount, 2) }}
+                                            {{ $sign }}₱{{ number_format($displayAmount, 2) }}
                                         </div>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
