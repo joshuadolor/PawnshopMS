@@ -273,6 +273,7 @@ class RenewalController extends Controller
             'expiry_date' => ['required', 'date', 'after_or_equal:maturity_date'],
             'auction_sale_date' => ['nullable', 'date', 'after_or_equal:expiry_date'],
             'interest_amount' => ['required', 'numeric', 'min:0'],
+            'transaction_pawn_ticket' => ['required', 'string', 'max:100'],
             'service_charge' => ['required', 'numeric', 'min:0'],
             'back_date' => ['nullable', 'boolean'],
         ]);
@@ -367,6 +368,7 @@ class RenewalController extends Controller
                 'back_date' => $backDate, // Back date flag
                 'net_proceeds' => $totalAmount, // For renewals, net_proceeds is the total amount paid (interest + service charge + additional charge + late days charge)
                 'status' => 'active',
+                'transaction_pawn_ticket' => $request->input('transaction_pawn_ticket'),
                 'note' => $request->input('note'),
             ]);
 

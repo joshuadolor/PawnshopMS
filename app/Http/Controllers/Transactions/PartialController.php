@@ -196,6 +196,7 @@ class PartialController extends Controller
                 'expiry_date' => ['required', 'date', 'after_or_equal:maturity_date'],
                 'auction_sale_date' => ['nullable', 'date', 'after_or_equal:expiry_date'],
                 'partial_amount' => ['required', 'numeric', 'min:0'],
+                'transaction_pawn_ticket' => ['required', 'string', 'max:100'],
                 'signature' => ['required', 'string'],
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
@@ -377,6 +378,7 @@ class PartialController extends Controller
                 'service_charge' => $serviceCharge,
                 'net_proceeds' => $partialAmount, // Total amount paid
                 'status' => 'active',
+                'transaction_pawn_ticket' => $request->input('transaction_pawn_ticket'),
                 'note' => $request->input('note'),
             ]);
 

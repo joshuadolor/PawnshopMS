@@ -400,10 +400,14 @@
                                             data-grams="{{ $transaction->grams ? number_format($transaction->grams, 1) : '' }}"
                                             data-back-date="{{ $transaction->back_date ? '1' : '0' }}"
                                             data-note="{{ $transaction->note ?? '' }}"
+                                            data-transaction-pawn-ticket="{{ $transaction->transaction_pawn_ticket ?? '' }}"
                                         >
                                             <td class="px-6 py-4 whitespace-nowrap {{ $pawnTicketNumber ? 'pl-12' : '' }}">
                                                 <div class="text-xs text-gray-500">Transaction #</div>
                                                 <div class="text-sm font-medium text-gray-900">{{ $transaction->transaction_number }}</div>
+                                                @if($transaction->transaction_pawn_ticket)
+                                                    <div class="text-xs text-gray-500 mt-1">Pawn ticket: {{ $transaction->transaction_pawn_ticket }}</div>
+                                                @endif
                                             </td>
                                             <td class="px-6 py-4 whitespace-nowrap">
                                                 <div class="text-sm text-gray-900">{{ $transaction->created_at->format('M d, Y') }}</div>
@@ -528,6 +532,7 @@
                                             data-late-days-charge="{{ number_format($childTransaction->late_days_charge ?? 0, 2) }}"
                                             data-back-date="{{ $childTransaction->back_date ? '1' : '0' }}"
                                             data-note="{{ $childTransaction->note ?? '' }}"
+                                            data-transaction-pawn-ticket="{{ $childTransaction->transaction_pawn_ticket ?? '' }}"
                                             data-orcr-serial="{{ $childTransaction->orcr_serial ?? '' }}"
                                             data-grams="{{ $childTransaction->grams ? number_format($childTransaction->grams, 1) : '' }}"
                                         >
@@ -538,6 +543,9 @@
                                                 <div class="text-[11px] text-gray-600 mt-1">
                                                     {{ $childTransaction->transaction_number }}
                                                 </div>
+                                                @if($childTransaction->transaction_pawn_ticket)
+                                                    <div class="text-[11px] text-gray-500 mt-1">Pawn ticket: {{ $childTransaction->transaction_pawn_ticket }}</div>
+                                                @endif
                                             </td>
                                             <td class="px-6 py-2 whitespace-nowrap">
                                                 <div class="text-xs text-gray-900">
@@ -632,10 +640,14 @@
                                             data-grams="{{ $transaction->grams ? number_format($transaction->grams, 1) : '' }}"
                                             data-back-date="{{ $transaction->back_date ? '1' : '0' }}"
                                             data-note="{{ $transaction->note ?? '' }}"
+                                            data-transaction-pawn-ticket="{{ $transaction->transaction_pawn_ticket ?? '' }}"
                                         >
                                                 <td class="px-6 py-4 whitespace-nowrap">
                                                     <div class="text-xs text-gray-500">Transaction #</div>
                                                     <div class="text-sm font-medium text-gray-900">{{ $transaction->transaction_number }}</div>
+                                                    @if($transaction->transaction_pawn_ticket)
+                                                        <div class="text-xs text-gray-500 mt-1">Pawn ticket: {{ $transaction->transaction_pawn_ticket }}</div>
+                                                    @endif
                                                 </td>
                                                 <td class="px-6 py-4 whitespace-nowrap">
                                                     <div class="text-sm text-gray-900">{{ $transaction->created_at->format('M d, Y') }}</div>
@@ -768,6 +780,10 @@
                         <div>
                             <p class="text-xs text-gray-500 uppercase tracking-wide">Pawn Ticket Number</p>
                             <p id="modalPawnTicketNumber" class="text-sm font-medium text-gray-900 mt-1">-</p>
+                        </div>
+                        <div id="modalTransactionPawnTicketContainer" class="hidden">
+                            <p class="text-xs text-gray-500 uppercase tracking-wide">Transaction Pawn Ticket</p>
+                            <p id="modalTransactionPawnTicket" class="text-sm font-medium text-gray-900 mt-1">-</p>
                         </div>
                     </div>
                     <div id="itemDetailsSection" class="mb-4">
@@ -1138,6 +1154,7 @@
                         orcrSerial,
                         grams,
                         note: note || '',
+                        transactionPawnTicket: transactionPawnTicket || '',
                         backDate: backDate
                     });
                 });
@@ -1160,6 +1177,12 @@
             
             // Set pawn ticket number
             document.getElementById('modalPawnTicketNumber').textContent = data.pawnTicketNumber || '-';
+            
+            // Hide transaction pawn ticket for pawn ticket view (it's per transaction)
+            const transactionPawnTicketContainer = document.getElementById('modalTransactionPawnTicketContainer');
+            if (transactionPawnTicketContainer) {
+                transactionPawnTicketContainer.classList.add('hidden');
+            }
             
             // Hide note section for pawn ticket view (notes are per transaction)
             const noteSection = document.getElementById('noteSection');
@@ -1303,6 +1326,19 @@
             
             // Set pawn ticket number
             document.getElementById('modalPawnTicketNumber').textContent = data.pawnTicketNumber || '-';
+            
+            // Show/hide transaction pawn ticket (only for renewal, partial, tubos)
+            const transactionPawnTicketContainer = document.getElementById('modalTransactionPawnTicketContainer');
+            const modalTransactionPawnTicket = document.getElementById('modalTransactionPawnTicket');
+            if (transactionPawnTicketContainer && modalTransactionPawnTicket) {
+                if (data.transactionPawnTicket && data.transactionPawnTicket.trim() !== '') {
+                    transactionPawnTicketContainer.classList.remove('hidden');
+                    modalTransactionPawnTicket.textContent = data.transactionPawnTicket;
+                } else {
+                    transactionPawnTicketContainer.classList.add('hidden');
+                    modalTransactionPawnTicket.textContent = '-';
+                }
+            }
             
             // Show/hide note section
             const noteSection = document.getElementById('noteSection');

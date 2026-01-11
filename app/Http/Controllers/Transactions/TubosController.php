@@ -171,6 +171,7 @@ class TubosController extends Controller
             'principal_amount' => ['required', 'numeric', 'min:0'],
             'service_charge' => ['required', 'numeric', 'min:0'],
             'additional_charge_amount' => ['nullable', 'numeric', 'min:0'],
+            'transaction_pawn_ticket' => ['required', 'string', 'max:100'],
             'signature' => ['required', 'string'],
         ]);
 
@@ -277,6 +278,7 @@ class TubosController extends Controller
                 'service_charge' => $serviceCharge,
                 'net_proceeds' => $totalAmount, // Total amount paid (principal + service charge + additional charge)
                 'status' => 'redeemed', // Mark as redeemed
+                'transaction_pawn_ticket' => $request->input('transaction_pawn_ticket'),
                 'note' => $request->input('note'),
             ]);
 

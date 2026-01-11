@@ -24,6 +24,7 @@ class Transaction extends Model
         'maturity_date',
         'expiry_date',
         'pawn_ticket_number',
+        'transaction_pawn_ticket',
         'pawn_ticket_image_path',
         'auction_sale_date',
         'item_type_id',

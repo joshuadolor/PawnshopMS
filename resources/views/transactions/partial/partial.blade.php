@@ -387,6 +387,22 @@
                             </div>
                         </div>
 
+                        <!-- Transaction Pawn Ticket -->
+                        <div class="mt-6">
+                            <x-input-label for="transaction_pawn_ticket" value="Transaction Pawn Ticket *" />
+                            <x-text-input 
+                                id="transaction_pawn_ticket" 
+                                name="transaction_pawn_ticket" 
+                                type="text" 
+                                class="mt-1 block w-full" 
+                                :value="old('transaction_pawn_ticket')" 
+                                placeholder="Enter transaction pawn ticket number"
+                                required
+                            />
+                            <p class="mt-1 text-xs text-gray-500">Reference field for staff use.</p>
+                            <x-input-error :messages="$errors->get('transaction_pawn_ticket')" class="mt-2" />
+                        </div>
+
                         <!-- Note -->
                         <div class="mt-6">
                             <x-input-label for="note" value="Note" />

@@ -520,6 +520,22 @@
                             <input type="hidden" name="late_days_charge_amount" value="{{ number_format($lateDaysCharge, 2, '.', '') }}">
                         </div>
 
+                        <!-- Transaction Pawn Ticket -->
+                        <div class="mt-6">
+                            <x-input-label for="transaction_pawn_ticket" value="Transaction Pawn Ticket *" />
+                            <x-text-input 
+                                id="transaction_pawn_ticket" 
+                                name="transaction_pawn_ticket" 
+                                type="text" 
+                                class="mt-1 block w-full" 
+                                :value="old('transaction_pawn_ticket')" 
+                                placeholder="Enter transaction pawn ticket number"
+                                required
+                            />
+                            <p class="mt-1 text-xs text-gray-500">Reference field for staff use.</p>
+                            <x-input-error :messages="$errors->get('transaction_pawn_ticket')" class="mt-2" />
+                        </div>
+
                         <!-- Note -->
                         <div class="mt-6">
                             <x-input-label for="note" value="Note" />
@@ -582,43 +598,45 @@
                 auctionSaleDateInput.setAttribute('min', referenceDateStr);
             }
             
-            // Handle back_date checkbox toggle
-            backDateCheckbox.addEventListener('change', function() {
-                const isChecked = this.checked;
-                
-                // Create a form to submit with pawn ticket number and back_date
-                const pawnTicketNumber = document.querySelector('input[name="pawn_ticket_number"]').value;
-                const submitForm = document.createElement('form');
-                submitForm.method = 'POST';
-                submitForm.action = '{{ route("transactions.renewal.find") }}';
-                
-                // Add CSRF token
-                const csrfInput = document.createElement('input');
-                csrfInput.type = 'hidden';
-                csrfInput.name = '_token';
-                csrfInput.value = '{{ csrf_token() }}';
-                submitForm.appendChild(csrfInput);
-                
-                // Add pawn ticket number
-                const pawnTicketInput = document.createElement('input');
-                pawnTicketInput.type = 'hidden';
-                pawnTicketInput.name = 'pawn_ticket_number';
-                pawnTicketInput.value = pawnTicketNumber;
-                submitForm.appendChild(pawnTicketInput);
-                
-                // Add back_date if checked
-                if (isChecked) {
-                    const backDateInput = document.createElement('input');
-                    backDateInput.type = 'hidden';
-                    backDateInput.name = 'back_date';
-                    backDateInput.value = '1';
-                    submitForm.appendChild(backDateInput);
-                }
-                
-                // Submit form
-                document.body.appendChild(submitForm);
-                submitForm.submit();
-            });
+            // Handle back_date checkbox toggle (only if checkbox exists)
+            if (backDateCheckbox) {
+                backDateCheckbox.addEventListener('change', function() {
+                    const isChecked = this.checked;
+                    
+                    // Create a form to submit with pawn ticket number and back_date
+                    const pawnTicketNumber = document.querySelector('input[name="pawn_ticket_number"]').value;
+                    const submitForm = document.createElement('form');
+                    submitForm.method = 'POST';
+                    submitForm.action = '{{ route("transactions.renewal.find") }}';
+                    
+                    // Add CSRF token
+                    const csrfInput = document.createElement('input');
+                    csrfInput.type = 'hidden';
+                    csrfInput.name = '_token';
+                    csrfInput.value = '{{ csrf_token() }}';
+                    submitForm.appendChild(csrfInput);
+                    
+                    // Add pawn ticket number
+                    const pawnTicketInput = document.createElement('input');
+                    pawnTicketInput.type = 'hidden';
+                    pawnTicketInput.name = 'pawn_ticket_number';
+                    pawnTicketInput.value = pawnTicketNumber;
+                    submitForm.appendChild(pawnTicketInput);
+                    
+                    // Add back_date if checked
+                    if (isChecked) {
+                        const backDateInput = document.createElement('input');
+                        backDateInput.type = 'hidden';
+                        backDateInput.name = 'back_date';
+                        backDateInput.value = '1';
+                        submitForm.appendChild(backDateInput);
+                    }
+                    
+                    // Submit form
+                    document.body.appendChild(submitForm);
+                    submitForm.submit();
+                });
+            }
 
             // Validation function to check date relationships
             function validateDates() {
