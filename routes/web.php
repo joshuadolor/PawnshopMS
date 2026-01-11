@@ -47,7 +47,7 @@ Route::middleware('auth')->group(function () {
         
         // Renewal Routes
         Route::get('/renewal/search', [RenewalController::class, 'search'])->name('renewal.search');
-        Route::post('/renewal/find', [RenewalController::class, 'find'])->name('renewal.find');
+        Route::match(['get', 'post'], '/renewal/find', [RenewalController::class, 'find'])->name('renewal.find');
         Route::post('/renewal', [RenewalController::class, 'store'])->name('renewal.store');
         
         // Tubos Routes

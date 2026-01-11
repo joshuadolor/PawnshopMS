@@ -267,6 +267,9 @@
                                             data-renewal-count="{{ $renewalTransactions->count() }}"
                                             data-principal="{{ number_format($principal, 2) }}"
                                             data-net-proceeds="{{ number_format($netProceeds, 2) }}"
+                                            data-maturity-date="{{ $latestMaturityDate }}"
+                                            data-expiry-date="{{ $latestExpiryDate }}"
+                                            data-auction-sale-date="{{ $latestAuctionSaleDate }}"
                                         >
                                             <td class="px-6 py-3">
                                                 <div class="flex  flex-col justify-between">
@@ -395,6 +398,7 @@
                                             data-net-proceeds="{{ number_format($transaction->net_proceeds, 2) }}"
                                             data-orcr-serial="{{ $transaction->orcr_serial ?? '' }}"
                                             data-grams="{{ $transaction->grams ? number_format($transaction->grams, 1) : '' }}"
+                                            data-back-date="{{ $transaction->back_date ? '1' : '0' }}"
                                         >
                                             <td class="px-6 py-4 whitespace-nowrap {{ $pawnTicketNumber ? 'pl-12' : '' }}">
                                                 <div class="text-xs text-gray-500">Transaction #</div>
@@ -520,6 +524,8 @@
                                             data-interest-rate="{{ number_format($childTransaction->interest_rate, 2) }}"
                                             data-service-charge="{{ number_format($childTransaction->service_charge, 2) }}"
                                             data-net-proceeds="{{ number_format($childTransaction->net_proceeds, 2) }}"
+                                            data-late-days-charge="{{ number_format($childTransaction->late_days_charge ?? 0, 2) }}"
+                                            data-back-date="{{ $childTransaction->back_date ? '1' : '0' }}"
                                             data-orcr-serial="{{ $childTransaction->orcr_serial ?? '' }}"
                                             data-grams="{{ $childTransaction->grams ? number_format($childTransaction->grams, 1) : '' }}"
                                         >
@@ -622,6 +628,7 @@
                                             data-net-proceeds="{{ number_format($transaction->net_proceeds, 2) }}"
                                             data-orcr-serial="{{ $transaction->orcr_serial ?? '' }}"
                                             data-grams="{{ $transaction->grams ? number_format($transaction->grams, 1) : '' }}"
+                                            data-back-date="{{ $transaction->back_date ? '1' : '0' }}"
                                         >
                                                 <td class="px-6 py-4 whitespace-nowrap">
                                                     <div class="text-xs text-gray-500">Transaction #</div>
@@ -711,6 +718,42 @@
             </div>
             
             <div class="p-6">
+                <!-- Voided Transaction Notice -->
+                <div id="voidedTransactionNotice" class="mb-4 p-4 bg-red-50 border border-red-200 rounded-md hidden">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <h3 class="text-sm font-medium text-red-800">This transaction has been voided</h3>
+                            <div class="mt-2 text-sm text-red-700">
+                                <p><strong>Voided by:</strong> <span id="modalVoidedBy">-</span></p>
+                                <p><strong>Voided at:</strong> <span id="modalVoidedAt">-</span></p>
+                                <p><strong>Reason:</strong> <span id="modalVoidReason">-</span></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Back Dated Transaction Notice -->
+                <div id="backDatedTransactionNotice" class="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-md hidden">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <h3 class="text-sm font-medium text-blue-800">Back Dated Transaction</h3>
+                            <div class="mt-2 text-sm text-blue-700">
+                                <p>This transaction was processed with the "Back Date" option enabled. The renewal was processed as if it occurred on the maturity date, and no additional charges or late days charges were applied.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Transaction Details Section -->
                 <div class="mb-6">
                     <h4 class="text-md font-semibold text-gray-900 mb-4">Transaction Information</h4>
@@ -768,7 +811,7 @@
                 </div>
 
                 <!-- Transaction Summary Section -->
-                <div class="mb-6">
+                <div id="transactionSummarySection" class="mb-6">
                     <h4 class="text-md font-semibold text-gray-900 mb-4">Transaction Summary</h4>
                     <div class="bg-gray-50 rounded-lg p-4">
                         <table class="min-w-full divide-y divide-gray-200">
@@ -785,6 +828,16 @@
                                 <tr>
                                     <td class="px-4 py-3 text-sm font-medium text-gray-900">Service Charge</td>
                                     <td class="px-4 py-3 text-sm text-gray-900 text-right" id="modalServiceCharge">₱0.00</td>
+                                </tr>
+                                <!-- Additional Charge row - only shown conditionally when it exists and is > 0 (for renewals) -->
+                                <tr id="modalAdditionalChargeRow" class="hidden">
+                                    <td class="px-4 py-3 text-sm font-medium text-gray-900">Additional Charge</td>
+                                    <td class="px-4 py-3 text-sm text-gray-900 text-right" id="modalAdditionalCharge">₱0.00</td>
+                                </tr>
+                                <!-- Late Days Charge row - only shown conditionally when it exists and is > 0 -->
+                                <tr id="modalLateDaysChargeRow" class="hidden">
+                                    <td class="px-4 py-3 text-sm font-medium text-gray-900">Late Days Charge</td>
+                                    <td class="px-4 py-3 text-sm text-gray-900 text-right" id="modalLateDaysCharge">₱0.00</td>
                                 </tr>
                                 <tr class="bg-gray-50">
                                     <td class="px-4 py-3 text-sm font-semibold text-gray-900">Net Proceeds</td>
@@ -965,6 +1018,9 @@
                     const renewalCount = this.getAttribute('data-renewal-count');
                     const principal = this.getAttribute('data-principal');
                     const netProceeds = this.getAttribute('data-net-proceeds');
+                    const maturityDate = this.getAttribute('data-maturity-date') || '';
+                    const expiryDate = this.getAttribute('data-expiry-date') || '';
+                    const auctionSaleDate = this.getAttribute('data-auction-sale-date') || '';
                     
                     showPawnTicketDetails({
                         pawnTicketNumber,
@@ -977,7 +1033,10 @@
                         sanglaCount,
                         renewalCount,
                         principal,
-                        netProceeds
+                        netProceeds,
+                        maturityDate,
+                        expiryDate,
+                        auctionSaleDate
                     });
                 });
             });
@@ -1012,15 +1071,26 @@
                     const isLatestChild = this.getAttribute('data-is-latest-child') === '1';
                     const isOlderThan6Hours = this.getAttribute('data-is-older-than-6-hours') === '1';
                     const transactionType = this.getAttribute('data-transaction-type') || '';
-                    const maturityDate = this.getAttribute('data-maturity-date');
-                    const expiryDate = this.getAttribute('data-expiry-date');
-                    const auctionSaleDate = this.getAttribute('data-auction-sale-date');
+                    // Get date attributes - getAttribute returns null if attribute doesn't exist, empty string if attribute exists but is empty
+                    const maturityDateAttr = this.getAttribute('data-maturity-date');
+                    const expiryDateAttr = this.getAttribute('data-expiry-date');
+                    const auctionSaleDateAttr = this.getAttribute('data-auction-sale-date');
+                    
+                    // Normalize: convert null or empty string to empty string for consistent handling
+                    // Empty string will be handled in setDateValue function
+                    const maturityDate = (maturityDateAttr && maturityDateAttr.trim() !== '') ? maturityDateAttr : '';
+                    const expiryDate = (expiryDateAttr && expiryDateAttr.trim() !== '') ? expiryDateAttr : '';
+                    const auctionSaleDate = (auctionSaleDateAttr && auctionSaleDateAttr.trim() !== '') ? auctionSaleDateAttr : '';
                     const loanAmount = this.getAttribute('data-loan-amount');
                     const interestRate = this.getAttribute('data-interest-rate');
                     const serviceCharge = this.getAttribute('data-service-charge');
                     const netProceeds = this.getAttribute('data-net-proceeds');
+                    const lateDaysCharge = this.getAttribute('data-late-days-charge') || '0';
                     const orcrSerial = this.getAttribute('data-orcr-serial') || '';
                     const grams = this.getAttribute('data-grams') || '';
+                    const backDateAttr = this.getAttribute('data-back-date');
+                    const backDate = backDateAttr === '1';
+                    console.log('Reading backDate attribute:', { backDateAttr, backDate, type: typeof backDate });
                     
                     showTransactionDetails({
                         itemImageUrl,
@@ -1051,8 +1121,10 @@
                         interestRate,
                         serviceCharge,
                         netProceeds,
+                        lateDaysCharge: lateDaysCharge || '0',
                         orcrSerial,
-                        grams
+                        grams,
+                        backDate: backDate
                     });
                 });
             });
@@ -1079,9 +1151,29 @@
             document.getElementById('itemDetailsSection').classList.add('hidden');
             
             // Hide transaction summary for pawn tickets
-            const summarySection = document.querySelector('.mb-6:has(#modalPrincipal)');
+            const summarySection = document.getElementById('transactionSummarySection');
             if (summarySection) {
                 summarySection.style.display = 'none';
+            }
+            
+            // Set dates from latest transaction
+            const maturityDateEl = document.getElementById('modalMaturityDate');
+            const expiryDateEl = document.getElementById('modalExpiryDate');
+            const auctionSaleDateEl = document.getElementById('modalAuctionSaleDate');
+            
+            // Helper function to check if a value is a valid non-empty string
+            const isValidDate = (value) => {
+                return value != null && value !== undefined && typeof value === 'string' && value.trim() !== '';
+            };
+            
+            if (maturityDateEl) {
+                maturityDateEl.textContent = isValidDate(data.maturityDate) ? data.maturityDate : '-';
+            }
+            if (expiryDateEl) {
+                expiryDateEl.textContent = isValidDate(data.expiryDate) ? data.expiryDate : '-';
+            }
+            if (auctionSaleDateEl) {
+                auctionSaleDateEl.textContent = isValidDate(data.auctionSaleDate) ? data.auctionSaleDate : '-';
             }
             
             // Set pawner image
@@ -1126,6 +1218,13 @@
             currentTransactionId = data.transactionId;
             currentPawnTicketNumber = null; // Clear pawn ticket number for individual transactions
             
+            // Ensure transaction summary is visible for individual transactions
+            const summarySection = document.getElementById('transactionSummarySection');
+            if (summarySection) {
+                summarySection.style.display = 'block';
+                summarySection.classList.remove('hidden');
+            }
+            
             // Show/hide voided transaction notice
             const voidedNotice = document.getElementById('voidedTransactionNotice');
             const transactionIsVoided = data.isVoided === '1' || data.isVoided === true || data.isVoided === 1;
@@ -1136,6 +1235,44 @@
                 document.getElementById('modalVoidReason').textContent = data.voidReason || '-';
             } else if (voidedNotice) {
                 voidedNotice.classList.add('hidden');
+            }
+            
+            // Show/hide back dated transaction notice
+            const backDatedNotice = document.getElementById('backDatedTransactionNotice');
+            // Handle backDate: it can be boolean true/false, string '1'/'0', or number 1/0
+            // Convert to boolean for consistent checking
+            const backDateValue = data.backDate;
+            // More robust check - handle all possible formats
+            let isBackDated = false;
+            if (backDateValue === true || backDateValue === 'true' || backDateValue === 1 || backDateValue === '1') {
+                isBackDated = true;
+            } else if (typeof backDateValue === 'string' && backDateValue.toLowerCase() === 'true') {
+                isBackDated = true;
+            } else if (backDateValue === false || backDateValue === 'false' || backDateValue === 0 || backDateValue === '0' || backDateValue === null || backDateValue === undefined) {
+                isBackDated = false;
+            }
+            
+            console.log('Back date notice check:', {
+                backDateValue: backDateValue,
+                backDateType: typeof backDateValue,
+                backDateString: String(backDateValue),
+                isBackDated: isBackDated,
+                noticeElement: !!backDatedNotice
+            });
+            
+            if (backDatedNotice) {
+                if (isBackDated) {
+                    backDatedNotice.classList.remove('hidden');
+                    backDatedNotice.style.display = 'block';
+                    backDatedNotice.style.visibility = 'visible';
+                    console.log('Back dated notice should be visible now');
+                } else {
+                    backDatedNotice.classList.add('hidden');
+                    backDatedNotice.style.display = 'none';
+                    console.log('Back dated notice hidden - backDateValue:', backDateValue, 'type:', typeof backDateValue);
+                }
+            } else {
+                console.error('Back dated notice element not found!');
             }
             
             // Set transaction number
@@ -1222,10 +1359,10 @@
                 gramsSection.classList.add('hidden');
             }
 
-            // Show transaction summary
-            const summarySection = document.querySelector('.mb-6:has(#modalPrincipal)');
+            // Show transaction summary - always show for individual transactions (already set above)
             if (summarySection) {
                 summarySection.style.display = 'block';
+                summarySection.classList.remove('hidden');
             }
             
             // If this is a renewal transaction, fetch and display all related items
@@ -1261,10 +1398,25 @@
                 voidBtn.classList.remove('hidden');
             }
             
-            // Set dates
-            document.getElementById('modalMaturityDate').textContent = data.maturityDate || '-';
-            document.getElementById('modalExpiryDate').textContent = data.expiryDate || '-';
-            document.getElementById('modalAuctionSaleDate').textContent = data.auctionSaleDate || '-';
+            // Set dates (handle null, undefined, and empty string values)
+            const maturityDateEl = document.getElementById('modalMaturityDate');
+            const expiryDateEl = document.getElementById('modalExpiryDate');
+            const auctionSaleDateEl = document.getElementById('modalAuctionSaleDate');
+            
+            // Helper function to check if a value is a valid non-empty string
+            const isValidDate = (value) => {
+                return value != null && value !== undefined && typeof value === 'string' && value.trim() !== '';
+            };
+            
+            if (maturityDateEl) {
+                maturityDateEl.textContent = isValidDate(data.maturityDate) ? data.maturityDate : '-';
+            }
+            if (expiryDateEl) {
+                expiryDateEl.textContent = isValidDate(data.expiryDate) ? data.expiryDate : '-';
+            }
+            if (auctionSaleDateEl) {
+                auctionSaleDateEl.textContent = isValidDate(data.auctionSaleDate) ? data.auctionSaleDate : '-';
+            }
             
             // Calculate and set transaction summary
             const principal = parseFloat(data.loanAmount.replace(/,/g, '')) || 0;
@@ -1272,11 +1424,45 @@
             const serviceCharge = parseFloat(data.serviceCharge.replace(/,/g, '')) || 0;
             const interest = principal * (interestRate / 100);
             const netProceeds = parseFloat(data.netProceeds.replace(/,/g, '')) || 0;
+            const lateDaysCharge = parseFloat((data.lateDaysCharge || '0').replace(/,/g, '')) || 0;
+            
+            // For renewal transactions, calculate additional charge from net_proceeds
+            // net_proceeds = interest + service_charge + additional_charge + late_days_charge
+            // So: additional_charge = net_proceeds - interest - service_charge - late_days_charge
+            const isRenewal = data.transactionType === 'renew';
+            let additionalCharge = 0;
+            if (isRenewal) {
+                additionalCharge = netProceeds - interest - serviceCharge - lateDaysCharge;
+                // Round to 2 decimal places and ensure non-negative
+                additionalCharge = Math.max(0, Math.round(additionalCharge * 100) / 100);
+            }
             
             document.getElementById('modalPrincipal').textContent = '₱' + principal.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
             document.getElementById('modalInterest').textContent = '₱' + interest.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
             document.getElementById('modalServiceCharge').textContent = '₱' + serviceCharge.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
             document.getElementById('modalNetProceeds').textContent = '₱' + netProceeds.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+            
+            // Show/hide additional charge row (only for renewals when > 0)
+            const additionalChargeRow = document.getElementById('modalAdditionalChargeRow');
+            if (additionalChargeRow) {
+                if (isRenewal && additionalCharge > 0) {
+                    additionalChargeRow.classList.remove('hidden');
+                    document.getElementById('modalAdditionalCharge').textContent = '₱' + additionalCharge.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                } else {
+                    additionalChargeRow.classList.add('hidden');
+                }
+            }
+            
+            // Show/hide late days charge row (only when > 0)
+            const lateDaysChargeRow = document.getElementById('modalLateDaysChargeRow');
+            if (lateDaysChargeRow) {
+                if (lateDaysCharge > 0) {
+                    lateDaysChargeRow.classList.remove('hidden');
+                    document.getElementById('modalLateDaysCharge').textContent = '₱' + lateDaysCharge.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                } else {
+                    lateDaysChargeRow.classList.add('hidden');
+                }
+            }
             
             // Set images
             document.getElementById('modalItemImage').src = data.itemImageUrl;
@@ -1423,6 +1609,21 @@
         }
 
         function closeTransactionImagesModal() {
+            // Reset summary section visibility when closing modal
+            const summarySection = document.getElementById('transactionSummarySection');
+            if (summarySection) {
+                summarySection.style.display = 'block';
+                summarySection.classList.remove('hidden');
+            }
+            // Hide notices when closing modal
+            const voidedNotice = document.getElementById('voidedTransactionNotice');
+            if (voidedNotice) {
+                voidedNotice.classList.add('hidden');
+            }
+            const backDatedNotice = document.getElementById('backDatedTransactionNotice');
+            if (backDatedNotice) {
+                backDatedNotice.classList.add('hidden');
+            }
             document.getElementById('transactionImagesModal').close();
         }
 

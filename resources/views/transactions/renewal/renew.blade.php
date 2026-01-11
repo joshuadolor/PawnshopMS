@@ -85,13 +85,31 @@
                             <div class="mb-3">
                                 <div class="flex justify-between items-center text-sm">
                                     <span class="text-yellow-800">
-                                        @if($additionalChargeAmount > 0 && $additionalChargeConfig)
+                                        @if($backDate)
+                                            Additional Charge (Back Dated - No Charge):
+                                        @elseif($additionalChargeAmount > 0 && $additionalChargeConfig)
                                             Additional Charge ({{ $additionalChargeType === 'EC' ? 'Exceeded Charge' : 'Late Days' }} - {{ $daysExceeded }} day(s), {{ $additionalChargeConfig->percentage }}% of ₱{{ number_format($currentPrincipalAmount, 2) }}):
                                         @else
                                             Additional Charge:
                                         @endif
                                     </span>
                                     <span class="font-medium text-yellow-900">₱{{ number_format($additionalChargeAmount, 2) }}</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Late Days Charge -->
+                            <div class="mb-3">
+                                <div class="flex justify-between items-center text-sm">
+                                    <span class="text-yellow-800">
+                                        @if($backDate)
+                                            Late Days Charge (Back Dated - No Charge):
+                                        @elseif($lateDaysCharge > 0 && isset($lateDaysChargeBreakdown))
+                                            Late Days Charge ({{ $lateDaysChargeBreakdown['late_days'] }} day(s), ({{ number_format($lateDaysChargeBreakdown['interest'], 2) }} / 30) × {{ $lateDaysChargeBreakdown['late_days'] }}):
+                                        @else
+                                            Late Days Charge:
+                                        @endif
+                                    </span>
+                                    <span class="font-medium text-yellow-900">₱{{ number_format($lateDaysCharge, 2) }}</span>
                                 </div>
                             </div>
                             
@@ -171,11 +189,11 @@
                                 </div>
                                 <div>
                                     <p class="text-sm text-gray-600">Current Maturity Date</p>
-                                    <p class="text-sm font-medium text-gray-900">{{ $transaction->maturity_date->format('M d, Y') }}</p>
+                                    <p class="text-sm font-medium text-gray-900">{{ $latestTransaction->maturity_date->format('M d, Y') }}</p>
                                 </div>
                                 <div>
                                     <p class="text-sm text-gray-600">Current Expiry Date</p>
-                                    <p class="text-sm font-medium text-gray-900">{{ $transaction->expiry_date->format('M d, Y') }}</p>
+                                    <p class="text-sm font-medium text-gray-900">{{ $latestTransaction->expiry_date->format('M d, Y') }}</p>
                                 </div>
                             </div>
                             
@@ -321,6 +339,28 @@
                         <input type="hidden" name="pawn_ticket_number" value="{{ $pawnTicketNumber }}">
 
                         <div class="space-y-6">
+                            <!-- Back Date Checkbox (only show if transaction is overdue) -->
+                            @if($isOverdue)
+                                <div class="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
+                                    <div class="flex items-center">
+                                        <input 
+                                            id="back_date" 
+                                            name="back_date" 
+                                            type="checkbox" 
+                                            value="1"
+                                            class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                            {{ old('back_date', $backDate) ? 'checked' : '' }}
+                                        />
+                                        <label for="back_date" class="ml-2 block text-sm font-medium text-gray-900">
+                                            Back Date
+                                        </label>
+                                    </div>
+                                    <p class="mt-2 text-xs text-blue-700">
+                                        When checked, the renewal will be processed as if today is the maturity date. This will remove additional charges and late days charges, and adjust the date calculations accordingly.
+                                    </p>
+                                </div>
+                            @endif
+
                             <!-- Maturity Date -->
                             <div>
                                 <x-input-label for="maturity_date" value="New Maturity Date" />
@@ -328,9 +368,10 @@
                                     id="maturity_date" 
                                     name="maturity_date" 
                                     type="date" 
-                                    class="mt-1 block w-full" 
+                                    class="mt-1 block w-full bg-gray-100" 
                                     :value="old('maturity_date', $defaultMaturityDate)" 
                                     required 
+                                    readonly
                                 />
                                 <x-input-error :messages="$errors->get('maturity_date')" class="mt-2" />
                                 <p class="mt-1 text-xs text-gray-500">The new maturity date for the renewed transaction.</p>
@@ -343,9 +384,10 @@
                                     id="expiry_date" 
                                     name="expiry_date" 
                                     type="date" 
-                                    class="mt-1 block w-full" 
-                                    :value="old('expiry_date')" 
+                                    class="mt-1 block w-full bg-gray-100" 
+                                    :value="old('expiry_date', $defaultExpiryDate)" 
                                     required 
+                                    readonly
                                 />
                                 <x-input-error :messages="$errors->get('expiry_date')" class="mt-2" />
                                 <p class="mt-1 text-xs text-gray-500">This will be auto-calculated based on maturity date + {{ $daysBeforeRedemption }} days.</p>
@@ -358,8 +400,9 @@
                                     id="auction_sale_date" 
                                     name="auction_sale_date" 
                                     type="date" 
-                                    class="mt-1 block w-full" 
-                                    :value="old('auction_sale_date')" 
+                                    class="mt-1 block w-full bg-gray-100" 
+                                    :value="old('auction_sale_date', $defaultAuctionSaleDate)" 
+                                    readonly
                                 />
                                 <x-input-error :messages="$errors->get('auction_sale_date')" class="mt-2" />
                                 <p class="mt-1 text-xs text-gray-500">This will be auto-calculated based on expiry date + {{ $daysBeforeAuctionSale }} days.</p>
@@ -422,6 +465,27 @@
                                 </p>
                             </div>
 
+                            <!-- Late Days Charge (Readonly, calculated) -->
+                            <div>
+                                <x-input-label for="late_days_charge" value="Late Days Charge" />
+                                <x-text-input 
+                                    id="late_days_charge" 
+                                    name="late_days_charge_display" 
+                                    type="text" 
+                                    class="mt-1 block w-full bg-gray-100" 
+                                    value="₱{{ number_format($lateDaysCharge, 2) }}" 
+                                    readonly
+                                    disabled
+                                />
+                                <p class="mt-1 text-xs text-gray-500">
+                                    @if($lateDaysCharge > 0 && isset($lateDaysChargeBreakdown))
+                                        {{ $lateDaysChargeBreakdown['late_days'] }} day(s) late, (Interest: ₱{{ number_format($lateDaysChargeBreakdown['interest'], 2) }} / 30) × {{ $lateDaysChargeBreakdown['late_days'] }} = ₱{{ number_format($lateDaysCharge, 2) }}
+                                    @else
+                                        No late days charge applicable
+                                    @endif
+                                </p>
+                            </div>
+
                             <!-- Total Amount (Readonly, calculated) -->
                             <div>
                                 <x-input-label for="total_amount" value="Total Amount to Pay" />
@@ -441,11 +505,19 @@
                                     @else
                                         + Additional Charge (if applicable)
                                     @endif
+                                    @if($lateDaysCharge > 0)
+                                        + Late Days Charge
+                                    @else
+                                        + Late Days Charge (if applicable)
+                                    @endif
                                 </p>
                             </div>
 
                             <!-- Hidden input for additional charge amount -->
                             <input type="hidden" name="additional_charge_amount" value="{{ number_format($additionalChargeAmount, 2, '.', '') }}">
+                            
+                            <!-- Hidden input for late days charge amount -->
+                            <input type="hidden" name="late_days_charge_amount" value="{{ number_format($lateDaysCharge, 2, '.', '') }}">
                         </div>
 
                         <div class="flex items-center justify-end mt-6 gap-4">
@@ -467,21 +539,72 @@
             const maturityDateInput = document.getElementById('maturity_date');
             const expiryDateInput = document.getElementById('expiry_date');
             const auctionSaleDateInput = document.getElementById('auction_sale_date');
+            const backDateCheckbox = document.getElementById('back_date');
             const form = document.querySelector('form');
             
             const daysBeforeRedemption = {{ $daysBeforeRedemption }};
             const daysBeforeAuctionSale = {{ $daysBeforeAuctionSale }};
+            const maturityDateStr = @json($maturityDate); // Previous transaction's maturity date
+            const backDateChecked = {{ old('back_date', $backDate) ? 'true' : 'false' }};
 
             // Set minimum date to today (no past dates allowed)
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const todayStr = today.toISOString().split('T')[0];
+            const actualToday = new Date();
+            actualToday.setHours(0, 0, 0, 0);
+            const actualTodayStr = actualToday.toISOString().split('T')[0];
             
-            maturityDateInput.setAttribute('min', todayStr);
-            expiryDateInput.setAttribute('min', todayStr);
-            if (auctionSaleDateInput) {
-                auctionSaleDateInput.setAttribute('min', todayStr);
+            // Determine reference date: if back_date is checked, use maturity date; otherwise use today
+            let referenceDate = actualToday;
+            let referenceDateStr = actualTodayStr;
+            
+            if (backDateChecked && maturityDateStr) {
+                referenceDate = new Date(maturityDateStr);
+                referenceDate.setHours(0, 0, 0, 0);
+                referenceDateStr = referenceDate.toISOString().split('T')[0];
             }
+            
+            maturityDateInput.setAttribute('min', referenceDateStr);
+            expiryDateInput.setAttribute('min', referenceDateStr);
+            if (auctionSaleDateInput) {
+                auctionSaleDateInput.setAttribute('min', referenceDateStr);
+            }
+            
+            // Handle back_date checkbox toggle
+            backDateCheckbox.addEventListener('change', function() {
+                const isChecked = this.checked;
+                
+                // Create a form to submit with pawn ticket number and back_date
+                const pawnTicketNumber = document.querySelector('input[name="pawn_ticket_number"]').value;
+                const submitForm = document.createElement('form');
+                submitForm.method = 'POST';
+                submitForm.action = '{{ route("transactions.renewal.find") }}';
+                
+                // Add CSRF token
+                const csrfInput = document.createElement('input');
+                csrfInput.type = 'hidden';
+                csrfInput.name = '_token';
+                csrfInput.value = '{{ csrf_token() }}';
+                submitForm.appendChild(csrfInput);
+                
+                // Add pawn ticket number
+                const pawnTicketInput = document.createElement('input');
+                pawnTicketInput.type = 'hidden';
+                pawnTicketInput.name = 'pawn_ticket_number';
+                pawnTicketInput.value = pawnTicketNumber;
+                submitForm.appendChild(pawnTicketInput);
+                
+                // Add back_date if checked
+                if (isChecked) {
+                    const backDateInput = document.createElement('input');
+                    backDateInput.type = 'hidden';
+                    backDateInput.name = 'back_date';
+                    backDateInput.value = '1';
+                    submitForm.appendChild(backDateInput);
+                }
+                
+                // Submit form
+                document.body.appendChild(submitForm);
+                submitForm.submit();
+            });
 
             // Validation function to check date relationships
             function validateDates() {
@@ -495,11 +618,11 @@
                 let isValid = true;
                 const errors = [];
 
-                // Check if maturity date is in the past
-                if (maturityDate && new Date(maturityDate) < today) {
+                // Check if maturity date is before reference date
+                if (maturityDate && new Date(maturityDate) < referenceDate) {
                     isValid = false;
-                    errors.push('Maturity date cannot be in the past.');
-                    showFieldError(maturityDateInput, 'Maturity date cannot be in the past.');
+                    errors.push('Maturity date cannot be before the reference date.');
+                    showFieldError(maturityDateInput, 'Maturity date cannot be before the reference date.');
                 }
 
                 // Check if expiry date is before maturity date
@@ -562,9 +685,9 @@
                 if (maturityDate) {
                     const maturity = new Date(maturityDate);
                     
-                    // Validate maturity date is not in the past
-                    if (maturity < today) {
-                        showFieldError(maturityDateInput, 'Maturity date cannot be in the past.');
+                    // Validate maturity date is not before reference date
+                    if (maturity < referenceDate) {
+                        showFieldError(maturityDateInput, 'Maturity date cannot be before the reference date.');
                         return;
                     }
                     

@@ -15,7 +15,7 @@ class AdditionalChargeConfigSeeder extends Seeder
         AdditionalChargeConfig::truncate();
         // LD (Late Days) configurations for renewal transactions
         AdditionalChargeConfig::create([
-            'start_day' => 4,
+            'start_day' => 2,
             'end_day' => 31,
             'percentage' => 2.00,
             'type' => 'LD',

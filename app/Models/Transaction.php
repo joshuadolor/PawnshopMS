@@ -36,6 +36,8 @@ class Transaction extends Model
         'grams',
         'orcr_serial',
         'service_charge',
+        'late_days_charge',
+        'back_date',
         'net_proceeds',
         'status',
     ];
@@ -49,6 +51,8 @@ class Transaction extends Model
         'auction_sale_date' => 'date',
         'grams' => 'decimal:1',
         'service_charge' => 'decimal:2',
+        'late_days_charge' => 'decimal:2',
+        'back_date' => 'boolean',
         'net_proceeds' => 'decimal:2',
     ];
 
