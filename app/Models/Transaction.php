@@ -38,6 +38,7 @@ class Transaction extends Model
         'orcr_serial',
         'service_charge',
         'late_days_charge',
+        'apply_additional_charge',
         'back_date',
         'net_proceeds',
         'status',
@@ -54,6 +55,7 @@ class Transaction extends Model
         'grams' => 'decimal:1',
         'service_charge' => 'decimal:2',
         'late_days_charge' => 'decimal:2',
+        'apply_additional_charge' => 'boolean',
         'back_date' => 'boolean',
         'net_proceeds' => 'decimal:2',
     ];

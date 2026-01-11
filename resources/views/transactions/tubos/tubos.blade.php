@@ -73,7 +73,7 @@
                             
                             
                             <!-- Additional Charge -->
-                            <div class="mb-3">
+                            <div class="mb-3" id="payment_summary_additional_charge">
                                 <div class="flex justify-between items-center text-sm">
                                     <span class="text-green-800">
                                         @if($additionalChargeAmount > 0 && $additionalChargeConfig)
@@ -82,7 +82,7 @@
                                             Additional Charge:
                                         @endif
                                     </span>
-                                    <span class="font-medium text-green-900">₱{{ number_format($additionalChargeAmount, 2) }}</span>
+                                    <span class="font-medium text-green-900" id="payment_summary_additional_charge_amount">₱{{ number_format($additionalChargeAmount, 2) }}</span>
                                 </div>
                             </div>
                             
@@ -106,7 +106,7 @@
                             <div class="border-t-2 border-green-400 pt-3 mt-3">
                                 <div class="flex justify-between items-center">
                                     <span class="text-lg font-semibold text-green-900">Total Amount to Pay:</span>
-                                    <span class="text-lg font-bold text-green-900">₱{{ number_format($totalAmountToPay, 2) }}</span>
+                                    <span class="text-lg font-bold text-green-900" id="payment_summary_total_amount">₱{{ number_format($totalAmountToPay, 2) }}</span>
                                 </div>
                             </div>
                         </div>
@@ -294,6 +294,32 @@
                                 <p class="mt-1 text-xs text-gray-500">This is the principal amount (loan amount) to be redeemed.</p>
                             </div>
 
+                            <!-- Additional Charge Toggle -->
+                            @if($additionalChargeAmount > 0 && $additionalChargeConfig)
+                            <div class="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+                                <div class="flex items-start">
+                                    <div class="flex items-center h-5">
+                                        <input 
+                                            id="apply_additional_charge" 
+                                            name="apply_additional_charge" 
+                                            type="checkbox" 
+                                            value="1"
+                                            class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                            checked
+                                        />
+                                    </div>
+                                    <div class="ml-3 text-sm">
+                                        <label for="apply_additional_charge" class="font-medium text-yellow-900 cursor-pointer">
+                                            Apply Additional Charge
+                                        </label>
+                                        <p class="text-xs text-yellow-700 mt-1">
+                                            {{ $additionalChargeType === 'EC' ? 'Exceeded Charge' : 'Late Days' }} - {{ $daysExceeded }} day(s) exceeded, {{ $additionalChargeConfig->percentage }}% of current principal (₱{{ number_format($currentPrincipalAmount, 2) }})
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            @endif
+
                             <!-- Additional Charge (Readonly, calculated) -->
                             <div>
                                 <x-input-label for="additional_charge" value="Additional Charge" />
@@ -364,7 +390,7 @@
                             </div>
 
                             <!-- Hidden input for additional charge amount -->
-                            <input type="hidden" name="additional_charge_amount" value="{{ number_format($additionalChargeAmount, 2, '.', '') }}">
+                            <input type="hidden" id="additional_charge_amount" name="additional_charge_amount" value="{{ number_format($additionalChargeAmount, 2, '.', '') }}">
                             <!-- Hidden input for late days charge amount -->
                             <input type="hidden" name="late_days_charge_amount" value="{{ number_format($lateDaysCharge, 2, '.', '') }}">
                         </div>
@@ -542,6 +568,53 @@
                     return false;
                 }
             });
+
+            // Handle additional charge toggle
+            const applyAdditionalChargeCheckbox = document.getElementById('apply_additional_charge');
+            const additionalChargeDisplay = document.getElementById('additional_charge');
+            const additionalChargeAmountInput = document.getElementById('additional_charge_amount');
+            const totalAmountDisplay = document.getElementById('total_amount');
+            
+            // Store original values
+            const originalAdditionalChargeAmount = parseFloat(additionalChargeAmountInput ? additionalChargeAmountInput.value : 0) || 0;
+            const lateDaysChargeAmount = parseFloat(document.querySelector('input[name="late_days_charge_amount"]') ? document.querySelector('input[name="late_days_charge_amount"]').value : 0) || 0;
+            const principalAmount = parseFloat(document.querySelector('input[name="principal_amount"]') ? document.querySelector('input[name="principal_amount"]').value : 0) || 0;
+
+            function updateTotalAmount() {
+                const applyAdditionalCharge = applyAdditionalChargeCheckbox ? applyAdditionalChargeCheckbox.checked : true;
+                const currentAdditionalCharge = applyAdditionalCharge ? originalAdditionalChargeAmount : 0;
+                const totalAmount = principalAmount + currentAdditionalCharge + lateDaysChargeAmount;
+                
+                // Format currency
+                const formatCurrency = (amount) => {
+                    return '₱' + amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                };
+                
+                // Update form display
+                if (additionalChargeDisplay) {
+                    additionalChargeDisplay.value = formatCurrency(currentAdditionalCharge);
+                }
+                if (additionalChargeAmountInput) {
+                    additionalChargeAmountInput.value = currentAdditionalCharge.toFixed(2);
+                }
+                if (totalAmountDisplay) {
+                    totalAmountDisplay.value = formatCurrency(totalAmount);
+                }
+                
+                // Update payment summary section
+                const paymentSummaryAdditionalCharge = document.getElementById('payment_summary_additional_charge_amount');
+                const paymentSummaryTotal = document.getElementById('payment_summary_total_amount');
+                if (paymentSummaryAdditionalCharge) {
+                    paymentSummaryAdditionalCharge.textContent = formatCurrency(currentAdditionalCharge);
+                }
+                if (paymentSummaryTotal) {
+                    paymentSummaryTotal.textContent = formatCurrency(totalAmount);
+                }
+            }
+
+            if (applyAdditionalChargeCheckbox) {
+                applyAdditionalChargeCheckbox.addEventListener('change', updateTotalAmount);
+            }
         });
     </script>
 </x-app-layout>

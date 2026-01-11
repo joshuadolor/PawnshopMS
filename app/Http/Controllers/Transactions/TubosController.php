@@ -196,6 +196,7 @@ class TubosController extends Controller
             'principal_amount' => ['required', 'numeric', 'min:0'],
             'additional_charge_amount' => ['nullable', 'numeric', 'min:0'],
             'late_days_charge_amount' => ['nullable', 'numeric', 'min:0'],
+            'apply_additional_charge' => ['nullable', 'boolean'],
             'transaction_pawn_ticket' => ['required', 'string', 'max:100'],
             'signature' => ['required', 'string'],
         ]);
@@ -232,6 +233,9 @@ class TubosController extends Controller
         $serviceCharge = 0; // No service charge for tubos
         $additionalChargeAmount = (float) ($request->input('additional_charge_amount') ?? 0);
         $lateDaysCharge = (float) ($request->input('late_days_charge_amount') ?? 0);
+        // Checkbox sends value when checked, nothing when unchecked
+        // If checkbox is present in request, it's checked (true), otherwise unchecked (false)
+        $applyAdditionalCharge = $request->has('apply_additional_charge') ? true : false;
         $totalAmount = $principalAmount + $additionalChargeAmount + $lateDaysCharge; // No service charge for tubos
 
         // Combine all item descriptions for the tubos transaction
@@ -270,7 +274,7 @@ class TubosController extends Controller
         }
 
         // Use database transaction to ensure data integrity
-        DB::transaction(function () use ($allTransactions, $request, $branchId, $principalAmount, $serviceCharge, $additionalChargeAmount, $lateDaysCharge, $totalAmount, $pawnTicketNumber, $oldestTransaction, $combinedDescriptions, $signaturePath) {
+        DB::transaction(function () use ($allTransactions, $request, $branchId, $principalAmount, $serviceCharge, $additionalChargeAmount, $lateDaysCharge, $applyAdditionalCharge, $totalAmount, $pawnTicketNumber, $oldestTransaction, $combinedDescriptions, $signaturePath) {
             // Generate tubos transaction number
             $tubosTransactionNumber = $this->generateTubosTransactionNumber();
 
@@ -303,6 +307,7 @@ class TubosController extends Controller
                 'orcr_serial' => $oldestTransaction->orcr_serial,
                 'service_charge' => $serviceCharge,
                 'late_days_charge' => $lateDaysCharge,
+                'apply_additional_charge' => $applyAdditionalCharge,
                 'net_proceeds' => $totalAmount, // Total amount paid (principal + additional charge + late days charge, no service charge for tubos)
                 'status' => 'redeemed', // Mark as redeemed
                 'transaction_pawn_ticket' => $request->input('transaction_pawn_ticket'),
