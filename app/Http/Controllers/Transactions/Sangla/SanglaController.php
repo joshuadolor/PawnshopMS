@@ -272,9 +272,18 @@ class SanglaController extends Controller
                 ->with('error', 'No active transaction found with the provided pawn ticket number. All transactions for this pawn ticket are voided.');
         }
 
+        // Check if more than 6 hours have passed since the first transaction
+        $hoursSinceFirstTransaction = now()->diffInHours($firstTransaction->created_at);
+        if ($hoursSinceFirstTransaction > 6) {
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'Cannot add additional item. More than 6 hours have passed since the first transaction was created. The first transaction was created on ' . $firstTransaction->created_at->format('M d, Y h:i A') . '.');
+        }
+
         // Check if there are any child transactions (additional items or renewals) with this pawn ticket number
         $childTransactions = Transaction::where('pawn_ticket_number', $pawnTicketNumber)
             ->where('id', '!=', $firstTransaction->id)
+            ->where('type', '!=', 'sangla')
             ->whereDoesntHave('voided')
             ->get();
 
