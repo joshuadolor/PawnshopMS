@@ -1117,6 +1117,7 @@
                     const orcrSerial = this.getAttribute('data-orcr-serial') || '';
                     const grams = this.getAttribute('data-grams') || '';
                     const note = this.getAttribute('data-note') || '';
+                    const transactionPawnTicket = this.getAttribute('data-transaction-pawn-ticket') || '';
                     const backDateAttr = this.getAttribute('data-back-date');
                     const backDate = backDateAttr === '1';
                     console.log('Reading backDate attribute:', { backDateAttr, backDate, type: typeof backDate });

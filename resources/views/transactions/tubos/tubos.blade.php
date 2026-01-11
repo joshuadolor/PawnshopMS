@@ -71,13 +71,6 @@
                                 </div>
                             </div>
                             
-                            <!-- Service Charge -->
-                            <div class="mb-3">
-                                <div class="flex justify-between items-center text-sm">
-                                    <span class="text-green-800">Service Charge:</span>
-                                    <span class="font-medium text-green-900">₱{{ number_format($totalServiceCharge, 2) }}</span>
-                                </div>
-                            </div>
                             
                             <!-- Additional Charge -->
                             <div class="mb-3">
@@ -285,24 +278,6 @@
                                 <p class="mt-1 text-xs text-gray-500">This is the principal amount (loan amount) to be redeemed.</p>
                             </div>
 
-                            <!-- Service Charge (Readonly, calculated) -->
-                            <div>
-                                <x-input-label for="service_charge" value="Service Charge *" />
-                                <x-text-input 
-                                    id="service_charge" 
-                                    name="service_charge" 
-                                    type="number" 
-                                    step="0.01" 
-                                    min="0" 
-                                    class="mt-1 block w-full bg-gray-100" 
-                                    :value="old('service_charge', number_format($totalServiceCharge, 2, '.', ''))" 
-                                    required 
-                                    readonly
-                                />
-                                <x-input-error :messages="$errors->get('service_charge')" class="mt-2" />
-                                <p class="mt-1 text-xs text-gray-500">Service charge (₱{{ number_format($serviceCharge, 2) }}) per pawn ticket.</p>
-                            </div>
-
                             <!-- Additional Charge (Readonly, calculated) -->
                             <div>
                                 <x-input-label for="additional_charge" value="Additional Charge" />
@@ -337,7 +312,7 @@
                                     disabled
                                 />
                                 <p class="mt-1 text-xs text-gray-500">
-                                    Total amount: Principal + Service Charge
+                                    Total amount: Principal
                                     @if($additionalChargeAmount > 0 && $additionalChargeConfig)
                                         + Additional Charge ({{ $additionalChargeType === 'EC' ? 'Exceeded' : 'Late Days' }})
                                     @else

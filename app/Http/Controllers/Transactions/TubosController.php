@@ -99,9 +99,9 @@ class TubosController extends Controller
         // For tubos: Principal amount (current loan_amount after any partial payments)
         $principalAmount = $currentPrincipalAmount;
 
-        // Get service charge from config (one service charge per pawn ticket)
-        $serviceCharge = Config::getValue('sangla_service_charge', 0);
-        $totalServiceCharge = $serviceCharge; // Only one service charge
+        // No service charge for tubos transactions
+        $serviceCharge = 0;
+        $totalServiceCharge = 0;
 
         // Calculate additional charges
         // Use the latest transaction's dates (most current state - could be from a renewal/tubos)
@@ -135,8 +135,8 @@ class TubosController extends Controller
             }
         }
 
-        // Total amount to pay: Principal + Service Charge + Additional Charge
-        $totalAmountToPay = $principalAmount + $totalServiceCharge + $additionalChargeAmount;
+        // Total amount to pay: Principal + Additional Charge (no service charge for tubos)
+        $totalAmountToPay = $principalAmount + $additionalChargeAmount;
 
         // Combine all item descriptions for the tubos transaction
         $combinedDescriptions = $allTransactions->pluck('item_description')->filter()->unique()->values()->implode('; ');
@@ -169,7 +169,6 @@ class TubosController extends Controller
         $request->validate([
             'pawn_ticket_number' => ['required', 'string', 'max:100'],
             'principal_amount' => ['required', 'numeric', 'min:0'],
-            'service_charge' => ['required', 'numeric', 'min:0'],
             'additional_charge_amount' => ['nullable', 'numeric', 'min:0'],
             'transaction_pawn_ticket' => ['required', 'string', 'max:100'],
             'signature' => ['required', 'string'],
@@ -204,9 +203,9 @@ class TubosController extends Controller
         $oldestTransaction = $allTransactions->first();
         $branchId = $oldestTransaction->branch_id;
         $principalAmount = (float) $request->input('principal_amount');
-        $serviceCharge = (float) $request->input('service_charge');
+        $serviceCharge = 0; // No service charge for tubos
         $additionalChargeAmount = (float) ($request->input('additional_charge_amount') ?? 0);
-        $totalAmount = $principalAmount + $serviceCharge + $additionalChargeAmount;
+        $totalAmount = $principalAmount + $additionalChargeAmount; // No service charge for tubos
 
         // Combine all item descriptions for the tubos transaction
         $combinedDescriptions = $allTransactions->pluck('item_description')->filter()->unique()->values()->implode('; ');
@@ -276,7 +275,7 @@ class TubosController extends Controller
                 'grams' => $oldestTransaction->grams,
                 'orcr_serial' => $oldestTransaction->orcr_serial,
                 'service_charge' => $serviceCharge,
-                'net_proceeds' => $totalAmount, // Total amount paid (principal + service charge + additional charge)
+                'net_proceeds' => $totalAmount, // Total amount paid (principal + additional charge, no service charge for tubos)
                 'status' => 'redeemed', // Mark as redeemed
                 'transaction_pawn_ticket' => $request->input('transaction_pawn_ticket'),
                 'note' => $request->input('note'),
@@ -290,7 +289,7 @@ class TubosController extends Controller
                 'transaction_id' => $tubosTransaction->id,
                 'type' => 'transaction',
                 'description' => "Tubos (Redemption) payment - Pawn Ticket #{$pawnTicketNumber}",
-                'amount' => $totalAmount, // Positive amount (money coming in: principal + service charge + additional charge)
+                'amount' => $totalAmount, // Positive amount (money coming in: principal + additional charge, no service charge for tubos)
                 'transaction_date' => now()->toDateString(),
             ]);
 
@@ -303,7 +302,7 @@ class TubosController extends Controller
             }
         });
 
-        $paymentBreakdown = "Principal: ₱" . number_format($principalAmount, 2) . ", Service Charge: ₱" . number_format($serviceCharge, 2);
+        $paymentBreakdown = "Principal: ₱" . number_format($principalAmount, 2);
         if ($additionalChargeAmount > 0) {
             $paymentBreakdown .= ", Additional Charge: ₱" . number_format($additionalChargeAmount, 2);
         }
