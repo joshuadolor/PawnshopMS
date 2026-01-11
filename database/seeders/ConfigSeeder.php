@@ -44,6 +44,13 @@ class ConfigSeeder extends Seeder
                 'type' => 'number',
                 'description' => 'Days before auction sale of Item',
             ],
+            [
+                'key' => 'grace_period_days',
+                'value' => 3,
+                'label' => 'Grace Period (Days)',
+                'type' => 'number',
+                'description' => 'Number of grace period days before additional charges apply',
+            ],
         ];
 
         foreach ($configs as $config) {
