@@ -86,6 +86,22 @@
                                 </div>
                             </div>
                             
+                            <!-- Late Days Charge -->
+                            @if($lateDaysCharge > 0)
+                            <div class="mb-3">
+                                <div class="flex justify-between items-center text-sm">
+                                    <span class="text-green-800">
+                                        @if($lateDaysChargeBreakdown)
+                                            Late Days Charge ({{ $lateDaysChargeBreakdown['late_days'] }} day(s)):
+                                        @else
+                                            Late Days Charge:
+                                        @endif
+                                    </span>
+                                    <span class="font-medium text-green-900">₱{{ number_format($lateDaysCharge, 2) }}</span>
+                                </div>
+                            </div>
+                            @endif
+                            
                             <!-- Total -->
                             <div class="border-t-2 border-green-400 pt-3 mt-3">
                                 <div class="flex justify-between items-center">
@@ -299,6 +315,29 @@
                                 </p>
                             </div>
 
+                            <!-- Late Days Charge (Readonly, calculated) -->
+                            @if($lateDaysCharge > 0)
+                            <div>
+                                <x-input-label for="late_days_charge" value="Late Days Charge" />
+                                <x-text-input 
+                                    id="late_days_charge" 
+                                    name="late_days_charge_display" 
+                                    type="text" 
+                                    class="mt-1 block w-full bg-gray-100" 
+                                    value="₱{{ number_format($lateDaysCharge, 2) }}" 
+                                    readonly
+                                    disabled
+                                />
+                                <p class="mt-1 text-xs text-gray-500">
+                                    @if($lateDaysChargeBreakdown)
+                                        {{ $lateDaysChargeBreakdown['late_days'] }} day(s) late. Formula: (interest / 30) * late_days
+                                    @else
+                                        Calculated based on late days
+                                    @endif
+                                </p>
+                            </div>
+                            @endif
+
                             <!-- Total Amount (Readonly, calculated) -->
                             <div>
                                 <x-input-label for="total_amount" value="Total Amount to Pay" />
@@ -318,11 +357,16 @@
                                     @else
                                         + Additional Charge (if applicable)
                                     @endif
+                                    @if($lateDaysCharge > 0)
+                                        + Late Days Charge
+                                    @endif
                                 </p>
                             </div>
 
                             <!-- Hidden input for additional charge amount -->
                             <input type="hidden" name="additional_charge_amount" value="{{ number_format($additionalChargeAmount, 2, '.', '') }}">
+                            <!-- Hidden input for late days charge amount -->
+                            <input type="hidden" name="late_days_charge_amount" value="{{ number_format($lateDaysCharge, 2, '.', '') }}">
                         </div>
 
                         <!-- Signature Section -->

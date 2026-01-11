@@ -135,8 +135,31 @@ class TubosController extends Controller
             }
         }
 
-        // Total amount to pay: Principal + Additional Charge (no service charge for tubos)
-        $totalAmountToPay = $principalAmount + $additionalChargeAmount;
+        // Calculate late days charge using ComputationController
+        $computationController = new \App\Http\Controllers\Transactions\ComputationController();
+        $lateDaysCharge = 0;
+        $lateDaysChargeBreakdown = null;
+        
+        if ($maturityDate && $today->gt($maturityDate)) {
+            // Transaction is overdue, calculate late days charge
+            $lateDaysCharge = $computationController->computeLateDaysCharge(
+                $oldestTransaction, 
+                $today, 
+                $currentPrincipalAmount,
+                (float) $oldestTransaction->interest_rate,
+                $maturityDate
+            );
+            $lateDaysChargeBreakdown = $computationController->getLateDaysChargeBreakdown(
+                $oldestTransaction, 
+                $today, 
+                $currentPrincipalAmount,
+                (float) $oldestTransaction->interest_rate,
+                $maturityDate
+            );
+        }
+
+        // Total amount to pay: Principal + Additional Charge + Late Days Charge (no service charge for tubos)
+        $totalAmountToPay = $principalAmount + $additionalChargeAmount + $lateDaysCharge;
 
         // Combine all item descriptions for the tubos transaction
         $combinedDescriptions = $allTransactions->pluck('item_description')->filter()->unique()->values()->implode('; ');
@@ -155,6 +178,8 @@ class TubosController extends Controller
             'additionalChargeAmount' => $additionalChargeAmount,
             'daysExceeded' => $daysExceeded,
             'additionalChargeConfig' => $additionalChargeConfig,
+            'lateDaysCharge' => $lateDaysCharge,
+            'lateDaysChargeBreakdown' => $lateDaysChargeBreakdown,
             'totalAmountToPay' => $totalAmountToPay,
             'combinedDescriptions' => $combinedDescriptions,
             'branchId' => $branchId,
@@ -170,6 +195,7 @@ class TubosController extends Controller
             'pawn_ticket_number' => ['required', 'string', 'max:100'],
             'principal_amount' => ['required', 'numeric', 'min:0'],
             'additional_charge_amount' => ['nullable', 'numeric', 'min:0'],
+            'late_days_charge_amount' => ['nullable', 'numeric', 'min:0'],
             'transaction_pawn_ticket' => ['required', 'string', 'max:100'],
             'signature' => ['required', 'string'],
         ]);
@@ -205,7 +231,8 @@ class TubosController extends Controller
         $principalAmount = (float) $request->input('principal_amount');
         $serviceCharge = 0; // No service charge for tubos
         $additionalChargeAmount = (float) ($request->input('additional_charge_amount') ?? 0);
-        $totalAmount = $principalAmount + $additionalChargeAmount; // No service charge for tubos
+        $lateDaysCharge = (float) ($request->input('late_days_charge_amount') ?? 0);
+        $totalAmount = $principalAmount + $additionalChargeAmount + $lateDaysCharge; // No service charge for tubos
 
         // Combine all item descriptions for the tubos transaction
         $combinedDescriptions = $allTransactions->pluck('item_description')->filter()->unique()->values()->implode('; ');
@@ -243,7 +270,7 @@ class TubosController extends Controller
         }
 
         // Use database transaction to ensure data integrity
-        DB::transaction(function () use ($allTransactions, $request, $branchId, $principalAmount, $serviceCharge, $additionalChargeAmount, $totalAmount, $pawnTicketNumber, $oldestTransaction, $combinedDescriptions, $signaturePath) {
+        DB::transaction(function () use ($allTransactions, $request, $branchId, $principalAmount, $serviceCharge, $additionalChargeAmount, $lateDaysCharge, $totalAmount, $pawnTicketNumber, $oldestTransaction, $combinedDescriptions, $signaturePath) {
             // Generate tubos transaction number
             $tubosTransactionNumber = $this->generateTubosTransactionNumber();
 
@@ -275,7 +302,8 @@ class TubosController extends Controller
                 'grams' => $oldestTransaction->grams,
                 'orcr_serial' => $oldestTransaction->orcr_serial,
                 'service_charge' => $serviceCharge,
-                'net_proceeds' => $totalAmount, // Total amount paid (principal + additional charge, no service charge for tubos)
+                'late_days_charge' => $lateDaysCharge,
+                'net_proceeds' => $totalAmount, // Total amount paid (principal + additional charge + late days charge, no service charge for tubos)
                 'status' => 'redeemed', // Mark as redeemed
                 'transaction_pawn_ticket' => $request->input('transaction_pawn_ticket'),
                 'note' => $request->input('note'),
@@ -305,6 +333,9 @@ class TubosController extends Controller
         $paymentBreakdown = "Principal: ₱" . number_format($principalAmount, 2);
         if ($additionalChargeAmount > 0) {
             $paymentBreakdown .= ", Additional Charge: ₱" . number_format($additionalChargeAmount, 2);
+        }
+        if ($lateDaysCharge > 0) {
+            $paymentBreakdown .= ", Late Days Charge: ₱" . number_format($lateDaysCharge, 2);
         }
         
         return redirect()->route('transactions.index')
