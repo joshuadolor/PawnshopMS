@@ -45,11 +45,11 @@ class ConfigSeeder extends Seeder
                 'description' => 'Days before auction sale of Item',
             ],
             [
-                'key' => 'grace_period_days',
-                'value' => 3,
-                'label' => 'Grace Period (Days)',
-                'type' => 'number',
-                'description' => 'Number of grace period days before additional charges apply',
+                'key' => 'email_receiver_list_for_notification',
+                'value' => '',
+                'label' => 'Email Receiver List for Notification',
+                'type' => 'text',
+                'description' => 'Email receiver list for notification separated by commas',
             ],
         ];
 
