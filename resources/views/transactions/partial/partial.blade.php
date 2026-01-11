@@ -95,6 +95,22 @@
                                 </div>
                             </div>
                             
+                            <!-- Late Days Charge -->
+                            @if($lateDaysCharge > 0)
+                            <div class="mb-3">
+                                <div class="flex justify-between items-center text-sm">
+                                    <span class="text-yellow-800">
+                                        @if($lateDaysChargeBreakdown)
+                                            Late Days Charge ({{ $lateDaysChargeBreakdown['late_days'] }} day(s)):
+                                        @else
+                                            Late Days Charge:
+                                        @endif
+                                    </span>
+                                    <span class="font-medium text-yellow-900">₱{{ number_format($lateDaysCharge, 2) }}</span>
+                                </div>
+                            </div>
+                            @endif
+                            
                             <!-- Minimum Renewal Amount -->
                             <div class="border-t-2 border-yellow-400 pt-3 mt-3">
                                 <div class="flex justify-between items-center">
@@ -164,7 +180,7 @@
                                 </div>
                                 <div>
                                     <p class="text-sm text-gray-600">Current Maturity Date</p>
-                                    <p class="text-sm font-medium text-gray-900">{{ $transaction->maturity_date->format('M d, Y') }}</p>
+                                    <p class="text-sm font-medium text-gray-900">{{ $latestTransaction->maturity_date ? \Carbon\Carbon::parse($latestTransaction->maturity_date)->format('M d, Y') : ($transaction->maturity_date ? $transaction->maturity_date->format('M d, Y') : 'N/A') }}</p>
                                 </div>
                                 <div>
                                     <p class="text-sm text-gray-600">Current Expiry Date</p>
@@ -269,7 +285,7 @@
                         </div>
                     </div>
 
-                    <form method="POST" action="{{ route('transactions.partial.store') }}" id="partialForm">
+                    <form method="POST" action="{{ route('transactions.partial.store') }}" id="partialForm" enctype="multipart/form-data">
                         @csrf
                         <input type="hidden" name="pawn_ticket_number" value="{{ $pawnTicketNumber }}">
 
@@ -315,6 +331,32 @@
                                 </p>
                             </div>
 
+                            <!-- Back Date Checkbox -->
+                            @if($isOverdue)
+                            <div class="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+                                <div class="flex items-start">
+                                    <div class="flex items-center h-5">
+                                        <input 
+                                            id="back_date" 
+                                            name="back_date" 
+                                            type="checkbox" 
+                                            value="1"
+                                            class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                            {{ old('back_date', $backDate) ? 'checked' : '' }}
+                                        />
+                                    </div>
+                                    <div class="ml-3 text-sm">
+                                        <label for="back_date" class="font-medium text-yellow-900 cursor-pointer">
+                                            Back Date
+                                        </label>
+                                        <p class="text-xs text-yellow-700 mt-1">
+                                            If checked, this partial payment will be processed as if it was made on the maturity date. Additional charges and late days charges will not apply.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            @endif
+
                             <!-- Date Fields -->
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div>
@@ -323,9 +365,9 @@
                                         id="maturity_date" 
                                         name="maturity_date" 
                                         type="date" 
-                                        class="mt-1 block w-full" 
+                                        class="mt-1 block w-full bg-gray-100" 
                                         :value="old('maturity_date', $defaultMaturityDate)" 
-                                        min="{{ \Carbon\Carbon::today()->format('Y-m-d') }}"
+                                        readonly
                                         required
                                     />
                                     <x-input-error :messages="$errors->get('maturity_date')" class="mt-2" />
@@ -337,9 +379,9 @@
                                         id="expiry_date" 
                                         name="expiry_date" 
                                         type="date" 
-                                        class="mt-1 block w-full" 
-                                        :value="old('expiry_date')" 
-                                        min="{{ \Carbon\Carbon::today()->format('Y-m-d') }}"
+                                        class="mt-1 block w-full bg-gray-100" 
+                                        :value="old('expiry_date', $defaultExpiryDate)" 
+                                        readonly
                                         required
                                     />
                                     <x-input-error :messages="$errors->get('expiry_date')" class="mt-2" />
@@ -351,38 +393,58 @@
                                         id="auction_sale_date" 
                                         name="auction_sale_date" 
                                         type="date" 
-                                        class="mt-1 block w-full" 
-                                        :value="old('auction_sale_date')" 
-                                        min="{{ \Carbon\Carbon::today()->format('Y-m-d') }}"
+                                        class="mt-1 block w-full bg-gray-100" 
+                                        :value="old('auction_sale_date', $defaultAuctionSaleDate)" 
+                                        readonly
                                     />
                                     <x-input-error :messages="$errors->get('auction_sale_date')" class="mt-2" />
                                 </div>
                             </div>
+                            
+                            <!-- Hidden input for late days charge -->
+                            <input type="hidden" name="late_days_charge_amount" value="{{ number_format($lateDaysCharge, 2, '.', '') }}">
 
                             <!-- Signature Section -->
                             <div class="mt-8 border-t pt-6">
-                                <x-input-label for="signature" value="Pawner Signature *" class="text-base font-semibold" />
-                                <p class="mt-1 text-sm text-gray-500 mb-4">Please sign below to confirm the partial payment.</p>
+                                <x-input-label value="Pawner Signature" class="text-base font-semibold" />
+                                <p class="mt-1 text-sm text-gray-500 mb-4">Please provide a signature by either taking/choosing a photo or drawing below (optional).</p>
                                 
-                                <div class="bg-white border-2 border-gray-300 rounded-lg p-4">
-                                    <canvas 
-                                        id="signatureCanvas" 
-                                        class="border border-gray-300 rounded cursor-crosshair touch-none"
-                                        width="600"
-                                        height="200"
-                                        style="max-width: 100%; height: auto; display: block;"
-                                    ></canvas>
-                                    <div class="mt-3 flex gap-2">
-                                        <button 
-                                            type="button" 
-                                            id="clearSignature" 
-                                            class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 text-sm font-medium"
-                                        >
-                                            Clear Signature
-                                        </button>
-                                    </div>
+                                <!-- Option 1: Photo Signature -->
+                                <div class="mb-6">
+                                    <x-input-label for="signature_photo" value="Option 1: Photo Signature" class="text-sm font-medium" />
+                                    <x-image-capture 
+                                        name="signature_photo" 
+                                        label="" 
+                                        :value="old('signature_photo')" 
+                                        :required="false"
+                                    />
                                 </div>
-                                <input type="hidden" name="signature" id="signatureData">
+                                
+                                <!-- Option 2: Canvas Signature -->
+                                <div class="mt-6">
+                                    <x-input-label for="signature_canvas" value="Option 2: Draw Signature" class="text-sm font-medium" />
+                                    <div class="bg-white border-2 border-gray-300 rounded-lg p-4 mt-2">
+                                        <canvas 
+                                            id="signatureCanvas" 
+                                            class="border border-gray-300 rounded cursor-crosshair touch-none"
+                                            width="600"
+                                            height="200"
+                                            style="max-width: 100%; height: auto; display: block;"
+                                        ></canvas>
+                                        <div class="mt-3 flex gap-2">
+                                            <button 
+                                                type="button" 
+                                                id="clearSignature" 
+                                                class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 text-sm font-medium"
+                                            >
+                                                Clear Signature
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <input type="hidden" name="signature_canvas" id="signatureData">
+                                    <p class="mt-1 text-xs text-gray-500">Draw your signature in the box above.</p>
+                                </div>
+                                
                                 <x-input-error :messages="$errors->get('signature')" class="mt-2" />
                             </div>
                         </div>
@@ -434,7 +496,7 @@
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const canvas = document.getElementById('signatureCanvas');
-            const ctx = canvas.getContext('2d');
+            const ctx = canvas ? canvas.getContext('2d') : null;
             const signatureInput = document.getElementById('signatureData');
             const clearBtn = document.getElementById('clearSignature');
             const form = document.getElementById('partialForm');
@@ -446,24 +508,26 @@
             let lastX = 0;
             let lastY = 0;
 
-            // Set canvas background to white
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.strokeStyle = '#000000';
-            ctx.lineWidth = 2;
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
+            // Set canvas background to white (if canvas exists)
+            if (canvas && ctx) {
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 2;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
 
-            // Mouse events
-            canvas.addEventListener('mousedown', startDrawing);
-            canvas.addEventListener('mousemove', draw);
-            canvas.addEventListener('mouseup', stopDrawing);
-            canvas.addEventListener('mouseout', stopDrawing);
+                // Mouse events
+                canvas.addEventListener('mousedown', startDrawing);
+                canvas.addEventListener('mousemove', draw);
+                canvas.addEventListener('mouseup', stopDrawing);
+                canvas.addEventListener('mouseout', stopDrawing);
 
-            // Touch events for mobile
-            canvas.addEventListener('touchstart', handleTouch);
-            canvas.addEventListener('touchmove', handleTouch);
-            canvas.addEventListener('touchend', stopDrawing);
+                // Touch events for mobile
+                canvas.addEventListener('touchstart', handleTouch);
+                canvas.addEventListener('touchmove', handleTouch);
+                canvas.addEventListener('touchend', stopDrawing);
+            }
 
             function startDrawing(e) {
                 isDrawing = true;
@@ -521,11 +585,15 @@
                 signatureInput.value = dataURL;
             }
 
-            clearBtn.addEventListener('click', function() {
-                ctx.fillStyle = '#ffffff';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                signatureInput.value = '';
-            });
+            if (clearBtn && canvas && ctx) {
+                clearBtn.addEventListener('click', function() {
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    if (signatureInput) {
+                        signatureInput.value = '';
+                    }
+                });
+            }
 
             // Calculate new principal amount when partial amount changes
             const currentPrincipal = {{ $currentPrincipalAmount }};
@@ -533,25 +601,34 @@
 
             function calculateNewPrincipal() {
                 const partialAmount = parseFloat(partialAmountInput.value) || 0;
+                const newPrincipal = currentPrincipal - partialAmount;
                 
-                if (partialAmount >= minimumRenewal && partialAmount <= currentPrincipal) {
-                    const newPrincipal = currentPrincipal - partialAmount;
+                // Handle negative values (increases principal)
+                if (partialAmount < 0) {
+                    newPrincipalInput.value = '₱' + newPrincipal.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                    newPrincipalInfo.textContent = `Principal increase of ₱${Math.abs(partialAmount).toFixed(2)} will increase the principal from ₱${currentPrincipal.toFixed(2)} to ₱${newPrincipal.toFixed(2)}.`;
+                    newPrincipalInfo.classList.remove('hidden');
+                    newPrincipalInfo.classList.remove('text-red-600');
+                    newPrincipalInfo.classList.add('text-green-600');
+                } else if (partialAmount >= minimumRenewal && partialAmount <= currentPrincipal) {
                     const finalPrincipal = newPrincipal < 0 ? 0 : newPrincipal;
-                    
                     newPrincipalInput.value = '₱' + finalPrincipal.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
                     newPrincipalInfo.textContent = `Partial payment of ₱${partialAmount.toFixed(2)} will reduce the principal from ₱${currentPrincipal.toFixed(2)} to ₱${finalPrincipal.toFixed(2)}.`;
                     newPrincipalInfo.classList.remove('hidden');
                     newPrincipalInfo.classList.remove('text-red-600');
-                } else if (partialAmount < minimumRenewal) {
+                    newPrincipalInfo.classList.remove('text-green-600');
+                } else if (partialAmount >= 0 && partialAmount < minimumRenewal) {
                     newPrincipalInput.value = '₱' + currentPrincipal.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
                     newPrincipalInfo.textContent = `Warning: Partial amount must be at least ₱${minimumRenewal.toFixed(2)} (minimum renewal amount).`;
                     newPrincipalInfo.classList.remove('hidden');
                     newPrincipalInfo.classList.add('text-red-600');
+                    newPrincipalInfo.classList.remove('text-green-600');
                 } else if (partialAmount > currentPrincipal) {
                     newPrincipalInput.value = '₱0.00';
                     newPrincipalInfo.textContent = `Warning: Partial amount exceeds current principal. Maximum allowed: ₱${currentPrincipal.toFixed(2)}.`;
                     newPrincipalInfo.classList.remove('hidden');
                     newPrincipalInfo.classList.add('text-red-600');
+                    newPrincipalInfo.classList.remove('text-green-600');
                 } else {
                     newPrincipalInput.value = '₱' + currentPrincipal.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
                     newPrincipalInfo.textContent = '';
@@ -587,12 +664,98 @@
                 }
             });
 
-            // Validate signature before form submission
-            form.addEventListener('submit', function(e) {
-                if (!signatureInput.value || signatureInput.value.trim() === '') {
-                    e.preventDefault();
-                    alert('Please provide a signature before submitting.');
-                    return false;
+            // Signature is optional, no validation needed
+            
+            // Handle back date checkbox toggle
+            const backDateCheckbox = document.getElementById('back_date');
+            if (backDateCheckbox) {
+                backDateCheckbox.addEventListener('change', function() {
+                    // Create a form to submit back to the find route
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = '{{ route("transactions.partial.find") }}';
+                    
+                    const csrfToken = document.querySelector('input[name="_token"]').value;
+                    const csrfInput = document.createElement('input');
+                    csrfInput.type = 'hidden';
+                    csrfInput.name = '_token';
+                    csrfInput.value = csrfToken;
+                    form.appendChild(csrfInput);
+                    
+                    const pawnTicketInput = document.createElement('input');
+                    pawnTicketInput.type = 'hidden';
+                    pawnTicketInput.name = 'pawn_ticket_number';
+                    pawnTicketInput.value = '{{ $pawnTicketNumber }}';
+                    form.appendChild(pawnTicketInput);
+                    
+                    const backDateInput = document.createElement('input');
+                    backDateInput.type = 'hidden';
+                    backDateInput.name = 'back_date';
+                    backDateInput.value = this.checked ? '1' : '0';
+                    form.appendChild(backDateInput);
+                    
+                    document.body.appendChild(form);
+                    form.submit();
+                });
+            }
+            
+            // Image capture handlers
+            document.addEventListener('click', function(e) {
+                if (e.target.closest('.image-capture-btn')) {
+                    const btn = e.target.closest('.image-capture-btn');
+                    const action = btn.getAttribute('data-action');
+                    const fieldName = btn.getAttribute('data-field');
+                    
+                    if (action === 'camera') {
+                        const input = document.getElementById(fieldName + '_input');
+                        if (input) {
+                            input.setAttribute('capture', 'environment');
+                            input.click();
+                        }
+                    } else if (action === 'select') {
+                        const input = document.getElementById(fieldName + '_input');
+                        if (input) {
+                            input.removeAttribute('capture');
+                            input.click();
+                        }
+                    } else if (action === 'remove') {
+                        const input = document.getElementById(fieldName + '_input');
+                        const preview = document.getElementById(fieldName + '_preview');
+                        const previewContainer = document.getElementById(fieldName + '_preview_container');
+                        const removeBtn = document.getElementById(fieldName + '_remove_btn');
+                        
+                        if (input) input.value = '';
+                        if (preview) preview.src = '';
+                        if (previewContainer) previewContainer.classList.add('hidden');
+                        if (removeBtn) removeBtn.classList.add('hidden');
+                    }
+                }
+            });
+
+            // Handle file input change to show preview
+            document.addEventListener('change', function(e) {
+                if (e.target.type === 'file' && e.target.id && e.target.id.endsWith('_input')) {
+                    const input = e.target;
+                    const fieldName = input.id.replace('_input', '');
+                    const preview = document.getElementById(fieldName + '_preview');
+                    const previewContainer = document.getElementById(fieldName + '_preview_container');
+                    const removeBtn = document.getElementById(fieldName + '_remove_btn');
+                    
+                    if (input.files && input.files[0]) {
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            if (preview) {
+                                preview.src = e.target.result;
+                            }
+                            if (previewContainer) {
+                                previewContainer.classList.remove('hidden');
+                            }
+                            if (removeBtn) {
+                                removeBtn.classList.remove('hidden');
+                            }
+                        };
+                        reader.readAsDataURL(input.files[0]);
+                    }
                 }
             });
         });

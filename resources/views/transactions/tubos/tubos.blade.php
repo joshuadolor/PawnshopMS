@@ -397,8 +397,8 @@
 
                         <!-- Signature Section -->
                         <div class="mt-8 border-t pt-6">
-                            <x-input-label value="Pawner Signature *" class="text-base font-semibold" />
-                            <p class="mt-1 text-sm text-gray-500 mb-4">Please provide a signature by either taking/choosing a photo or drawing below.</p>
+                            <x-input-label value="Pawner Signature" class="text-base font-semibold" />
+                            <p class="mt-1 text-sm text-gray-500 mb-4">Please provide a signature by either taking/choosing a photo or drawing below (optional).</p>
                             
                             <!-- Option 1: Photo Signature -->
                             <div class="mb-6">
@@ -646,21 +646,7 @@
                     });
                 }
 
-                // Validate signature before form submission
-                if (form) {
-                    form.addEventListener('submit', function(e) {
-                        const signaturePhoto = document.querySelector('input[name="signature_photo"]');
-                        const signatureCanvas = document.getElementById('signatureData');
-                        const hasPhoto = signaturePhoto && signaturePhoto.files && signaturePhoto.files.length > 0;
-                        const hasCanvas = signatureCanvas && signatureCanvas.value && signatureCanvas.value.trim() !== '';
-                        
-                        if (!hasPhoto && !hasCanvas) {
-                            e.preventDefault();
-                            alert('Please provide a signature either by taking/choosing a photo or drawing on the canvas.');
-                            return false;
-                        }
-                    });
-                }
+                // Signature is optional, no validation needed
             }
 
             // Handle additional charge toggle

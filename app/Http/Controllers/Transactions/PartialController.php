@@ -112,39 +112,90 @@ class PartialController extends Controller
 
         // Calculate additional charges
         // Use the latest transaction's dates (most current state - could be from a renewal/partial)
-        $today = Carbon::today();
+        $actualToday = Carbon::today();
         $expiryRedemptionDate = $latestTransactionForDates->expiry_date ? Carbon::parse($latestTransactionForDates->expiry_date) : null;
         $maturityDate = $latestTransactionForDates->maturity_date ? Carbon::parse($latestTransactionForDates->maturity_date) : null;
+        
+        // Check if transaction exceeds maturity date (is overdue)
+        $isOverdue = false;
+        if ($maturityDate) {
+            $maturityDateCarbon = $maturityDate instanceof Carbon ? $maturityDate : Carbon::parse($maturityDate);
+            $isOverdue = $actualToday->gt($maturityDateCarbon);
+        }
+        
+        // Check if back_date is requested (from input or old input)
+        $backDate = $request->has('back_date') ? (bool) $request->input('back_date') : (bool) old('back_date', false);
+        
+        // If back_date is checked, use maturity date as reference date (as if today is the maturity date)
+        $today = $backDate && $maturityDate ? Carbon::parse($maturityDate) : $actualToday;
+        
         $daysExceeded = 0;
         $additionalChargeType = null;
         $additionalChargeAmount = 0;
         $additionalChargeConfig = null;
 
-        // First, check if expiry redemption date is exceeded
-        if ($expiryRedemptionDate && $today->gt($expiryRedemptionDate)) {
-            // Expiry redemption date is exceeded - use EC (Exceeded Charge)
-            // Count days exceeded from expiry redemption date to today
-            $daysExceeded = $expiryRedemptionDate->diffInDays($today);
-            $additionalChargeType = 'EC';
-        } elseif ($maturityDate && $today->gt($maturityDate)) {
-            // Expiry redemption date is NOT exceeded, but maturity date is exceeded - use LD (Late Days)
-            // Count days exceeded from maturity date to today
-            $daysExceeded = $maturityDate->diffInDays($today);
-            $additionalChargeType = 'LD';
+        // If back_date is NOT checked, calculate additional charges
+        if (!$backDate) {
+            // First, check if expiry redemption date is exceeded
+            if ($expiryRedemptionDate && $today->gt($expiryRedemptionDate)) {
+                // Expiry redemption date is exceeded - use EC (Exceeded Charge)
+                // Count days exceeded from expiry redemption date to today
+                $daysExceeded = $expiryRedemptionDate->diffInDays($today);
+                $additionalChargeType = 'EC';
+            } elseif ($maturityDate && $today->gt($maturityDate)) {
+                // Expiry redemption date is NOT exceeded, but maturity date is exceeded - use LD (Late Days)
+                // Count days exceeded from maturity date to today
+                $daysExceeded = $maturityDate->diffInDays($today);
+                $additionalChargeType = 'LD';
+            }
+
+            // Get the percentage from additionalChargeConfig table based on days exceeded and type
+            if ($daysExceeded > 0 && $additionalChargeType) {
+                $additionalChargeConfig = AdditionalChargeConfig::findApplicable($daysExceeded, $additionalChargeType, 'renewal');
+                if ($additionalChargeConfig) {
+                    // Calculate charge amount: current principal * percentage from config
+                    $additionalChargeAmount = $currentPrincipalAmount * ((float) $additionalChargeConfig->percentage / 100);
+                }
+            }
         }
 
-        // Get the percentage from additionalChargeConfig table based on days exceeded and type
-        if ($daysExceeded > 0 && $additionalChargeType) {
-            $additionalChargeConfig = AdditionalChargeConfig::findApplicable($daysExceeded, $additionalChargeType, 'renewal');
-            if ($additionalChargeConfig) {
-                // Calculate charge amount: current principal * percentage from config
-                $additionalChargeAmount = $currentPrincipalAmount * ((float) $additionalChargeConfig->percentage / 100);
-            }
+        // Calculate late days charge using ComputationController
+        // If back_date is checked, skip late days charge (set to 0)
+        $computationController = new \App\Http\Controllers\Transactions\ComputationController();
+        if ($backDate) {
+            $lateDaysCharge = 0;
+            $lateDaysChargeBreakdown = [
+                'loan_amount' => $currentPrincipalAmount,
+                'interest_rate' => (float) $oldestTransaction->interest_rate,
+                'interest' => round($currentPrincipalAmount * ((float) $oldestTransaction->interest_rate / 100), 2),
+                'maturity_date' => $maturityDate ? $maturityDate->format('Y-m-d') : null,
+                'reference_date' => $today->format('Y-m-d'),
+                'late_days' => 0,
+                'is_late' => false,
+                'late_days_charge' => 0,
+                'formula' => '(interest / 30) * late_days',
+                'calculation' => 'No late days charge (back dated)',
+            ];
+        } else {
+            $lateDaysCharge = $computationController->computeLateDaysCharge(
+                $oldestTransaction, 
+                $today, 
+                $currentPrincipalAmount, 
+                (float) $oldestTransaction->interest_rate,
+                $maturityDate
+            );
+            $lateDaysChargeBreakdown = $computationController->getLateDaysChargeBreakdown(
+                $oldestTransaction, 
+                $today, 
+                $currentPrincipalAmount,
+                (float) $oldestTransaction->interest_rate,
+                $maturityDate
+            );
         }
 
         // Calculate minimum renewal amount (for display and validation only)
         // The computation is still: new principal = current principal - partial amount paid
-        $minimumRenewalAmount = $totalInterest + $totalServiceCharge + $additionalChargeAmount;
+        $minimumRenewalAmount = $totalInterest + $totalServiceCharge + $additionalChargeAmount + $lateDaysCharge;
 
         // Combine all item descriptions for the partial transaction
         $combinedDescriptions = $allTransactions->pluck('item_description')->filter()->unique()->values()->implode('; ');
@@ -155,14 +206,22 @@ class PartialController extends Controller
         $interestPeriod = Config::getValue('sangla_interest_period', 'per_month');
 
         // Calculate default new maturity date based on interest period
+        // If back_date is checked, start from maturity date instead of today
         $defaultMaturityDate = match ($interestPeriod) {
             'per_annum' => $today->copy()->addYear()->format('Y-m-d'),
             'per_month' => $today->copy()->addMonth()->format('Y-m-d'),
             default => $today->copy()->addMonth()->format('Y-m-d'),
         };
+        
+        // Calculate default expiry date: maturity date + days before redemption
+        $defaultExpiryDate = Carbon::parse($defaultMaturityDate)->addDays($daysBeforeRedemption)->format('Y-m-d');
+        
+        // Calculate default auction sale date: expiry date + days before auction sale
+        $defaultAuctionSaleDate = Carbon::parse($defaultExpiryDate)->addDays($daysBeforeAuctionSale)->format('Y-m-d');
 
         return view('transactions.partial.partial', [
             'transaction' => $oldestTransaction, // Show oldest transaction (for reference)
+            'latestTransaction' => $latestTransactionForDates, // Show latest transaction (for current dates)
             'allTransactions' => $allTransactions, // Keep for reference if needed
             'pawnTicketNumber' => $pawnTicketNumber,
             'totalInterest' => $totalInterest,
@@ -172,6 +231,11 @@ class PartialController extends Controller
             'additionalChargeAmount' => $additionalChargeAmount,
             'daysExceeded' => $daysExceeded,
             'additionalChargeConfig' => $additionalChargeConfig,
+            'lateDaysCharge' => $lateDaysCharge,
+            'lateDaysChargeBreakdown' => $lateDaysChargeBreakdown,
+            'backDate' => $backDate,
+            'isOverdue' => $isOverdue,
+            'maturityDate' => $maturityDate ? $maturityDate->format('Y-m-d') : null,
             'currentPrincipalAmount' => $currentPrincipalAmount,
             'originalPrincipalAmount' => $originalPrincipalAmount, // Pass original principal to view
             'partialTransactions' => $partialTransactions, // Pass partial transactions for history
@@ -181,6 +245,8 @@ class PartialController extends Controller
             'daysBeforeRedemption' => $daysBeforeRedemption,
             'daysBeforeAuctionSale' => $daysBeforeAuctionSale,
             'defaultMaturityDate' => $defaultMaturityDate,
+            'defaultExpiryDate' => $defaultExpiryDate,
+            'defaultAuctionSaleDate' => $defaultAuctionSaleDate,
         ]);
     }
 
@@ -192,12 +258,15 @@ class PartialController extends Controller
         try {
             $validated = $request->validate([
                 'pawn_ticket_number' => ['required', 'string', 'max:100'],
-                'maturity_date' => ['required', 'date', 'after_or_equal:today'],
+                'maturity_date' => ['required', 'date'],
                 'expiry_date' => ['required', 'date', 'after_or_equal:maturity_date'],
                 'auction_sale_date' => ['nullable', 'date', 'after_or_equal:expiry_date'],
-                'partial_amount' => ['required', 'numeric', 'min:0'],
+                'partial_amount' => ['required', 'numeric'], // Allow negative values
                 'transaction_pawn_ticket' => ['required', 'string', 'max:100'],
-                'signature' => ['required', 'string'],
+                'back_date' => ['nullable', 'boolean'],
+                'late_days_charge_amount' => ['nullable', 'numeric', 'min:0'],
+                'signature_photo' => ['nullable', 'image', 'mimes:jpeg,png,jpg', 'max:5120'],
+                'signature_canvas' => ['nullable', 'string'],
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             $pawnTicketNumber = $request->input('pawn_ticket_number', '');
@@ -235,6 +304,8 @@ class PartialController extends Controller
         $oldestTransaction = $allTransactions->first();
         $branchId = $oldestTransaction->branch_id;
         $partialAmount = (float) $request->input('partial_amount');
+        $backDate = $request->has('back_date') ? (bool) $request->input('back_date') : false;
+        $lateDaysCharge = (float) ($request->input('late_days_charge_amount') ?? 0);
 
         // Get the latest partial transaction to check if principal has been reduced
         $latestPartialTransaction = Transaction::where('pawn_ticket_number', $pawnTicketNumber)
@@ -264,49 +335,45 @@ class PartialController extends Controller
         }
 
         // Calculate additional charges
-        $today = Carbon::today();
+        $actualToday = Carbon::today();
         $expiryRedemptionDate = $latestTransactionForDates->expiry_date ? Carbon::parse($latestTransactionForDates->expiry_date) : null;
         $maturityDate = $latestTransactionForDates->maturity_date ? Carbon::parse($latestTransactionForDates->maturity_date) : null;
+        
+        // If back_date is checked, use maturity date as reference date
+        $today = $backDate && $maturityDate ? Carbon::parse($maturityDate) : $actualToday;
+        
         $additionalChargeAmount = 0;
 
-        if ($expiryRedemptionDate && $today->gt($expiryRedemptionDate)) {
-            $daysExceeded = $expiryRedemptionDate->diffInDays($today);
-            $additionalChargeConfig = AdditionalChargeConfig::findApplicable($daysExceeded, 'EC', 'renewal');
-            if ($additionalChargeConfig) {
-                $additionalChargeAmount = $currentPrincipalAmount * ((float) $additionalChargeConfig->percentage / 100);
-            }
-        } elseif ($maturityDate && $today->gt($maturityDate)) {
-            $daysExceeded = $maturityDate->diffInDays($today);
-            $additionalChargeConfig = AdditionalChargeConfig::findApplicable($daysExceeded, 'LD', 'renewal');
-            if ($additionalChargeConfig) {
-                $additionalChargeAmount = $currentPrincipalAmount * ((float) $additionalChargeConfig->percentage / 100);
+        // If back_date is NOT checked, calculate additional charges
+        if (!$backDate) {
+            if ($expiryRedemptionDate && $today->gt($expiryRedemptionDate)) {
+                $daysExceeded = $expiryRedemptionDate->diffInDays($today);
+                $additionalChargeConfig = AdditionalChargeConfig::findApplicable($daysExceeded, 'EC', 'renewal');
+                if ($additionalChargeConfig) {
+                    $additionalChargeAmount = $currentPrincipalAmount * ((float) $additionalChargeConfig->percentage / 100);
+                }
+            } elseif ($maturityDate && $today->gt($maturityDate)) {
+                $daysExceeded = $maturityDate->diffInDays($today);
+                $additionalChargeConfig = AdditionalChargeConfig::findApplicable($daysExceeded, 'LD', 'renewal');
+                if ($additionalChargeConfig) {
+                    $additionalChargeAmount = $currentPrincipalAmount * ((float) $additionalChargeConfig->percentage / 100);
+                }
             }
         }
 
-        $minimumRenewalAmount = $totalInterest + $serviceCharge + $additionalChargeAmount;
+        $minimumRenewalAmount = $totalInterest + $serviceCharge + $additionalChargeAmount + $lateDaysCharge;
 
-        // Validate that partial amount is at least the minimum renewal amount
-        if ($partialAmount < $minimumRenewalAmount) {
+        // Validate that partial amount is at least the minimum renewal amount (only if positive)
+        if ($partialAmount >= 0 && $partialAmount < $minimumRenewalAmount) {
             return redirect()->route('transactions.partial.find', ['pawn_ticket_number' => $pawnTicketNumber])
                 ->withInput()
                 ->withErrors(['partial_amount' => "Partial amount must be at least the minimum renewal amount (₱" . number_format($minimumRenewalAmount, 2) . ")."]);
         }
 
-        // Validate that partial amount is not greater than current principal
-        if ($partialAmount > $currentPrincipalAmount) {
-            return redirect()->route('transactions.partial.find', ['pawn_ticket_number' => $pawnTicketNumber])
-                ->withInput()
-                ->withErrors(['partial_amount' => "Partial amount cannot exceed the current principal amount (₱" . number_format($currentPrincipalAmount, 2) . ")."]);
-        }
-
         // Calculate new principal amount
-        // Simple calculation: New principal = Current principal - Partial amount paid
+        // If partial amount is negative, it increases the principal (pawner adds more money)
+        // If partial amount is positive, it decreases the principal (pawner pays)
         $newPrincipalAmount = $currentPrincipalAmount - $partialAmount;
-
-        // Ensure new principal is not negative
-        if ($newPrincipalAmount < 0) {
-            $newPrincipalAmount = 0;
-        }
 
         // Combine all item descriptions for the partial transaction
         $combinedDescriptions = $allTransactions->pluck('item_description')->filter()->unique()->values()->implode('; ');
@@ -344,7 +411,7 @@ class PartialController extends Controller
         }
 
         // Use database transaction to ensure data integrity
-        DB::transaction(function () use ($allTransactions, $request, $branchId, $partialAmount, $pawnTicketNumber, $oldestTransaction, $combinedDescriptions, $signaturePath, $newPrincipalAmount, $totalInterest, $serviceCharge, $additionalChargeAmount) {
+        DB::transaction(function () use ($allTransactions, $request, $branchId, $partialAmount, $lateDaysCharge, $backDate, $pawnTicketNumber, $oldestTransaction, $combinedDescriptions, $signaturePath, $newPrincipalAmount, $totalInterest, $serviceCharge, $additionalChargeAmount) {
             // Generate partial transaction number
             $partialTransactionNumber = $this->generatePartialTransactionNumber();
 
@@ -376,7 +443,9 @@ class PartialController extends Controller
                 'grams' => $oldestTransaction->grams,
                 'orcr_serial' => $oldestTransaction->orcr_serial,
                 'service_charge' => $serviceCharge,
-                'net_proceeds' => $partialAmount, // Total amount paid
+                'late_days_charge' => $lateDaysCharge,
+                'back_date' => $backDate,
+                'net_proceeds' => abs($partialAmount), // Use absolute value for net proceeds
                 'status' => 'active',
                 'transaction_pawn_ticket' => $request->input('transaction_pawn_ticket'),
                 'note' => $request->input('note'),
@@ -384,22 +453,30 @@ class PartialController extends Controller
 
             // Create financial transaction for the partial payment
             // Type: "transaction" (same family as Sangla), but this one is an ADD (money coming in)
+            // If partial amount is negative, it's money going out (pawner adding to principal)
+            // If partial amount is positive, it's money coming in (pawner paying)
             BranchFinancialTransaction::create([
                 'branch_id' => $branchId,
                 'user_id' => $request->user()->id,
                 'transaction_id' => $partialTransaction->id,
                 'type' => 'transaction',
-                'description' => "Partial payment - Pawn Ticket #{$pawnTicketNumber}",
-                'amount' => $partialAmount, // Positive amount (money coming in)
+                'description' => $partialAmount >= 0 
+                    ? "Partial payment - Pawn Ticket #{$pawnTicketNumber}" 
+                    : "Principal increase - Pawn Ticket #{$pawnTicketNumber}",
+                'amount' => $partialAmount, // Can be positive (payment) or negative (increase)
                 'transaction_date' => now()->toDateString(),
             ]);
 
-            // Update branch balance (add the partial amount)
+            // Update branch balance (add the partial amount - negative values will decrease balance)
             BranchBalance::updateBalance($branchId, $partialAmount);
         });
 
+        $message = $partialAmount >= 0
+            ? "Partial payment of ₱" . number_format($partialAmount, 2) . " for pawn ticket number '{$pawnTicketNumber}' has been recorded successfully. Principal reduced from ₱" . number_format($currentPrincipalAmount, 2) . " to ₱" . number_format($newPrincipalAmount, 2) . "."
+            : "Principal increase of ₱" . number_format(abs($partialAmount), 2) . " for pawn ticket number '{$pawnTicketNumber}' has been recorded successfully. Principal increased from ₱" . number_format($currentPrincipalAmount, 2) . " to ₱" . number_format($newPrincipalAmount, 2) . ".";
+        
         return redirect()->route('transactions.index')
-            ->with('success', "Partial payment of ₱" . number_format($partialAmount, 2) . " for pawn ticket number '{$pawnTicketNumber}' has been recorded successfully. Principal reduced from ₱" . number_format($currentPrincipalAmount, 2) . " to ₱" . number_format($newPrincipalAmount, 2) . ".");
+            ->with('success', $message);
     }
 
     /**

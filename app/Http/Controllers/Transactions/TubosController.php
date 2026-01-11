@@ -203,8 +203,8 @@ class TubosController extends Controller
             'late_days_charge_amount' => ['nullable', 'numeric', 'min:0'],
             'apply_additional_charge' => ['nullable', 'boolean'],
             'transaction_pawn_ticket' => ['required', 'string', 'max:100'],
-            'signature_photo' => ['nullable', 'image', 'mimes:jpeg,png,jpg', 'max:5120'], // 5MB max
-            'signature_canvas' => ['nullable', 'string'],
+            'signature_photo' => ['nullable', 'image', 'mimes:jpeg,png,jpg', 'max:5120'], // Optional
+            'signature_canvas' => ['nullable', 'string'], // Optional
         ]);
 
         $pawnTicketNumber = $request->input('pawn_ticket_number');
@@ -285,12 +285,7 @@ class TubosController extends Controller
                 }
             }
             
-            // Validate that at least one signature method was provided
-            if (!$signaturePath) {
-                return redirect()->back()
-                    ->withInput()
-                    ->with('error', 'Please provide a signature either by taking/choosing a photo or drawing on the canvas.');
-            }
+            // Signature is optional, so no validation needed
         } catch (\Exception $e) {
             return redirect()->back()
                 ->withInput()
