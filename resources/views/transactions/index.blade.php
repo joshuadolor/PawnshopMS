@@ -479,6 +479,18 @@
                                             $isRenewal = $childTransaction->type === 'renew';
                                             $isTubos = $childTransaction->type === 'tubos';
                                             $isPartial = $childTransaction->type === 'partial';
+                                            
+                                            // Check if partial transaction is a principal increase (negative amount)
+                                            $isPrincipalIncrease = false;
+                                            if ($isPartial) {
+                                                $financialTransaction = \App\Models\BranchFinancialTransaction::where('transaction_id', $childTransaction->id)
+                                                    ->where('type', 'expense')
+                                                    ->where('description', 'like', '%Principal increase%')
+                                                    ->whereDoesntHave('voided')
+                                                    ->first();
+                                                $isPrincipalIncrease = $financialTransaction !== null;
+                                            }
+                                            
                                             $bgColor = $isRenewal ? 'bg-yellow-50 hover:bg-yellow-100' : ($isTubos ? 'bg-green-50 hover:bg-green-100' : ($isPartial ? 'bg-purple-50 hover:bg-purple-100' : 'bg-gray-50'));
                                             $textColor = $isRenewal ? 'text-yellow-900' : ($isTubos ? 'text-green-900' : ($isPartial ? 'text-purple-900' : 'text-gray-900'));
                                             $badgeColor = $isRenewal ? 'bg-yellow-100 text-yellow-800' : ($isTubos ? 'bg-green-100 text-green-800' : ($isPartial ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'));
@@ -488,16 +500,20 @@
                                                 : ($isTubos 
                                                     ? "Redemption of Pawn Ticket #{$childTransaction->pawn_ticket_number}"
                                                     : ($isPartial
-                                                        ? "Partial Payment of Pawn Ticket #{$childTransaction->pawn_ticket_number}"
+                                                        ? ($isPrincipalIncrease 
+                                                            ? "Principal Increase of Pawn Ticket #{$childTransaction->pawn_ticket_number}"
+                                                            : "Partial Payment of Pawn Ticket #{$childTransaction->pawn_ticket_number}")
                                                         : "Transaction #{$childTransaction->transaction_number}"));
                                             $subDescription = $isRenewal 
                                                 ? "Interest payment to extend maturity and expiry dates."
                                                 : ($isTubos 
                                                     ? "Principal + Service Charge + Additional Charge payment."
                                                     : ($isPartial
-                                                        ? "Partial payment that reduces principal amount."
+                                                        ? ($isPrincipalIncrease
+                                                            ? "Principal increase that adds to the loan amount."
+                                                            : "Partial payment that reduces principal amount.")
                                                         : ""));
-                                            $amountLabel = $isRenewal ? "Interest Paid:" : ($isTubos ? "Amount Paid:" : ($isPartial ? "Partial Amount Paid:" : "Amount:"));
+                                            $amountLabel = $isRenewal ? "Interest Paid:" : ($isTubos ? "Amount Paid:" : ($isPartial ? ($isPrincipalIncrease ? "Principal Increase:" : "Partial Amount Paid:") : "Amount:"));
                                         @endphp
                                         <tr 
                                             class="{{ $bgColor }} transition-colors cursor-pointer transaction-row {{ $isVoided ? 'opacity-40' : '' }}"
@@ -566,15 +582,28 @@
                                                 @endif
                                             </td>
                                             <td class="px-6 py-2 whitespace-nowrap">
-                                                <span class="px-2 inline-flex text-[11px] leading-5 font-semibold rounded-full {{ $badgeColor }}">
-                                                    {{ $isRenewal ? 'Renew' : ($isTubos ? 'Tubos' : ($isPartial ? 'Partial' : ucfirst($childTransaction->type))) }}
-                                                </span>
+                                                <div class="flex flex-col gap-1">
+                                                    <span class="px-2 inline-flex text-[11px] leading-5 font-semibold rounded-full {{ $badgeColor }}">
+                                                        {{ $isRenewal ? 'Renew' : ($isTubos ? 'Tubos' : ($isPartial ? 'Partial' : ucfirst($childTransaction->type))) }}
+                                                    </span>
+                                                    @if($childTransaction->status === 'redeemed')
+                                                        <span class="px-2 inline-flex text-[11px] leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                                                            Redeemed
+                                                        </span>
+                                                    @endif
+                                                </div>
                                             </td>
                                             <td class="px-6 py-2 whitespace-nowrap">
                                                 <div class="text-[11px] text-gray-500">{{ $amountLabel }}</div>
-                                                <div class="text-xs font-medium text-green-700">
-                                                    +₱{{ number_format($childTransaction->net_proceeds, 2) }}
-                                                </div>
+                                                @if($isPartial && $isPrincipalIncrease)
+                                                    <div class="text-xs font-medium text-red-700">
+                                                        -₱{{ number_format($childTransaction->net_proceeds, 2) }}
+                                                    </div>
+                                                @else
+                                                    <div class="text-xs font-medium text-green-700">
+                                                        +₱{{ number_format($childTransaction->net_proceeds, 2) }}
+                                                    </div>
+                                                @endif
                                             </td>
                                             <td class="px-6 py-2 whitespace-nowrap">
                                                 <div class="text-xs text-gray-900">
@@ -663,13 +692,20 @@
                                                     <div class="text-xs text-gray-500 mt-1">{{ \Illuminate\Support\Str::limit($transaction->item_description, 40) }}</div>
                                                 </td>
                                                 <td class="px-6 py-4 whitespace-nowrap">
-                                                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                                                        {{ $transaction->type === 'sangla' ? 'bg-blue-100 text-blue-800' : 
-                                                           ($transaction->type === 'tubos' ? 'bg-green-100 text-green-800' : 
-                                                           ($transaction->type === 'renew' ? 'bg-yellow-100 text-yellow-800' : 
-                                                           ($transaction->type === 'partial' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'))) }}">
-                                                        {{ $transaction->type === 'partial' ? 'Partial' : ucfirst($transaction->type) }}
-                                                    </span>
+                                                    <div class="flex flex-col gap-1">
+                                                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                                                            {{ $transaction->type === 'sangla' ? 'bg-blue-100 text-blue-800' : 
+                                                               ($transaction->type === 'tubos' ? 'bg-green-100 text-green-800' : 
+                                                               ($transaction->type === 'renew' ? 'bg-yellow-100 text-yellow-800' : 
+                                                               ($transaction->type === 'partial' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'))) }}">
+                                                            {{ $transaction->type === 'partial' ? 'Partial' : ucfirst($transaction->type) }}
+                                                        </span>
+                                                        @if($transaction->status === 'redeemed')
+                                                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                                                                Redeemed
+                                                            </span>
+                                                        @endif
+                                                    </div>
                                                 </td>
                                                 <td class="px-6 py-4 whitespace-nowrap">
                                                     <div class="text-xs text-gray-500">Principal:</div>

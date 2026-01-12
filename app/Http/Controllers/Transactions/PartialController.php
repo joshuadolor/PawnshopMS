@@ -42,11 +42,24 @@ class PartialController extends Controller
             $pawnTicketNumber = $request->input('pawn_ticket_number');
         }
 
-        // Find all Sangla transactions with this pawn ticket number (including additional items)
+        // Find all Sangla transactions with this pawn ticket number (including additional items and redeemed ones)
         $allTransactions = Transaction::where('pawn_ticket_number', $pawnTicketNumber)
             ->where('type', 'sangla')
             ->whereDoesntHave('voided')
             ->with(['branch', 'itemType', 'itemTypeSubtype', 'tags'])
+            ->orderBy('created_at', 'asc')
+            ->get();
+        
+        // Get tubos transaction for this pawn ticket to identify items redeemed via tubos
+        $tubosTransaction = Transaction::where('pawn_ticket_number', $pawnTicketNumber)
+            ->where('type', 'tubos')
+            ->whereDoesntHave('voided')
+            ->first();
+        
+        // Get all partial transactions for this pawn ticket to find redemption info
+        $partialTransactionsForRedemption = Transaction::where('pawn_ticket_number', $pawnTicketNumber)
+            ->where('type', 'partial')
+            ->whereDoesntHave('voided')
             ->orderBy('created_at', 'asc')
             ->get();
 
@@ -222,7 +235,9 @@ class PartialController extends Controller
         return view('transactions.partial.partial', [
             'transaction' => $oldestTransaction, // Show oldest transaction (for reference)
             'latestTransaction' => $latestTransactionForDates, // Show latest transaction (for current dates)
-            'allTransactions' => $allTransactions, // Keep for reference if needed
+            'allTransactions' => $allTransactions, // All items including redeemed ones
+            'tubosTransaction' => $tubosTransaction, // Tubos transaction if exists
+            'partialTransactionsForRedemption' => $partialTransactionsForRedemption, // Partial transactions for redemption info
             'pawnTicketNumber' => $pawnTicketNumber,
             'totalInterest' => $totalInterest,
             'serviceCharge' => $serviceCharge,
@@ -267,6 +282,8 @@ class PartialController extends Controller
                 'late_days_charge_amount' => ['nullable', 'numeric', 'min:0'],
                 'signature_photo' => ['nullable', 'image', 'mimes:jpeg,png,jpg', 'max:5120'],
                 'signature_canvas' => ['nullable', 'string'],
+                'selected_items' => ['nullable', 'array'],
+                'selected_items.*' => ['integer', 'exists:transactions,id'],
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             $pawnTicketNumber = $request->input('pawn_ticket_number', '');
@@ -276,13 +293,39 @@ class PartialController extends Controller
         }
 
         $pawnTicketNumber = $request->input('pawn_ticket_number');
+        $selectedItemIds = $request->input('selected_items', []);
+        
+        // Debug: Log what we received
+        \Log::info('=== PARTIAL STORE START ===', [
+            'pawn_ticket_number' => $pawnTicketNumber,
+            'selected_items_raw' => $request->input('selected_items'),
+            'selected_items_type' => gettype($request->input('selected_items')),
+            'all_request_keys' => array_keys($request->except(['_token', 'signature_photo', 'signature_canvas'])),
+        ]);
+        
+        // Ensure selectedItemIds is an array and contains only integers
+        if (!is_array($selectedItemIds)) {
+            \Log::warning('Partial Store - selected_items is not an array', ['type' => gettype($selectedItemIds), 'value' => $selectedItemIds]);
+            $selectedItemIds = [];
+        }
+        $selectedItemIds = array_filter(array_map('intval', $selectedItemIds));
+        
+        \Log::info('Partial Store - Processed Selected Items', [
+            'selected_item_ids' => $selectedItemIds,
+            'count' => count($selectedItemIds),
+            'is_empty' => empty($selectedItemIds),
+        ]);
 
-        // Find all transactions with this pawn ticket number
+        // Find all transactions with this pawn ticket number (including redeemed ones for display)
+        // But we'll filter out redeemed items when processing
         $allTransactions = Transaction::where('pawn_ticket_number', $pawnTicketNumber)
             ->where('type', 'sangla')
             ->whereDoesntHave('voided')
             ->orderBy('created_at', 'asc')
             ->get();
+        
+        // Filter out redeemed items for processing
+        $activeTransactions = $allTransactions->where('status', '!=', 'redeemed');
 
         if ($allTransactions->isEmpty()) {
             return redirect()->route('transactions.partial.search')
@@ -290,18 +333,89 @@ class PartialController extends Controller
         }
 
         // Check if this pawn ticket has already been redeemed (has non-voided tubos transaction)
+        // But allow if we're processing selected items (partial tubos)
         $hasActiveTubos = Transaction::where('pawn_ticket_number', $pawnTicketNumber)
             ->where('type', 'tubos')
             ->whereDoesntHave('voided')
             ->exists();
 
-        if ($hasActiveTubos) {
+        if ($hasActiveTubos && empty($selectedItemIds)) {
             return redirect()->route('transactions.partial.search')
                 ->with('error', 'This pawn ticket has already been redeemed (tubos). Partial payment is not allowed for redeemed transactions.');
         }
 
+        // Separate selected items from remaining items (only from active transactions)
+        $selectedTransactions = $activeTransactions->whereIn('id', $selectedItemIds);
+        $remainingTransactions = $activeTransactions->whereNotIn('id', $selectedItemIds);
+        
+        \Log::info('Partial Store - Transaction Separation', [
+            'all_transactions_count' => $allTransactions->count(),
+            'all_transaction_ids' => $allTransactions->pluck('id')->toArray(),
+            'selected_item_ids' => $selectedItemIds,
+            'selected_transactions_count' => $selectedTransactions->count(),
+            'selected_transaction_ids' => $selectedTransactions->pluck('id')->toArray(),
+            'remaining_transactions_count' => $remainingTransactions->count(),
+            'remaining_transaction_ids' => $remainingTransactions->pluck('id')->toArray(),
+        ]);
+
+        // If items are selected, mark them as redeemed (but don't create tubos transaction)
+        $selectedItemsMessage = '';
+        if (!empty($selectedItemIds) && $selectedTransactions->isNotEmpty()) {
+            \Log::info('Partial Store - Processing Selected Items', [
+                'selected_item_ids' => $selectedItemIds,
+                'selected_transactions_count' => $selectedTransactions->count(),
+            ]);
+            // Calculate principal allocation for selected items to adjust remaining principal
+            // Use appraised value ratio if available, otherwise equal split
+            $totalAppraisedValue = $allTransactions->sum('appraised_value');
+            $selectedAppraisedValue = $selectedTransactions->sum('appraised_value');
+            
+            // Get current principal
+            $latestPartialTransaction = Transaction::where('pawn_ticket_number', $pawnTicketNumber)
+                ->where('type', 'partial')
+                ->whereDoesntHave('voided')
+                ->orderBy('created_at', 'desc')
+                ->first();
+            
+            $currentPrincipalAmount = $latestPartialTransaction 
+                ? (float) $latestPartialTransaction->loan_amount 
+                : (float) $allTransactions->first()->loan_amount;
+            
+            // Calculate principal for selected items (to subtract from remaining)
+            $selectedPrincipalAmount = 0;
+            if ($totalAppraisedValue > 0 && $selectedAppraisedValue > 0) {
+                // Allocate based on appraised value ratio
+                $selectedPrincipalAmount = $currentPrincipalAmount * ($selectedAppraisedValue / $totalAppraisedValue);
+            } else {
+                // Equal split
+                $selectedPrincipalAmount = $currentPrincipalAmount * ($selectedTransactions->count() / $allTransactions->count());
+            }
+            
+            // Mark selected transactions as redeemed (no tubos transaction created)
+            // Store the count for later use in the transaction
+            $selectedItemsToRedeem = $selectedItemIds;
+            $selectedItemsMessage = "Selected " . count($selectedItemsToRedeem) . " item(s) will be marked as redeemed. ";
+            
+            \Log::info('Partial Store - Prepared for Redemption', [
+                'selected_items_to_redeem' => $selectedItemsToRedeem,
+                'count' => count($selectedItemsToRedeem),
+            ]);
+            
+            // Update current principal to exclude selected items
+            $currentPrincipalAmount = $currentPrincipalAmount - $selectedPrincipalAmount;
+            
+            // If all items are selected, we're done (just mark them as redeemed)
+            if ($remainingTransactions->isEmpty()) {
+                return redirect()->route('transactions.index')
+                    ->with('success', $selectedItemsMessage . "All items have been marked as redeemed.");
+            }
+            
+            // Update activeTransactions to only include remaining items for partial processing
+            $activeTransactions = $remainingTransactions;
+        }
+
         // Use the oldest transaction for basic info (has actual loan amount)
-        $oldestTransaction = $allTransactions->first();
+        $oldestTransaction = $activeTransactions->first();
         $branchId = $oldestTransaction->branch_id;
         $partialAmount = (float) $request->input('partial_amount');
         $backDate = $request->has('back_date') ? (bool) $request->input('back_date') : false;
@@ -371,43 +485,108 @@ class PartialController extends Controller
         // If partial amount is positive, it decreases the principal (pawner pays)
         $newPrincipalAmount = $currentPrincipalAmount - $partialAmount;
 
-        // Combine all item descriptions for the partial transaction
-        $combinedDescriptions = $allTransactions->pluck('item_description')->filter()->unique()->values()->implode('; ');
+        // Combine all item descriptions for the partial transaction (from active transactions only)
+        $combinedDescriptions = $activeTransactions->pluck('item_description')->filter()->unique()->values()->implode('; ');
 
-        // Process signature (base64 to image file)
+        // Process signature for partial payment (base64 to image file)
         $signaturePath = null;
-        $branch = $oldestTransaction->branch;
-        $branchName = $branch->name;
         
-        try {
-            $signatureData = $request->input('signature');
-            if ($signatureData && strpos($signatureData, 'data:image') === 0) {
-                // Extract base64 data
-                list($type, $data) = explode(';', $signatureData);
-                list(, $data) = explode(',', $data);
-                $imageData = base64_decode($data);
-                
-                // Create directory structure: transactions/signatures/YYYY-MM-DD/branch-name/
-                $dateFolder = now()->format('Y-m-d');
-                $sanitizedBranchName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $branchName);
-                $directory = "transactions/signatures/{$dateFolder}/{$sanitizedBranchName}";
-                
-                // Generate unique filename
-                $filename = 'signature_' . uniqid() . '_' . time() . '.png';
-                $filePath = "{$directory}/{$filename}";
-                
-                // Store the image
-                Storage::disk('local')->put($filePath, $imageData);
-                $signaturePath = $filePath;
+        if (true) {
+            $branch = $oldestTransaction->branch;
+            $branchName = $branch->name;
+            
+            try {
+                // Handle signature photo
+                if ($request->hasFile('signature_photo')) {
+                    $imageService = app(\App\Services\ImageProcessingService::class);
+                    $signaturePath = $imageService->processAndStore(
+                        $request->file('signature_photo'),
+                        'transactions/signatures',
+                        $branchName
+                    );
+                } elseif ($request->input('signature_canvas')) {
+                    // Handle canvas signature (base64)
+                    $signatureData = $request->input('signature_canvas');
+                    if (strpos($signatureData, 'data:image') === 0) {
+                        list($type, $data) = explode(';', $signatureData);
+                        list(, $data) = explode(',', $data);
+                        $imageData = base64_decode($data);
+                        
+                        // Create directory structure: transactions/signatures/YYYY-MM-DD/branch-name/
+                        $dateFolder = now()->format('Y-m-d');
+                        $sanitizedBranchName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $branchName);
+                        $directory = "transactions/signatures/{$dateFolder}/{$sanitizedBranchName}";
+                        
+                        // Generate unique filename
+                        $filename = 'signature_' . uniqid() . '_' . time() . '.png';
+                        $filePath = "{$directory}/{$filename}";
+                        
+                        // Store the image
+                        Storage::disk('local')->put($filePath, $imageData);
+                        $signaturePath = $filePath;
+                    }
+                }
+            } catch (\Exception $e) {
+                // Continue without signature if processing fails (signature is optional)
             }
-        } catch (\Exception $e) {
-            return redirect()->route('transactions.partial.find', ['pawn_ticket_number' => $pawnTicketNumber])
-                ->withInput()
-                ->with('error', 'Failed to process signature: ' . $e->getMessage());
         }
 
         // Use database transaction to ensure data integrity
-        DB::transaction(function () use ($allTransactions, $request, $branchId, $partialAmount, $lateDaysCharge, $backDate, $pawnTicketNumber, $oldestTransaction, $combinedDescriptions, $signaturePath, $newPrincipalAmount, $totalInterest, $serviceCharge, $additionalChargeAmount) {
+        // Include selected items redemption in the same transaction
+        $selectedItemsToRedeem = isset($selectedItemIds) && !empty($selectedItemIds) ? $selectedItemIds : [];
+        
+        \Log::info('Partial Store - Before DB Transaction', [
+            'selected_items_to_redeem' => $selectedItemsToRedeem,
+            'pawn_ticket_number' => $pawnTicketNumber,
+            'partial_amount' => $partialAmount,
+        ]);
+        
+        DB::transaction(function () use ($activeTransactions, $request, $branchId, $partialAmount, $lateDaysCharge, $backDate, $pawnTicketNumber, $oldestTransaction, $combinedDescriptions, $signaturePath, $newPrincipalAmount, $totalInterest, $serviceCharge, $additionalChargeAmount, $selectedItemsToRedeem) {
+            // First, mark selected items as redeemed (if any)
+            if (!empty($selectedItemsToRedeem)) {
+                \Log::info('Partial Store - Inside DB Transaction - Updating Selected Items', [
+                    'selected_items_to_redeem' => $selectedItemsToRedeem,
+                    'pawn_ticket_number' => $pawnTicketNumber,
+                ]);
+                
+                // Check current status before update
+                $beforeUpdate = Transaction::whereIn('id', $selectedItemsToRedeem)
+                    ->get(['id', 'status', 'pawn_ticket_number', 'type'])
+                    ->toArray();
+                
+                \Log::info('Partial Store - Before Update Status', [
+                    'transactions_before' => $beforeUpdate,
+                ]);
+                
+                $updatedCount = Transaction::whereIn('id', $selectedItemsToRedeem)
+                    ->where('pawn_ticket_number', $pawnTicketNumber)
+                    ->where('type', 'sangla')
+                    ->where('status', '!=', 'redeemed') // Only update if not already redeemed
+                    ->update(['status' => 'redeemed']);
+                
+                \Log::info('Partial Store - Update Result', [
+                    'updated_count' => $updatedCount,
+                    'selected_items_to_redeem' => $selectedItemsToRedeem,
+                ]);
+                
+                // Check status after update
+                $afterUpdate = Transaction::whereIn('id', $selectedItemsToRedeem)
+                    ->get(['id', 'status', 'pawn_ticket_number', 'type'])
+                    ->toArray();
+                
+                \Log::info('Partial Store - After Update Status', [
+                    'transactions_after' => $afterUpdate,
+                ]);
+                
+                if ($updatedCount === 0 && !empty($selectedItemsToRedeem)) {
+                    \Log::error('Partial Store - Update Failed', [
+                        'selected_items_to_redeem' => $selectedItemsToRedeem,
+                        'updated_count' => $updatedCount,
+                    ]);
+                    throw new \Exception('Failed to mark selected items as redeemed. The selected items may have already been redeemed or do not exist.');
+                }
+            }
+            
             // Generate partial transaction number
             $partialTransactionNumber = $this->generatePartialTransactionNumber();
 
@@ -477,14 +656,26 @@ class PartialController extends Controller
 
             // Update branch balance (add the partial amount - negative values will decrease balance)
             BranchBalance::updateBalance($branchId, $partialAmount);
+            
+            \Log::info('Partial Store - DB Transaction Completed Successfully', [
+                'selected_items_to_redeem' => $selectedItemsToRedeem ?? [],
+            ]);
         });
+        
+        \Log::info('=== PARTIAL STORE END ===', [
+            'pawn_ticket_number' => $pawnTicketNumber,
+            'selected_items_redeemed' => $selectedItemsToRedeem ?? [],
+        ]);
 
-        $message = $partialAmount >= 0
+        $partialMessage = $partialAmount >= 0
             ? "Partial payment of ₱" . number_format($partialAmount, 2) . " for pawn ticket number '{$pawnTicketNumber}' has been recorded successfully. Principal reduced from ₱" . number_format($currentPrincipalAmount, 2) . " to ₱" . number_format($newPrincipalAmount, 2) . "."
             : "Principal increase of ₱" . number_format(abs($partialAmount), 2) . " for pawn ticket number '{$pawnTicketNumber}' has been recorded successfully. Principal increased from ₱" . number_format($currentPrincipalAmount, 2) . " to ₱" . number_format($newPrincipalAmount, 2) . ".";
         
+        // Combine messages if items were selected
+        $successMessage = (isset($selectedItemsMessage) ? $selectedItemsMessage : '') . $partialMessage;
+        
         return redirect()->route('transactions.index')
-            ->with('success', $message);
+            ->with('success', $successMessage);
     }
 
     /**

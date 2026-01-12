@@ -41,11 +41,24 @@ class TubosController extends Controller
 
         $pawnTicketNumber = $request->input('pawn_ticket_number');
 
-        // Find all Sangla transactions with this pawn ticket number (including additional items)
+        // Find all Sangla transactions with this pawn ticket number (including additional items and redeemed ones)
         $allTransactions = Transaction::where('pawn_ticket_number', $pawnTicketNumber)
             ->where('type', 'sangla')
             ->whereDoesntHave('voided')
             ->with(['branch', 'itemType', 'itemTypeSubtype', 'tags'])
+            ->orderBy('created_at', 'asc')
+            ->get();
+        
+        // Get tubos transaction for this pawn ticket to identify items redeemed via tubos
+        $tubosTransaction = Transaction::where('pawn_ticket_number', $pawnTicketNumber)
+            ->where('type', 'tubos')
+            ->whereDoesntHave('voided')
+            ->first();
+        
+        // Get all partial transactions for this pawn ticket to find redemption info
+        $partialTransactionsForRedemption = Transaction::where('pawn_ticket_number', $pawnTicketNumber)
+            ->where('type', 'partial')
+            ->whereDoesntHave('voided')
             ->orderBy('created_at', 'asc')
             ->get();
 
@@ -171,7 +184,9 @@ class TubosController extends Controller
 
         return view('transactions.tubos.tubos', [
             'transaction' => $oldestTransaction, // Show oldest transaction (for reference)
-            'allTransactions' => $allTransactions, // Keep for reference if needed
+            'allTransactions' => $allTransactions, // All items including redeemed ones
+            'tubosTransaction' => $tubosTransaction, // Tubos transaction if exists
+            'partialTransactionsForRedemption' => $partialTransactionsForRedemption, // Partial transactions for redemption info
             'pawnTicketNumber' => $pawnTicketNumber,
             'principalAmount' => $principalAmount,
             'currentPrincipalAmount' => $currentPrincipalAmount, // Pass current principal to view
@@ -210,8 +225,11 @@ class TubosController extends Controller
         $pawnTicketNumber = $request->input('pawn_ticket_number');
 
         // Find all transactions with this pawn ticket number
+        // Note: We allow tubos even if some items are redeemed via partial flow
+        // Only process non-redeemed items
         $allTransactions = Transaction::where('pawn_ticket_number', $pawnTicketNumber)
             ->where('type', 'sangla')
+            ->where('status', '!=', 'redeemed') // Exclude redeemed transactions from processing
             ->whereDoesntHave('voided')
             ->orderBy('created_at', 'asc')
             ->get();

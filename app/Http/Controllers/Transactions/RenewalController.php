@@ -37,11 +37,24 @@ class RenewalController extends Controller
 
         $pawnTicketNumber = $request->input('pawn_ticket_number');
 
-        // Find all Sangla transactions with this pawn ticket number (including additional items)
+        // Find all Sangla transactions with this pawn ticket number (including additional items and redeemed ones)
         $allTransactions = Transaction::where('pawn_ticket_number', $pawnTicketNumber)
             ->where('type', 'sangla')
             ->whereDoesntHave('voided')
             ->with(['branch', 'itemType', 'itemTypeSubtype', 'tags'])
+            ->orderBy('created_at', 'asc')
+            ->get();
+        
+        // Get tubos transaction for this pawn ticket to identify items redeemed via tubos
+        $tubosTransaction = Transaction::where('pawn_ticket_number', $pawnTicketNumber)
+            ->where('type', 'tubos')
+            ->whereDoesntHave('voided')
+            ->first();
+        
+        // Get all partial transactions for this pawn ticket to find redemption info
+        $partialTransactionsForRedemption = Transaction::where('pawn_ticket_number', $pawnTicketNumber)
+            ->where('type', 'partial')
+            ->whereDoesntHave('voided')
             ->orderBy('created_at', 'asc')
             ->get();
 
@@ -234,7 +247,9 @@ class RenewalController extends Controller
         return view('transactions.renewal.renew', [
             'transaction' => $oldestTransaction, // Show oldest transaction (for reference)
             'latestTransaction' => $latestTransactionForDates, // Show latest transaction (for current dates)
-            'allTransactions' => $allTransactions, // Keep for reference if needed
+            'allTransactions' => $allTransactions, // All items including redeemed ones
+            'tubosTransaction' => $tubosTransaction, // Tubos transaction if exists
+            'partialTransactionsForRedemption' => $partialTransactionsForRedemption, // Partial transactions for redemption info
             'pawnTicketNumber' => $pawnTicketNumber,
             'currentPrincipalAmount' => $currentPrincipalAmount, // Pass current principal to view
             'originalPrincipalAmount' => $originalPrincipalAmount, // Pass original principal to view

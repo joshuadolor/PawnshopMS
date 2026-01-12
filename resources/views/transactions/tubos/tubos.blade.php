@@ -46,18 +46,119 @@
                     @endif
 
                     <div class="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
-                        <p class="text-sm text-blue-800">
-                            <strong>Pawn Ticket Number:</strong> {{ $pawnTicketNumber }}
-                        </p>
-                        <p class="text-sm text-blue-700 mt-1">
-                            <strong>Found {{ $allTransactions->count() }} transaction(s)</strong> - Payment is calculated based on the principal amount.
-                        </p>
-                        @if($allTransactions->count() > 1)
-                            <p class="text-xs text-blue-600 mt-1">
-                                <strong>Note:</strong> All item descriptions will be combined in the tubos transaction.
-                            </p>
-                        @endif
+                        <div class="flex flex-col gap-4">
+                            <div>
+                                <p class="text-sm text-blue-800">
+                                    <strong>Pawn Ticket Number:</strong> {{ $pawnTicketNumber }}
+                                </p>
+                                <p class="text-sm text-blue-700 mt-1">
+                                    <strong>Found {{ $allTransactions->count() }} transaction(s)</strong> - Payment is calculated based on the principal amount.
+                                </p>
+                                @if($allTransactions->count() > 1)
+                                    <p class="text-xs text-blue-600 mt-1">
+                                        <strong>Note:</strong> All item descriptions will be combined in the tubos transaction.
+                                    </p>
+                                @endif
+                            </div>
+                            @if($transaction->pawn_ticket_image_path)
+                                <div>
+                                    <div class="text-xs text-blue-600 mb-1">Pawn Ticket:</div>
+                                    <img 
+                                        src="{{ route('images.show', ['path' => $transaction->pawn_ticket_image_path]) }}" 
+                                        alt="Pawn Ticket" 
+                                        class="w-full h-auto object-cover rounded-lg border-2 border-blue-300 shadow-sm"
+                                        onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'192\' height=\'256\'%3E%3Crect fill=\'%23e5e7eb\' width=\'192\' height=\'256\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'%239ca3af\' font-size=\'12\'%3ENo Image%3C/text%3E%3C/svg%3E'"
+                                    />
+                                </div>
+                            @endif
+                        </div>
                     </div>
+
+                    <!-- Items List -->
+                    @if($allTransactions->count() > 0)
+                        <div class="mb-6">
+                            <div class="border border-gray-200 rounded-lg p-4">
+                                <p class="text-sm font-medium text-gray-700 mb-3">Items in this Pawn Ticket:</p>
+                                <div class="space-y-3">
+                                    @foreach($allTransactions as $tx)
+                                        @php
+                                            $isRedeemed = $tx->status === 'redeemed';
+                                            $redeemedViaTubos = $isRedeemed && $tubosTransaction;
+                                            $redeemedViaPartial = $isRedeemed && !$tubosTransaction;
+                                            
+                                            $redemptionDate = null;
+                                            $redemptionTransactionPawnTicket = null;
+                                            
+                                            if ($redeemedViaTubos && $tubosTransaction) {
+                                                $redemptionDate = $tubosTransaction->created_at;
+                                                $redemptionTransactionPawnTicket = $tubosTransaction->transaction_pawn_ticket;
+                                            } elseif ($redeemedViaPartial) {
+                                                // Find the partial transaction that marked this item as redeemed
+                                                $partialAfterItem = $partialTransactionsForRedemption->filter(function($pt) use ($tx) {
+                                                    return $pt->created_at >= $tx->created_at;
+                                                })->first();
+                                                if ($partialAfterItem) {
+                                                    $redemptionDate = $partialAfterItem->created_at;
+                                                    $redemptionTransactionPawnTicket = $partialAfterItem->transaction_pawn_ticket;
+                                                }
+                                            }
+                                        @endphp
+                                        <div class="bg-gray-50 rounded-lg p-3 border border-gray-200 {{ $isRedeemed ? 'opacity-75' : '' }}">
+                                            <div class="flex items-start gap-4">
+                                                @if($tx->item_image_path)
+                                                    <div class="flex-shrink-0 relative">
+                                                        <img 
+                                                            src="{{ route('images.show', ['path' => $tx->item_image_path]) }}" 
+                                                            alt="Item Image" 
+                                                            class="w-24 h-24 object-cover rounded-lg border border-gray-300 {{ $isRedeemed ? 'blur-sm' : '' }}"
+                                                            onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'96\' height=\'96\'%3E%3Crect fill=\'%23e5e7eb\' width=\'96\' height=\'96\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'%239ca3af\' font-size=\'12\'%3ENo Image%3C/text%3E%3C/svg%3E'"
+                                                        />
+                                                        @if($isRedeemed)
+                                                            <div class="absolute inset-0 flex items-center justify-center">
+                                                                <span class="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded">REDEEMED</span>
+                                                            </div>
+                                                        @endif
+                                                    </div>
+                                                @endif
+                                                <div class="flex-1">
+                                                    <p class="text-sm font-medium text-gray-900">
+                                                        {{ $tx->itemType->name }}
+                                                        @if($tx->itemTypeSubtype)
+                                                            <span class="text-gray-600">- {{ $tx->itemTypeSubtype->name }}</span>
+                                                        @endif
+                                                        @if($tx->custom_item_type)
+                                                            <span class="text-gray-600">- {{ $tx->custom_item_type }}</span>
+                                                        @endif
+                                                    </p>
+                                                    <p class="text-sm text-gray-700 mt-1">{{ $tx->item_description }}</p>
+                                                    @if($tx->tags && $tx->tags->count() > 0)
+                                                        <div class="flex flex-wrap gap-1 mt-2">
+                                                            @foreach($tx->tags as $tag)
+                                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800">
+                                                                    {{ $tag->name }}
+                                                                </span>
+                                                            @endforeach
+                                                        </div>
+                                                    @endif
+                                                    <p class="text-xs text-gray-500 mt-2">Transaction: {{ $tx->transaction_number }}</p>
+                                                    @if($isRedeemed && $redemptionDate)
+                                                        <div class="mt-2 p-2 bg-red-50 border border-red-200 rounded">
+                                                            <p class="text-xs text-red-700">
+                                                                <strong>Redeemed:</strong> {{ $redemptionDate->format('M d, Y') }}
+                                                                @if($redemptionTransactionPawnTicket)
+                                                                    <br><strong>Pawn Ticket:</strong> {{ $redemptionTransactionPawnTicket }}
+                                                                @endif
+                                                            </p>
+                                                        </div>
+                                                    @endif
+                                                </div>
+                                            </div>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            </div>
+                        </div>
+                    @endif
 
                     <!-- Payment Summary -->
                     <div class="mb-6 p-4 bg-green-50 border border-green-200 rounded-md">

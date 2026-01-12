@@ -15,6 +15,8 @@ class ItemsController extends Controller
     public function index(Request $request): View
     {
         // Query sangla transactions (items)
+        // Only exclude items redeemed via partial flow (status = 'redeemed' but no tubos transaction)
+        // Items redeemed via tubos will still show (they have tubos transaction)
         $query = Transaction::where('type', 'sangla')
             ->with(['branch', 'user', 'itemType', 'itemTypeSubtype', 'tags', 'voided'])
             ->orderBy('created_at', 'desc');
@@ -87,6 +89,11 @@ class ItemsController extends Controller
                 ->unique()
                 ->values();
         }
+        
+        // Filter out items that were redeemed via partial flow (status = 'redeemed' but no tubos transaction)
+        // Items redeemed via tubos will still show (they have a tubos transaction)
+        // Note: We need to filter after getting tubos info, but pagination makes this tricky
+        // So we'll filter in the view instead
 
         // Get branches for filter
         $branches = \App\Models\Branch::orderBy('name', 'asc')->get();

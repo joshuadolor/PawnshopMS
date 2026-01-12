@@ -111,8 +111,8 @@
                                 @foreach($items as $item)
                                     @php
                                         $isVoided = $item->isVoided();
-                                        // Check if this pawn ticket has a non-voided tubos transaction
-                                        $isRedeemed = $item->pawn_ticket_number && $redeemedPawnTickets->contains($item->pawn_ticket_number);
+                                        // Check if this item is redeemed (either via tubos transaction OR marked as redeemed via partial flow)
+                                        $isRedeemed = $item->status === 'redeemed' || ($item->pawn_ticket_number && $redeemedPawnTickets->contains($item->pawn_ticket_number));
                                         $isReadyForAuction = !$isVoided && !$isRedeemed && $item->auction_sale_date && \Carbon\Carbon::parse($item->auction_sale_date)->lte(\Carbon\Carbon::today());
                                         $isAvailable = !$isVoided && !$isRedeemed && (!$item->auction_sale_date || \Carbon\Carbon::parse($item->auction_sale_date)->gt(\Carbon\Carbon::today()));
                                         

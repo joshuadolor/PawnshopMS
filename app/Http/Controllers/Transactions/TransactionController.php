@@ -280,10 +280,49 @@ class TransactionController extends Controller
                 'voided_at' => now(),
             ]);
 
-            // Find and void the associated financial transaction (type: transaction)
-            // First try to find by transaction_id (for records created after migration)
+            // Handle partial transaction reversals
+            if ($transaction->type === 'partial') {
+                $pawnTicketNumber = $transaction->pawn_ticket_number;
+                
+                // 1. Revert item statuses: Find all sangla transactions for this pawn ticket that are marked as redeemed
+                // Only revert if there's no tubos transaction (items were redeemed via partial flow, not tubos)
+                $hasTubosTransaction = Transaction::where('pawn_ticket_number', $pawnTicketNumber)
+                    ->where('type', 'tubos')
+                    ->whereDoesntHave('voided')
+                    ->exists();
+                
+                if (!$hasTubosTransaction) {
+                    // No tubos transaction exists, so any redeemed items were redeemed via partial flow
+                    // Revert them back to 'active'
+                    Transaction::where('pawn_ticket_number', $pawnTicketNumber)
+                        ->where('type', 'sangla')
+                        ->where('status', 'redeemed')
+                        ->whereDoesntHave('voided')
+                        ->update(['status' => 'active']);
+                }
+                
+                // 2. Revert principal amount: Find the previous partial transaction (or original sangla)
+                // and restore the principal to that value
+                $previousTransaction = Transaction::where('pawn_ticket_number', $pawnTicketNumber)
+                    ->whereIn('type', ['partial', 'sangla'])
+                    ->where('id', '!=', $transaction->id)
+                    ->whereDoesntHave('voided')
+                    ->orderBy('created_at', 'desc')
+                    ->first();
+                
+                if ($previousTransaction) {
+                    // The principal should be restored to the previous transaction's loan_amount
+                    // But actually, the principal is stored in the partial transaction itself
+                    // The next partial/renewal will use the previous one's loan_amount
+                    // So we don't need to update anything here - the voiding of this transaction
+                    // means the next transaction will use the previous one's principal
+                }
+            }
+
+            // Find and void the associated financial transaction
+            // For partial transactions, it could be type 'transaction' (positive partial) or 'expense' (negative partial)
             $financialTransaction = BranchFinancialTransaction::where('transaction_id', $transaction->id)
-                ->where('type', 'transaction')
+                ->whereIn('type', ['transaction', 'expense'])
                 ->whereDoesntHave('voided')
                 ->first();
 
@@ -317,6 +356,22 @@ class TransactionController extends Controller
                             ->whereNull('transaction_id') // Only match records without transaction_id
                             ->first();
                     }
+                } elseif ($transaction->type === 'partial') {
+                    // For Partial transactions, match by description
+                    $pawnTicketNumber = $transaction->pawn_ticket_number;
+                    if ($pawnTicketNumber) {
+                        $financialTransaction = BranchFinancialTransaction::whereIn('type', ['transaction', 'expense'])
+                            ->where(function($q) use ($pawnTicketNumber) {
+                                $q->where('description', "Partial payment - Pawn Ticket #{$pawnTicketNumber}")
+                                  ->orWhere('description', "Principal increase - Pawn Ticket #{$pawnTicketNumber}");
+                            })
+                            ->where('branch_id', $transaction->branch_id)
+                            ->where('amount', abs($transaction->net_proceeds)) // Amount is stored as absolute value
+                            ->whereDate('transaction_date', $transaction->created_at->toDateString())
+                            ->whereDoesntHave('voided')
+                            ->whereNull('transaction_id') // Only match records without transaction_id
+                            ->first();
+                    }
                 }
             }
 
@@ -341,6 +396,17 @@ class TransactionController extends Controller
                 } elseif ($transaction->type === 'renew') {
                     // Renewal: amount was positive (money in), so we reverse by subtracting it
                     BranchBalance::updateBalance($financialTransaction->branch_id, -(float) $financialTransaction->amount);
+                } elseif ($transaction->type === 'partial') {
+                    // Partial: reverse the original amount
+                    // If it was a payment (type: transaction), reverse by subtracting
+                    // If it was an expense (type: expense), reverse by adding
+                    if ($financialTransaction->type === 'transaction') {
+                        // Original was money in (positive), reverse by subtracting
+                        BranchBalance::updateBalance($financialTransaction->branch_id, -(float) $financialTransaction->amount);
+                    } elseif ($financialTransaction->type === 'expense') {
+                        // Original was money out (negative), reverse by adding
+                        BranchBalance::updateBalance($financialTransaction->branch_id, (float) $financialTransaction->amount);
+                    }
                 }
             } else {
                 // No existing financial transaction found - create one for voiding log
@@ -363,6 +429,31 @@ class TransactionController extends Controller
                     $description = $pawnTicketNumber 
                         ? "Renewal interest payment - Pawn Ticket #{$pawnTicketNumber}" 
                         : 'Renewal interest payment';
+                } elseif ($transaction->type === 'partial') {
+                    $amount = abs($transaction->net_proceeds);
+                    $pawnTicketNumber = $transaction->pawn_ticket_number;
+                    // Determine if it was a payment or expense based on the loan_amount change
+                    // If loan_amount decreased, it was a payment; if increased, it was an expense
+                    $previousTransaction = Transaction::where('pawn_ticket_number', $pawnTicketNumber)
+                        ->whereIn('type', ['partial', 'sangla'])
+                        ->where('id', '!=', $transaction->id)
+                        ->whereDoesntHave('voided')
+                        ->orderBy('created_at', 'desc')
+                        ->first();
+                    
+                    if ($previousTransaction) {
+                        $previousPrincipal = (float) $previousTransaction->loan_amount;
+                        $currentPrincipal = (float) $transaction->loan_amount;
+                        if ($currentPrincipal < $previousPrincipal) {
+                            // Principal decreased = payment (money in)
+                            $description = "Partial payment - Pawn Ticket #{$pawnTicketNumber}";
+                        } else {
+                            // Principal increased = expense (money out)
+                            $description = "Principal increase - Pawn Ticket #{$pawnTicketNumber}";
+                        }
+                    } else {
+                        $description = "Partial payment - Pawn Ticket #{$pawnTicketNumber}";
+                    }
                 }
 
                 if ($amount > 0) {
@@ -392,6 +483,29 @@ class TransactionController extends Controller
                     } elseif ($transaction->type === 'renew') {
                         // Renewal: original was money in (positive), voiding subtracts it (negative)
                         BranchBalance::updateBalance($transaction->branch_id, -(float) $amount);
+                    } elseif ($transaction->type === 'partial') {
+                        // Partial: determine if it was payment or expense
+                        $previousTransaction = Transaction::where('pawn_ticket_number', $transaction->pawn_ticket_number)
+                            ->whereIn('type', ['partial', 'sangla'])
+                            ->where('id', '!=', $transaction->id)
+                            ->whereDoesntHave('voided')
+                            ->orderBy('created_at', 'desc')
+                            ->first();
+                        
+                        if ($previousTransaction) {
+                            $previousPrincipal = (float) $previousTransaction->loan_amount;
+                            $currentPrincipal = (float) $transaction->loan_amount;
+                            if ($currentPrincipal < $previousPrincipal) {
+                                // Was a payment (money in), reverse by subtracting
+                                BranchBalance::updateBalance($transaction->branch_id, -(float) $amount);
+                            } else {
+                                // Was an expense (money out), reverse by adding
+                                BranchBalance::updateBalance($transaction->branch_id, (float) $amount);
+                            }
+                        } else {
+                            // Default: assume it was a payment
+                            BranchBalance::updateBalance($transaction->branch_id, -(float) $amount);
+                        }
                     }
                 }
             }
