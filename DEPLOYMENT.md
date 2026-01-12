@@ -81,3 +81,18 @@ sudo ufw reload
 - **Container shell**: `docker compose exec app bash`
 - **Check status**: `docker compose ps`
 - **Rebuild**: `docker compose up -d --build --force-recreate`
+
+### Fix Vite Permission Issues
+
+If you get "Permission denied" when running `npm run build`:
+
+```bash
+# Fix node_modules permissions inside container
+docker compose exec app chmod -R +x node_modules/.bin
+
+# Or reinstall node_modules
+docker compose exec app rm -rf node_modules
+docker compose exec app npm install
+docker compose exec app chmod -R +x node_modules/.bin
+docker compose exec app npm run build
+```

@@ -25,15 +25,23 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
 # Set working directory
 WORKDIR /var/www/html
 
+# Copy package files first for better caching
+COPY package*.json ./
+
+# Install npm dependencies
+RUN npm install
+
 # Copy application files
 COPY . /var/www/html
 
 # Set permissions (directories 755, files 644)
+# But preserve execute permissions for node_modules/.bin
 RUN chown -R www-data:www-data /var/www/html \
     && find /var/www/html -type d -exec chmod 755 {} \; \
     && find /var/www/html -type f -exec chmod 644 {} \; \
     && chmod -R 775 /var/www/html/storage \
-    && chmod -R 775 /var/www/html/bootstrap/cache
+    && chmod -R 775 /var/www/html/bootstrap/cache \
+    && if [ -d /var/www/html/node_modules/.bin ]; then chmod -R +x /var/www/html/node_modules/.bin; fi
 
 # Copy Nginx configuration
 COPY docker/nginx.conf /etc/nginx/sites-available/default
