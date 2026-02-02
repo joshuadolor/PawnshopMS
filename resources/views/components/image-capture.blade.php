@@ -17,14 +17,29 @@
         
         <!-- Preview and capture button container -->
         <div class="flex flex-col items-center gap-4">
-            <!-- Image preview -->
+            <!-- Image preview with collapse/expand -->
             <div id="{{ $name }}_preview_container" class="{{ $value ? '' : 'hidden' }} w-full max-w-md">
-                <img 
-                    id="{{ $name }}_preview" 
-                    src="{{ $value ? asset('storage/' . $value) : '' }}" 
-                    alt="Preview" 
-                    class="w-full h-auto rounded-lg border-2 border-gray-300 object-cover max-h-64"
-                />
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm font-medium text-gray-700">Image Preview</span>
+                    <button 
+                        type="button"
+                        onclick="toggleImagePreview('{{ $name }}')"
+                        class="text-sm text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1"
+                    >
+                        <span id="{{ $name }}_toggle_text">Hide</span>
+                        <svg id="{{ $name }}_toggle_icon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div id="{{ $name }}_preview_image_container" class="border-2 border-gray-300 rounded-lg overflow-hidden">
+                    <img 
+                        id="{{ $name }}_preview" 
+                        src="{{ $value ? asset('storage/' . $value) : '' }}" 
+                        alt="Preview" 
+                        class="w-full h-auto rounded-lg object-cover max-h-64"
+                    />
+                </div>
             </div>
             
             <!-- Buttons -->
@@ -69,3 +84,30 @@
     <x-input-error :messages="$errors->get($name)" class="mt-2" />
 </div>
 
+@once
+@push('scripts')
+<script>
+    function toggleImagePreview(fieldName) {
+        const imageContainer = document.getElementById(fieldName + '_preview_image_container');
+        const toggleText = document.getElementById(fieldName + '_toggle_text');
+        const toggleIcon = document.getElementById(fieldName + '_toggle_icon');
+        
+        if (imageContainer && toggleText && toggleIcon) {
+            const isHidden = imageContainer.classList.contains('hidden');
+            
+            if (isHidden) {
+                // Show image
+                imageContainer.classList.remove('hidden');
+                toggleText.textContent = 'Hide';
+                toggleIcon.style.transform = 'rotate(0deg)';
+            } else {
+                // Hide image
+                imageContainer.classList.add('hidden');
+                toggleText.textContent = 'Show';
+                toggleIcon.style.transform = 'rotate(180deg)';
+            }
+        }
+    }
+</script>
+@endpush
+@endonce

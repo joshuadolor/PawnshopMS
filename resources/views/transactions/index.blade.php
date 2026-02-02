@@ -955,9 +955,21 @@
                     <h4 class="text-md font-semibold text-gray-900 mb-4">Images</h4>
                     <div class="grid grid-cols-1 md:grid-cols-1 gap-6">
                         <!-- Item Image -->
-                        <div>
-                            <h5 class="text-sm font-medium text-gray-700 mb-2">Item Image</h5>
-                            <div class="border-2 border-gray-200 rounded-lg overflow-hidden">
+                        <div id="modalItemImageSection">
+                            <div class="flex items-center justify-between mb-2">
+                                <h5 class="text-sm font-medium text-gray-700">Item Image</h5>
+                                <button 
+                                    type="button"
+                                    onclick="toggleModalImage('modalItemImageContainer')"
+                                    class="text-sm text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1 px-3 py-1 border border-indigo-300 rounded-md hover:bg-indigo-50 transition-colors"
+                                >
+                                    <span id="modalItemImageToggleText">Hide</span>
+                                    <svg id="modalItemImageToggleIcon" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div id="modalItemImageContainer" class="border-2 border-gray-200 rounded-lg overflow-hidden">
                                 <img 
                                     id="modalItemImage" 
                                     src="" 
@@ -969,7 +981,19 @@
                         
                         <!-- All Item Images (for Renewal transactions) -->
                         <div id="allItemImagesSection" class="hidden">
-                            <h5 class="text-sm font-medium text-gray-700 mb-2">All Item Images</h5>
+                            <div class="flex items-center justify-between mb-2">
+                                <h5 class="text-sm font-medium text-gray-700">All Item Images</h5>
+                                <button 
+                                    type="button"
+                                    onclick="toggleModalImage('allItemImagesContainer')"
+                                    class="text-sm text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1 px-3 py-1 border border-indigo-300 rounded-md hover:bg-indigo-50 transition-colors"
+                                >
+                                    <span id="allItemImagesToggleText">Hide</span>
+                                    <svg id="allItemImagesToggleIcon" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path>
+                                    </svg>
+                                </button>
+                            </div>
                             <div id="allItemImagesContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <!-- Item images will be dynamically inserted here -->
                             </div>
@@ -977,8 +1001,20 @@
                         
                         <!-- Pawner ID Image -->
                         <div>
-                            <h5 class="text-sm font-medium text-gray-700 mb-2">Pawner ID/Photo</h5>
-                            <div class="border-2 border-gray-200 rounded-lg overflow-hidden">
+                            <div class="flex items-center justify-between mb-2">
+                                <h5 class="text-sm font-medium text-gray-700">Pawner ID/Photo</h5>
+                                <button 
+                                    type="button"
+                                    onclick="toggleModalImage('modalPawnerImageContainer')"
+                                    class="text-sm text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1 px-3 py-1 border border-indigo-300 rounded-md hover:bg-indigo-50 transition-colors"
+                                >
+                                    <span id="modalPawnerImageToggleText">Hide</span>
+                                    <svg id="modalPawnerImageToggleIcon" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div id="modalPawnerImageContainer" class="border-2 border-gray-200 rounded-lg overflow-hidden">
                                 <img 
                                     id="modalPawnerImage" 
                                     src="" 
@@ -990,8 +1026,20 @@
                         
                         <!-- Pawn Ticket Image -->
                         <div>
-                            <h5 class="text-sm font-medium text-gray-700 mb-2">Pawn Ticket</h5>
-                            <div class="border-2 border-gray-200 rounded-lg overflow-hidden">
+                            <div class="flex items-center justify-between mb-2">
+                                <h5 class="text-sm font-medium text-gray-700">Pawn Ticket</h5>
+                                <button 
+                                    type="button"
+                                    onclick="toggleModalImage('modalPawnTicketImageContainer')"
+                                    class="text-sm text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1 px-3 py-1 border border-indigo-300 rounded-md hover:bg-indigo-50 transition-colors"
+                                >
+                                    <span id="modalPawnTicketImageToggleText">Hide</span>
+                                    <svg id="modalPawnTicketImageToggleIcon" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div id="modalPawnTicketImageContainer" class="border-2 border-gray-200 rounded-lg overflow-hidden">
                                 <img 
                                     id="modalPawnTicketImage" 
                                     src="" 
@@ -1009,8 +1057,20 @@
                         
                         <!-- Signature Image (for Tubos transactions) -->
                         <div id="signatureSection" class="hidden">
-                            <h5 class="text-sm font-medium text-gray-700 mb-2">Pawner Signature</h5>
-                            <div class="border-2 border-gray-200 rounded-lg overflow-hidden">
+                            <div class="flex items-center justify-between mb-2">
+                                <h5 class="text-sm font-medium text-gray-700">Pawner Signature</h5>
+                                <button 
+                                    type="button"
+                                    onclick="toggleModalImage('modalSignatureImageContainer')"
+                                    class="text-sm text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1 px-3 py-1 border border-indigo-300 rounded-md hover:bg-indigo-50 transition-colors"
+                                >
+                                    <span id="modalSignatureImageToggleText">Hide</span>
+                                    <svg id="modalSignatureImageToggleIcon" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div id="modalSignatureImageContainer" class="border-2 border-gray-200 rounded-lg overflow-hidden">
                                 <img 
                                     id="modalSignatureImage" 
                                     src="" 
@@ -1542,7 +1602,11 @@
                 // Hide all items section for non-renewal transactions
                 document.getElementById('allItemsSection').classList.add('hidden');
                 document.getElementById('allItemImagesSection').classList.add('hidden');
-                document.getElementById('modalItemImage').parentElement.style.display = 'block';
+                // Show the single Item Image section
+                const modalItemImageSection = document.getElementById('modalItemImageSection');
+                if (modalItemImageSection) {
+                    modalItemImageSection.classList.remove('hidden');
+                }
             }
             
             // Show/hide void button based on voided status, child transactions, latest child check, and 6-hour rule
@@ -1630,6 +1694,14 @@
                 }
             }
             
+            // Hide "All Item Images" section for individual transactions
+            document.getElementById('allItemImagesSection').classList.add('hidden');
+            // Show the single Item Image section for individual transactions
+            const modalItemImageSection = document.getElementById('modalItemImageSection');
+            if (modalItemImageSection) {
+                modalItemImageSection.classList.remove('hidden');
+            }
+            
             // Set images
             document.getElementById('modalItemImage').src = data.itemImageUrl;
             document.getElementById('modalPawnerImage').src = data.pawnerImageUrl;
@@ -1678,7 +1750,7 @@
                     const allItemImagesContainer = document.getElementById('allItemImagesContainer');
                     const allItemsSection = document.getElementById('allItemsSection');
                     const allItemImagesSection = document.getElementById('allItemImagesSection');
-                    const singleItemImageSection = document.getElementById('modalItemImage').parentElement;
+                    const modalItemImageSection = document.getElementById('modalItemImageSection');
 
                     // Clear previous content
                     allItemsContainer.innerHTML = '';
@@ -1688,7 +1760,10 @@
                         // Show all items section
                         allItemsSection.classList.remove('hidden');
                         allItemImagesSection.classList.remove('hidden');
-                        singleItemImageSection.style.display = 'none';
+                        // Hide the single Item Image section completely
+                        if (modalItemImageSection) {
+                            modalItemImageSection.classList.add('hidden');
+                        }
 
                         // Display all items
                         data.items.forEach((item, index) => {
@@ -1760,7 +1835,10 @@
                         // Hide sections if no items found
                         allItemsSection.classList.add('hidden');
                         allItemImagesSection.classList.add('hidden');
-                        singleItemImageSection.style.display = 'block';
+                        // Show the single Item Image section
+                        if (modalItemImageSection) {
+                            modalItemImageSection.classList.remove('hidden');
+                        }
                         document.getElementById('itemDetailsSection').classList.remove('hidden');
                     }
                 })
@@ -1769,9 +1847,58 @@
                     // Hide sections on error
                     document.getElementById('allItemsSection').classList.add('hidden');
                     document.getElementById('allItemImagesSection').classList.add('hidden');
-                    document.getElementById('modalItemImage').parentElement.style.display = 'block';
+                    // Show the single Item Image section
+                    const modalItemImageSection = document.getElementById('modalItemImageSection');
+                    if (modalItemImageSection) {
+                        modalItemImageSection.classList.remove('hidden');
+                    }
                     document.getElementById('itemDetailsSection').classList.remove('hidden');
                 });
+        }
+
+        // Function to toggle modal image visibility
+        function toggleModalImage(containerId) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            
+            // Determine which toggle elements to update based on container ID
+            let toggleTextId, toggleIconId;
+            
+            if (containerId === 'modalItemImageContainer') {
+                toggleTextId = 'modalItemImageToggleText';
+                toggleIconId = 'modalItemImageToggleIcon';
+            } else if (containerId === 'allItemImagesContainer') {
+                toggleTextId = 'allItemImagesToggleText';
+                toggleIconId = 'allItemImagesToggleIcon';
+            } else if (containerId === 'modalPawnerImageContainer') {
+                toggleTextId = 'modalPawnerImageToggleText';
+                toggleIconId = 'modalPawnerImageToggleIcon';
+            } else if (containerId === 'modalPawnTicketImageContainer') {
+                toggleTextId = 'modalPawnTicketImageToggleText';
+                toggleIconId = 'modalPawnTicketImageToggleIcon';
+            } else if (containerId === 'modalSignatureImageContainer') {
+                toggleTextId = 'modalSignatureImageToggleText';
+                toggleIconId = 'modalSignatureImageToggleIcon';
+            }
+            
+            const toggleText = toggleTextId ? document.getElementById(toggleTextId) : null;
+            const toggleIcon = toggleIconId ? document.getElementById(toggleIconId) : null;
+            
+            if (container) {
+                const isHidden = container.classList.contains('hidden');
+                
+                if (isHidden) {
+                    // Show image
+                    container.classList.remove('hidden');
+                    if (toggleText) toggleText.textContent = 'Hide';
+                    if (toggleIcon) toggleIcon.style.transform = 'rotate(0deg)';
+                } else {
+                    // Hide image
+                    container.classList.add('hidden');
+                    if (toggleText) toggleText.textContent = 'Show';
+                    if (toggleIcon) toggleIcon.style.transform = 'rotate(180deg)';
+                }
+            }
         }
 
         function closeTransactionImagesModal() {
