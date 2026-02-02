@@ -400,7 +400,7 @@
                                         <tr 
                                             class="hover:bg-gray-50 transition-colors transaction-row {{ $isVoided ? 'opacity-40' : '' }} {{ $pawnTicketNumber ? 'bg-gray-50' : '' }}"
                                             data-item-image="{{ route('images.show', ['path' => $transaction->item_image_path]) }}"
-                                            data-pawner-image="{{ route('images.show', ['path' => $transaction->pawner_id_image_path]) }}"
+                                            data-pawner-image="{{ $transaction->pawner_id_image_path ? route('images.show', ['path' => $transaction->pawner_id_image_path]) : '' }}"
                                             data-pawn-ticket-image="{{ $transaction->pawn_ticket_image_path ? route('images.show', ['path' => $transaction->pawn_ticket_image_path]) : '' }}"
                                             data-signature-image="{{ $transaction->signature_path ? route('images.show', ['path' => $transaction->signature_path]) : '' }}"
                                             data-transaction-id="{{ $transaction->id }}"
@@ -548,7 +548,7 @@
                                         <tr 
                                             class="{{ $bgColor }} transition-colors cursor-pointer transaction-row {{ $isVoided ? 'opacity-40' : '' }}"
                                             data-item-image="{{ route('images.show', ['path' => $childTransaction->item_image_path]) }}"
-                                            data-pawner-image="{{ route('images.show', ['path' => $childTransaction->pawner_id_image_path]) }}"
+                                            data-pawner-image="{{ $childTransaction->pawner_id_image_path ? route('images.show', ['path' => $childTransaction->pawner_id_image_path]) : '' }}"
                                             data-pawn-ticket-image="{{ $childTransaction->pawn_ticket_image_path ? route('images.show', ['path' => $childTransaction->pawn_ticket_image_path]) : '' }}"
                                             data-signature-image="{{ $childTransaction->signature_path ? route('images.show', ['path' => $childTransaction->signature_path]) : '' }}"
                                             data-transaction-id="{{ $childTransaction->id }}"
@@ -669,7 +669,7 @@
                                         <tr 
                                             class="hover:bg-gray-50 transition-colors cursor-pointer transaction-row {{ $isVoided ? 'opacity-40' : '' }}"
                                             data-item-image="{{ route('images.show', ['path' => $transaction->item_image_path]) }}"
-                                            data-pawner-image="{{ route('images.show', ['path' => $transaction->pawner_id_image_path]) }}"
+                                            data-pawner-image="{{ $transaction->pawner_id_image_path ? route('images.show', ['path' => $transaction->pawner_id_image_path]) : '' }}"
                                             data-pawn-ticket-image="{{ $transaction->pawn_ticket_image_path ? route('images.show', ['path' => $transaction->pawn_ticket_image_path]) : '' }}"
                                             data-signature-image="{{ $transaction->signature_path ? route('images.show', ['path' => $transaction->signature_path]) : '' }}"
                                             data-transaction-id="{{ $transaction->id }}"
@@ -1376,8 +1376,17 @@
                 auctionSaleDateEl.textContent = isValidDate(data.auctionSaleDate) ? data.auctionSaleDate : '-';
             }
             
-            // Set pawner image
-            document.getElementById('modalPawnerImage').src = data.pawnerImageUrl;
+            // Set pawner image (handle null/empty)
+            const modalPawnerImage = document.getElementById('modalPawnerImage');
+            const modalPawnerImageContainer = document.getElementById('modalPawnerImageContainer');
+            if (modalPawnerImage && modalPawnerImageContainer) {
+                if (data.pawnerImageUrl && data.pawnerImageUrl.trim() !== '') {
+                    modalPawnerImage.src = data.pawnerImageUrl;
+                    modalPawnerImageContainer.classList.remove('hidden');
+                } else {
+                    modalPawnerImage.src = 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'400\' height=\'300\'%3E%3Crect fill=\'%23e5e7eb\' width=\'400\' height=\'300\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'%239ca3af\' font-size=\'14\'%3ENo image available%3C/text%3E%3C/svg%3E';
+                }
+            }
             
             // Handle pawn ticket image
             const pawnTicketImage = document.getElementById('modalPawnTicketImage');
@@ -1704,7 +1713,16 @@
             
             // Set images
             document.getElementById('modalItemImage').src = data.itemImageUrl;
-            document.getElementById('modalPawnerImage').src = data.pawnerImageUrl;
+            const modalPawnerImage = document.getElementById('modalPawnerImage');
+            const modalPawnerImageContainer = document.getElementById('modalPawnerImageContainer');
+            if (modalPawnerImage && modalPawnerImageContainer) {
+                if (data.pawnerImageUrl && data.pawnerImageUrl.trim() !== '') {
+                    modalPawnerImage.src = data.pawnerImageUrl;
+                    modalPawnerImageContainer.classList.remove('hidden');
+                } else {
+                    modalPawnerImage.src = 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'400\' height=\'300\'%3E%3Crect fill=\'%23e5e7eb\' width=\'400\' height=\'300\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'%239ca3af\' font-size=\'14\'%3ENo image available%3C/text%3E%3C/svg%3E';
+                }
+            }
             
             // Handle pawn ticket image (may not exist)
             const pawnTicketImage = document.getElementById('modalPawnTicketImage');

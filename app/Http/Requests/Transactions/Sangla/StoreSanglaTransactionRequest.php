@@ -108,13 +108,17 @@ class StoreSanglaTransactionRequest extends FormRequest
                 },
             ],
             'pawner_id_image' => [
+                'nullable',
                 function ($attribute, $value, $fail) {
-                    // Only required for first item, not for additional items
-                    if (!$this->isAdditionalItem() && !$value) {
-                        $fail('The pawner ID image is required.');
-                    }
+                    // Optional field - only validate if provided
                     if ($value && $value->getSize() > 5 * 1024 * 1024) {
                         $fail('The pawner ID image must not be larger than 5MB.');
+                    }
+                },
+                function ($attribute, $value, $fail) {
+                    // Only validate image type and mimes if a file is provided
+                    if ($value && !in_array($value->getMimeType(), ['image/jpeg', 'image/jpg', 'image/png'])) {
+                        $fail('The pawner ID image must be a JPEG or PNG image.');
                     }
                 },
             ],

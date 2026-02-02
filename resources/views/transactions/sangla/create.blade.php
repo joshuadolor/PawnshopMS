@@ -337,7 +337,7 @@
                             name="pawner_id_image" 
                             label="Pawner ID/Photo" 
                             :value="old('pawner_id_image')" 
-                            :required="true"
+                            :required="false"
                         />
 
                         <!-- Pawn Ticket Image -->

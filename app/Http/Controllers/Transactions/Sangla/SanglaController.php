@@ -121,11 +121,17 @@ class SanglaController extends Controller
                 'transactions/items',
                 $branchName
             );
-            $pawnerIdImagePath = $this->imageService->processAndStore(
-                $request->file('pawner_id_image'),
-                'transactions/pawners',
-                $branchName
-            );
+            
+            // Pawner ID image is optional
+            $pawnerIdImagePath = null;
+            if ($request->hasFile('pawner_id_image')) {
+                $pawnerIdImagePath = $this->imageService->processAndStore(
+                    $request->file('pawner_id_image'),
+                    'transactions/pawners',
+                    $branchName
+                );
+            }
+            
             $pawnTicketImagePath = $this->imageService->processAndStore(
                 $request->file('pawn_ticket_image'),
                 'transactions/pawn-tickets',
