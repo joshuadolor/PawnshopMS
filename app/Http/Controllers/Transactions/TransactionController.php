@@ -32,11 +32,18 @@ class TransactionController extends Controller
             $query->where('branch_id', $user->branches()->first()->id);
             $query->whereDate('created_at', today());
         } else {
-            // Admin and Superadmin can filter by date
-            if ($request->filled('date')) {
-                $query->whereDate('created_at', $request->date);
-            } elseif ($request->has('today_only') && $request->boolean('today_only')) {
+            // Admin and Superadmin can filter by date range
+            if ($request->has('today_only') && $request->boolean('today_only')) {
+                // Today Only: clear date filters and set to today
                 $query->whereDate('created_at', today());
+            } elseif ($request->filled('start_date') || $request->filled('end_date')) {
+                // Date range filter
+                if ($request->filled('start_date')) {
+                    $query->whereDate('created_at', '>=', $request->start_date);
+                }
+                if ($request->filled('end_date')) {
+                    $query->whereDate('created_at', '<=', $request->end_date);
+                }
             }
         }
 
@@ -60,6 +67,11 @@ class TransactionController extends Controller
             }
         } elseif ($request->filled('branch_id')) {
             $query->where('branch_id', $request->branch_id);
+        }
+
+        // Filter by transaction type
+        if ($request->filled('type')) {
+            $query->where('type', $request->type);
         }
 
         // Get all transactions (sangla and renew) - we'll group by pawn ticket in the view
@@ -91,10 +103,17 @@ class TransactionController extends Controller
                 $renewalQuery->where('branch_id', $user->branches()->first()->id);
                 $renewalQuery->whereDate('created_at', today());
             } else {
-                if ($request->filled('date')) {
-                    $renewalQuery->whereDate('created_at', $request->date);
-                } elseif ($request->has('today_only') && $request->boolean('today_only')) {
+                if ($request->has('today_only') && $request->boolean('today_only')) {
+                    // Today Only: clear date filters and set to today
                     $renewalQuery->whereDate('created_at', today());
+                } elseif ($request->filled('start_date') || $request->filled('end_date')) {
+                    // Date range filter
+                    if ($request->filled('start_date')) {
+                        $renewalQuery->whereDate('created_at', '>=', $request->start_date);
+                    }
+                    if ($request->filled('end_date')) {
+                        $renewalQuery->whereDate('created_at', '<=', $request->end_date);
+                    }
                 }
             }
 
@@ -118,6 +137,10 @@ class TransactionController extends Controller
                 $renewalQuery->where('branch_id', $request->branch_id);
             }
 
+            if ($request->filled('type')) {
+                $renewalQuery->where('type', $request->type);
+            }
+
             $renewalsForPawnTickets = $renewalQuery->get();
             
             // Apply same filters for tubos
@@ -125,10 +148,17 @@ class TransactionController extends Controller
                 $tubosQuery->where('branch_id', $user->branches()->first()->id);
                 $tubosQuery->whereDate('created_at', today());
             } else {
-                if ($request->filled('date')) {
-                    $tubosQuery->whereDate('created_at', $request->date);
-                } elseif ($request->has('today_only') && $request->boolean('today_only')) {
+                if ($request->has('today_only') && $request->boolean('today_only')) {
+                    // Today Only: clear date filters and set to today
                     $tubosQuery->whereDate('created_at', today());
+                } elseif ($request->filled('start_date') || $request->filled('end_date')) {
+                    // Date range filter
+                    if ($request->filled('start_date')) {
+                        $tubosQuery->whereDate('created_at', '>=', $request->start_date);
+                    }
+                    if ($request->filled('end_date')) {
+                        $tubosQuery->whereDate('created_at', '<=', $request->end_date);
+                    }
                 }
             }
 
@@ -152,6 +182,10 @@ class TransactionController extends Controller
                 $tubosQuery->where('branch_id', $request->branch_id);
             }
 
+            if ($request->filled('type')) {
+                $tubosQuery->where('type', $request->type);
+            }
+
             $tubosForPawnTickets = $tubosQuery->get();
             
             // Apply same filters for partial
@@ -159,10 +193,17 @@ class TransactionController extends Controller
                 $partialQuery->where('branch_id', $user->branches()->first()->id);
                 $partialQuery->whereDate('created_at', today());
             } else {
-                if ($request->filled('date')) {
-                    $partialQuery->whereDate('created_at', $request->date);
-                } elseif ($request->has('today_only') && $request->boolean('today_only')) {
+                if ($request->has('today_only') && $request->boolean('today_only')) {
+                    // Today Only: clear date filters and set to today
                     $partialQuery->whereDate('created_at', today());
+                } elseif ($request->filled('start_date') || $request->filled('end_date')) {
+                    // Date range filter
+                    if ($request->filled('start_date')) {
+                        $partialQuery->whereDate('created_at', '>=', $request->start_date);
+                    }
+                    if ($request->filled('end_date')) {
+                        $partialQuery->whereDate('created_at', '<=', $request->end_date);
+                    }
                 }
             }
 
@@ -186,6 +227,10 @@ class TransactionController extends Controller
                 $partialQuery->where('branch_id', $request->branch_id);
             }
 
+            if ($request->filled('type')) {
+                $partialQuery->where('type', $request->type);
+            }
+
             $partialsForPawnTickets = $partialQuery->get();
         }
 
@@ -202,10 +247,12 @@ class TransactionController extends Controller
             'partialsForPawnTickets' => $partialsForPawnTickets,
             'branches' => $branches,
             'filters' => [
-                'date' => $request->date ?? null,
+                'start_date' => $request->start_date ?? null,
+                'end_date' => $request->end_date ?? null,
                 'today_only' => $request->boolean('today_only', false),
                 'search' => $request->search ?? null,
                 'branch_id' => $request->branch_id ?? null,
+                'type' => $request->type ?? null,
             ],
         ]);
     }

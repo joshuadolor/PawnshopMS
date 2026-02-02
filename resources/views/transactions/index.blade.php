@@ -38,14 +38,25 @@
                             </div>
 
                             @if(auth()->user()->isAdminOrSuperAdmin())
-                                <!-- Date Filter -->
+                                <!-- Date Range Filter -->
                                 <div>
-                                    <label for="date" class="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                                    <label for="start_date" class="block text-sm font-medium text-gray-700 mb-1">Date of Transaction (From)</label>
                                     <input 
                                         type="date" 
-                                        id="date" 
-                                        name="date" 
-                                        value="{{ $filters['date'] }}"
+                                        id="start_date" 
+                                        name="start_date" 
+                                        value="{{ $filters['start_date'] }}"
+                                        class="block w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+                                    >
+                                </div>
+
+                                <div>
+                                    <label for="end_date" class="block text-sm font-medium text-gray-700 mb-1">Date of Transaction (To)</label>
+                                    <input 
+                                        type="date" 
+                                        id="end_date" 
+                                        name="end_date" 
+                                        value="{{ $filters['end_date'] }}"
                                         class="block w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
                                     >
                                 </div>
@@ -53,9 +64,8 @@
                                 <!-- Today Only Button -->
                                 <div class="flex items-end">
                                     <button
-                                        type="submit"
-                                        name="today_only"
-                                        value="1"
+                                        type="button"
+                                        onclick="setTodayOnly()"
                                         class="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-sm font-medium transition-colors">
                                         Today Only
                                     </button>
@@ -80,6 +90,22 @@
                                     </div>
                                 @endif
                             @endif
+
+                            <!-- Transaction Type Filter -->
+                            <div>
+                                <label for="type" class="block text-sm font-medium text-gray-700 mb-1">Transaction Type</label>
+                                <select 
+                                    id="type" 
+                                    name="type" 
+                                    class="block w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+                                >
+                                    <option value="">All Types</option>
+                                    <option value="sangla" {{ $filters['type'] == 'sangla' ? 'selected' : '' }}>Sangla</option>
+                                    <option value="renew" {{ $filters['type'] == 'renew' ? 'selected' : '' }}>Renewal</option>
+                                    <option value="tubos" {{ $filters['type'] == 'tubos' ? 'selected' : '' }}>Tubos</option>
+                                    <option value="partial" {{ $filters['type'] == 'partial' ? 'selected' : '' }}>Partial</option>
+                                </select>
+                            </div>
 
                             <!-- Hide Voided Transactions Checkbox -->
                             <div class="flex items-end">
@@ -231,7 +257,11 @@
                                             $firstSanglaTransaction = $nonVoidedSanglaTransactions->first() ?? $sanglaTransactions->first();
                                             
                                             // Get first transaction for pawner info (use non-voided if available)
+                                            // Fallback to any transaction in the group if no sangla transactions exist
                                             $firstTransaction = $nonVoidedSanglaTransactions->first() ?? $sanglaTransactions->first() ?? $pawnTicketTransactions->first();
+                                            
+                                            // Use first transaction for images if no sangla transaction exists
+                                            $transactionForImages = $firstSanglaTransaction ?? $firstTransaction;
                                             
                                             // Get latest transaction for dates (prefer renewal, then latest sangla)
                                             $latestRenewal = $renewalTransactions->filter(function($tx) {
@@ -258,8 +288,8 @@
                                             class="{{ $hasTubosTransactions ? 'bg-white' : 'bg-violet-100' }} border-t-2 border-gray-300 {{ $hasTubosTransactions ? 'hover:bg-gray-50' : 'hover:bg-violet-200' }} transition-colors cursor-pointer pawn-ticket-row {{ $allSanglaTransactionsVoided ? 'opacity-40' : '' }}"
                                             data-pawn-ticket-number="{{ $pawnTicketNumber }}"
                                             data-pawner-name="{{ $firstTransaction->pawner_name }}"
-                                            data-pawner-image="{{ route('images.show', ['path' => $firstSanglaTransaction->pawner_id_image_path]) }}"
-                                            data-pawn-ticket-image="{{ $firstSanglaTransaction->pawn_ticket_image_path ? route('images.show', ['path' => $firstSanglaTransaction->pawn_ticket_image_path]) : '' }}"
+                                            data-pawner-image="{{ $transactionForImages && $transactionForImages->pawner_id_image_path ? route('images.show', ['path' => $transactionForImages->pawner_id_image_path]) : '' }}"
+                                            data-pawn-ticket-image="{{ $transactionForImages && $transactionForImages->pawn_ticket_image_path ? route('images.show', ['path' => $transactionForImages->pawn_ticket_image_path]) : '' }}"
                                             data-has-voided-transactions="{{ $allSanglaTransactionsVoided ? '1' : '0' }}"
                                             data-has-child-transactions="{{ $hasChildTransactions ? '1' : '0' }}"
                                             data-is-older-than-6-hours="{{ $isOlderThan6Hours ? '1' : '0' }}"
@@ -1062,6 +1092,36 @@
     </dialog>
 
     <script>
+        function setTodayOnly() {
+            const today = new Date().toISOString().split('T')[0];
+            const startDateInput = document.getElementById('start_date');
+            const endDateInput = document.getElementById('end_date');
+            
+            // Clear existing date values
+            if (startDateInput) startDateInput.value = '';
+            if (endDateInput) endDateInput.value = '';
+            
+            // Set to today
+            if (startDateInput) startDateInput.value = today;
+            if (endDateInput) endDateInput.value = today;
+            
+            // Create a hidden input for today_only
+            const form = document.querySelector('form[method="GET"]');
+            if (form) {
+                const existingInput = form.querySelector('input[name="today_only"]');
+                if (existingInput) {
+                    existingInput.remove();
+                }
+                const todayOnlyInput = document.createElement('input');
+                todayOnlyInput.type = 'hidden';
+                todayOnlyInput.name = 'today_only';
+                todayOnlyInput.value = '1';
+                form.appendChild(todayOnlyInput);
+                
+                // Submit the form
+                form.submit();
+            }
+        }
         document.addEventListener('DOMContentLoaded', function() {
             // Add click handler to pawn ticket rows
             document.querySelectorAll('.pawn-ticket-row').forEach(function(row) {
