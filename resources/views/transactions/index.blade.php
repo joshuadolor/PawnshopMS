@@ -89,6 +89,25 @@
                                         </select>
                                     </div>
                                 @endif
+
+                                <!-- User Filter -->
+                                @if($users && $users->count() > 0)
+                                    <div>
+                                        <label for="user_id" class="block text-sm font-medium text-gray-700 mb-1">User</label>
+                                        <select 
+                                            id="user_id" 
+                                            name="user_id" 
+                                            class="block w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+                                        >
+                                            <option value="">All Users</option>
+                                            @foreach($users as $filterUser)
+                                                <option value="{{ $filterUser->id }}" {{ $filters['user_id'] == $filterUser->id ? 'selected' : '' }}>
+                                                    {{ $filterUser->name }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                @endif
                             @endif
 
                             <!-- Transaction Type Filter -->

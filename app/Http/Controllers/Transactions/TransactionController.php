@@ -74,6 +74,11 @@ class TransactionController extends Controller
             $query->where('type', $request->type);
         }
 
+        // Filter by user (admin and superadmin only)
+        if ($user->isAdminOrSuperAdmin() && $request->filled('user_id')) {
+            $query->where('user_id', $request->user_id);
+        }
+
         // Get all transactions (sangla and renew) - we'll group by pawn ticket in the view
         $transactions = $query->orderBy('created_at', 'desc')
             ->paginate(20);
@@ -141,6 +146,11 @@ class TransactionController extends Controller
                 $renewalQuery->where('type', $request->type);
             }
 
+            // Filter by user (admin and superadmin only)
+            if ($user->isAdminOrSuperAdmin() && $request->filled('user_id')) {
+                $renewalQuery->where('user_id', $request->user_id);
+            }
+
             $renewalsForPawnTickets = $renewalQuery->get();
             
             // Apply same filters for tubos
@@ -184,6 +194,11 @@ class TransactionController extends Controller
 
             if ($request->filled('type')) {
                 $tubosQuery->where('type', $request->type);
+            }
+
+            // Filter by user (admin and superadmin only)
+            if ($user->isAdminOrSuperAdmin() && $request->filled('user_id')) {
+                $tubosQuery->where('user_id', $request->user_id);
             }
 
             $tubosForPawnTickets = $tubosQuery->get();
@@ -231,6 +246,11 @@ class TransactionController extends Controller
                 $partialQuery->where('type', $request->type);
             }
 
+            // Filter by user (admin and superadmin only)
+            if ($user->isAdminOrSuperAdmin() && $request->filled('user_id')) {
+                $partialQuery->where('user_id', $request->user_id);
+            }
+
             $partialsForPawnTickets = $partialQuery->get();
         }
 
@@ -240,12 +260,21 @@ class TransactionController extends Controller
             $branches = Branch::orderBy('name', 'asc')->get();
         }
 
+        // Get users for filter (admin/superadmin only)
+        $users = null;
+        if ($user->isAdminOrSuperAdmin()) {
+            $users = \App\Models\User::orderBy('first_name', 'asc')
+                ->orderBy('last_name', 'asc')
+                ->get();
+        }
+
         return view('transactions.index', [
             'transactions' => $transactions,
             'renewalsForPawnTickets' => $renewalsForPawnTickets,
             'tubosForPawnTickets' => $tubosForPawnTickets,
             'partialsForPawnTickets' => $partialsForPawnTickets,
             'branches' => $branches,
+            'users' => $users,
             'filters' => [
                 'start_date' => $request->start_date ?? null,
                 'end_date' => $request->end_date ?? null,
@@ -253,6 +282,7 @@ class TransactionController extends Controller
                 'search' => $request->search ?? null,
                 'branch_id' => $request->branch_id ?? null,
                 'type' => $request->type ?? null,
+                'user_id' => $request->user_id ?? null,
             ],
         ]);
     }
