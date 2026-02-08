@@ -84,6 +84,7 @@ class PartialController extends Controller
         // The oldest transaction has the actual loan amount (additional items have loan_amount = 0)
         $oldestTransaction = $allTransactions->first();
         $branchId = $oldestTransaction->branch_id;
+        $loanGrantedDate = Carbon::parse($oldestTransaction->created_at)->startOfDay();
 
         // Get the latest transaction (Sangla OR Renewal OR Partial) for date calculations (most current dates)
         // This ensures we use the dates from the most recent renewal/partial if one exists
@@ -139,46 +140,61 @@ class PartialController extends Controller
         $actualToday = Carbon::today();
         $expiryRedemptionDate = $latestTransactionForDates->expiry_date ? Carbon::parse($latestTransactionForDates->expiry_date) : null;
         $maturityDate = $latestTransactionForDates->maturity_date ? Carbon::parse($latestTransactionForDates->maturity_date) : null;
+
+        // Charge reference rule:
+        // If parent Sangla is no_advance=true and advance_paid=false, late days + LD additional charges
+        // should be computed against the loan granted date (oldest Sangla created_at), not maturity_date.
+        $useLoanGrantedDateForCharges = (bool) $oldestTransaction->no_advance && !(bool) $oldestTransaction->advance_paid;
+        $maturityDateForCharges = $useLoanGrantedDateForCharges ? $loanGrantedDate : $maturityDate;
         
         // Check if transaction exceeds maturity date (is overdue)
         $isOverdue = false;
-        if ($maturityDate) {
-            $maturityDateCarbon = $maturityDate instanceof Carbon ? $maturityDate : Carbon::parse($maturityDate);
+        if ($maturityDateForCharges) {
+            $maturityDateCarbon = $maturityDateForCharges instanceof Carbon ? $maturityDateForCharges : Carbon::parse($maturityDateForCharges);
             $isOverdue = $actualToday->gt($maturityDateCarbon);
         }
         
         // Check if back_date is requested (from input or old input)
         $backDate = $request->has('back_date') ? (bool) $request->input('back_date') : (bool) old('back_date', false);
         
-        // If back_date is checked, use maturity date as reference date (as if today is the maturity date)
-        $today = $backDate && $maturityDate ? Carbon::parse($maturityDate) : $actualToday;
+        // If back_date is checked, use the charge reference date (maturity or loan-granted) as reference date
+        $today = $backDate && $maturityDateForCharges ? Carbon::parse($maturityDateForCharges) : $actualToday;
         
-        $daysExceeded = 0;
-        $additionalChargeType = null;
         $additionalChargeAmount = 0;
-        $additionalChargeConfig = null;
+        $additionalChargeBreakdown = [];
 
         // If back_date is NOT checked, calculate additional charges
+        // Rule: if both LD and EC are applicable, they are BOTH applied (AND), not either/or.
         if (!$backDate) {
-            // First, check if expiry redemption date is exceeded
+            // EC (Exceeded Charge): based on expiry redemption date
             if ($expiryRedemptionDate && $today->gt($expiryRedemptionDate)) {
-                // Expiry redemption date is exceeded - use EC (Exceeded Charge)
-                // Count days exceeded from expiry redemption date to today
-                $daysExceeded = $expiryRedemptionDate->diffInDays($today);
-                $additionalChargeType = 'EC';
-            } elseif ($maturityDate && $today->gt($maturityDate)) {
-                // Expiry redemption date is NOT exceeded, but maturity date is exceeded - use LD (Late Days)
-                // Count days exceeded from maturity date to today
-                $daysExceeded = $maturityDate->diffInDays($today);
-                $additionalChargeType = 'LD';
+                $ecDays = $expiryRedemptionDate->diffInDays($today);
+                $ecConfig = AdditionalChargeConfig::findApplicable($ecDays, 'EC', 'renewal');
+                if ($ecConfig) {
+                    $ecAmount = $currentPrincipalAmount * ((float) $ecConfig->percentage / 100);
+                    $additionalChargeAmount += $ecAmount;
+                    $additionalChargeBreakdown[] = [
+                        'type' => 'EC',
+                        'days' => $ecDays,
+                        'percentage' => (float) $ecConfig->percentage,
+                        'amount' => $ecAmount,
+                    ];
+                }
             }
 
-            // Get the percentage from additionalChargeConfig table based on days exceeded and type
-            if ($daysExceeded > 0 && $additionalChargeType) {
-                $additionalChargeConfig = AdditionalChargeConfig::findApplicable($daysExceeded, $additionalChargeType, 'renewal');
-                if ($additionalChargeConfig) {
-                    // Calculate charge amount: current principal * percentage from config
-                    $additionalChargeAmount = $currentPrincipalAmount * ((float) $additionalChargeConfig->percentage / 100);
+            // LD (Late Days additional charge): based on maturity (or loan granted date for no_advance/unpaid)
+            if ($maturityDateForCharges && $today->gt($maturityDateForCharges)) {
+                $ldDays = Carbon::parse($maturityDateForCharges)->diffInDays($today);
+                $ldConfig = AdditionalChargeConfig::findApplicable($ldDays, 'LD', 'renewal');
+                if ($ldConfig) {
+                    $ldAmount = $currentPrincipalAmount * ((float) $ldConfig->percentage / 100);
+                    $additionalChargeAmount += $ldAmount;
+                    $additionalChargeBreakdown[] = [
+                        'type' => 'LD',
+                        'days' => $ldDays,
+                        'percentage' => (float) $ldConfig->percentage,
+                        'amount' => $ldAmount,
+                    ];
                 }
             }
         }
@@ -206,14 +222,14 @@ class PartialController extends Controller
                 $today, 
                 $currentPrincipalAmount, 
                 (float) $oldestTransaction->interest_rate,
-                $maturityDate
+                $maturityDateForCharges
             );
             $lateDaysChargeBreakdown = $computationController->getLateDaysChargeBreakdown(
                 $oldestTransaction, 
                 $today, 
                 $currentPrincipalAmount,
                 (float) $oldestTransaction->interest_rate,
-                $maturityDate
+                $maturityDateForCharges
             );
         }
 
@@ -256,15 +272,18 @@ class PartialController extends Controller
             'advanceInterestDue' => $advanceInterestDue,
             'serviceCharge' => $serviceCharge,
             'totalServiceCharge' => $totalServiceCharge,
-            'additionalChargeType' => $additionalChargeType,
+            'additionalChargeType' => null,
             'additionalChargeAmount' => $additionalChargeAmount,
-            'daysExceeded' => $daysExceeded,
-            'additionalChargeConfig' => $additionalChargeConfig,
+            'daysExceeded' => null,
+            'additionalChargeConfig' => null,
+            'additionalChargeBreakdown' => $additionalChargeBreakdown,
             'lateDaysCharge' => $lateDaysCharge,
             'lateDaysChargeBreakdown' => $lateDaysChargeBreakdown,
             'backDate' => $backDate,
             'isOverdue' => $isOverdue,
             'maturityDate' => $maturityDate ? $maturityDate->format('Y-m-d') : null,
+            'useLoanGrantedDateForCharges' => $useLoanGrantedDateForCharges,
+            'loanGrantedDate' => $loanGrantedDate->format('Y-m-d'),
             'currentPrincipalAmount' => $currentPrincipalAmount,
             'originalPrincipalAmount' => $originalPrincipalAmount, // Pass original principal to view
             'partialTransactions' => $partialTransactions, // Pass partial transactions for history
@@ -471,25 +490,33 @@ class PartialController extends Controller
         $actualToday = Carbon::today();
         $expiryRedemptionDate = $latestTransactionForDates->expiry_date ? Carbon::parse($latestTransactionForDates->expiry_date) : null;
         $maturityDate = $latestTransactionForDates->maturity_date ? Carbon::parse($latestTransactionForDates->maturity_date) : null;
+
+        // Charge reference rule for store-side additional charge computation
+        $loanGrantedDate = Carbon::parse($oldestTransaction->created_at)->startOfDay();
+        $useLoanGrantedDateForCharges = (bool) $oldestTransaction->no_advance && !(bool) $oldestTransaction->advance_paid;
+        $maturityDateForCharges = $useLoanGrantedDateForCharges ? $loanGrantedDate : $maturityDate;
         
-        // If back_date is checked, use maturity date as reference date
-        $today = $backDate && $maturityDate ? Carbon::parse($maturityDate) : $actualToday;
+        // If back_date is checked, use the charge reference date (maturity or loan-granted) as reference date
+        $today = $backDate && $maturityDateForCharges ? Carbon::parse($maturityDateForCharges) : $actualToday;
         
         $additionalChargeAmount = 0;
 
         // If back_date is NOT checked, calculate additional charges
         if (!$backDate) {
+            // EC
             if ($expiryRedemptionDate && $today->gt($expiryRedemptionDate)) {
-                $daysExceeded = $expiryRedemptionDate->diffInDays($today);
-                $additionalChargeConfig = AdditionalChargeConfig::findApplicable($daysExceeded, 'EC', 'renewal');
-                if ($additionalChargeConfig) {
-                    $additionalChargeAmount = $currentPrincipalAmount * ((float) $additionalChargeConfig->percentage / 100);
+                $ecDays = $expiryRedemptionDate->diffInDays($today);
+                $ecConfig = AdditionalChargeConfig::findApplicable($ecDays, 'EC', 'renewal');
+                if ($ecConfig) {
+                    $additionalChargeAmount += $currentPrincipalAmount * ((float) $ecConfig->percentage / 100);
                 }
-            } elseif ($maturityDate && $today->gt($maturityDate)) {
-                $daysExceeded = $maturityDate->diffInDays($today);
-                $additionalChargeConfig = AdditionalChargeConfig::findApplicable($daysExceeded, 'LD', 'renewal');
-                if ($additionalChargeConfig) {
-                    $additionalChargeAmount = $currentPrincipalAmount * ((float) $additionalChargeConfig->percentage / 100);
+            }
+            // LD
+            if ($maturityDateForCharges && $today->gt($maturityDateForCharges)) {
+                $ldDays = Carbon::parse($maturityDateForCharges)->diffInDays($today);
+                $ldConfig = AdditionalChargeConfig::findApplicable($ldDays, 'LD', 'renewal');
+                if ($ldConfig) {
+                    $additionalChargeAmount += $currentPrincipalAmount * ((float) $ldConfig->percentage / 100);
                 }
             }
         }

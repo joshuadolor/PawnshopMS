@@ -107,8 +107,10 @@
                             <div class="mb-3">
                                 <div class="flex justify-between items-center text-sm">
                                     <span class="text-yellow-800">
-                                        @if($additionalChargeAmount > 0 && $additionalChargeConfig)
-                                            Additional Charge ({{ $additionalChargeType === 'EC' ? 'Exceeded Charge' : 'Late Days' }} - {{ $daysExceeded }} day(s), {{ $additionalChargeConfig->percentage }}%):
+                                        @if(isset($additionalChargeBreakdown) && count($additionalChargeBreakdown) > 0)
+                                            Additional Charge (
+                                            {{ collect($additionalChargeBreakdown)->map(fn ($c) => ($c['type'] === 'EC' ? 'Exceeded' : 'Late Days') . " {$c['days']} day(s) @ {$c['percentage']}%")->implode(' + ') }}
+                                            ):
                                         @else
                                             Additional Charge:
                                         @endif

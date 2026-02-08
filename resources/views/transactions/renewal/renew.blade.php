@@ -189,8 +189,10 @@
                                     <span class="text-yellow-800">
                                         @if($backDate)
                                             Additional Charge (Back Dated - No Charge):
-                                        @elseif($additionalChargeAmount > 0 && $additionalChargeConfig)
-                                            Additional Charge ({{ $additionalChargeType === 'EC' ? 'Exceeded Charge' : 'Late Days' }} - {{ $daysExceeded }} day(s), {{ $additionalChargeConfig->percentage }}% of ₱{{ number_format($currentPrincipalAmount, 2) }}):
+                                        @elseif(isset($additionalChargeBreakdown) && count($additionalChargeBreakdown) > 0)
+                                            Additional Charge (
+                                            {{ collect($additionalChargeBreakdown)->map(fn ($c) => ($c['type'] === 'EC' ? 'Exceeded' : 'Late Days') . " {$c['days']} day(s) @ {$c['percentage']}%")->implode(' + ') }}
+                                            ):
                                         @else
                                             Additional Charge:
                                         @endif
@@ -559,8 +561,8 @@
                                     disabled
                                 />
                                 <p class="mt-1 text-xs text-gray-500">
-                                    @if($additionalChargeAmount > 0 && $additionalChargeConfig)
-                                        {{ $additionalChargeType === 'EC' ? 'Exceeded Charge' : 'Late Days' }} - {{ $daysExceeded }} day(s) exceeded, {{ $additionalChargeConfig->percentage }}% of current principal (₱{{ number_format($currentPrincipalAmount, 2) }})
+                                    @if(isset($additionalChargeBreakdown) && count($additionalChargeBreakdown) > 0)
+                                        {{ collect($additionalChargeBreakdown)->map(fn ($c) => ($c['type'] === 'EC' ? 'Exceeded' : 'Late Days') . " {$c['days']} day(s) @ {$c['percentage']}%")->implode(' + ') }}
                                     @else
                                         No additional charge applicable
                                     @endif
@@ -602,8 +604,8 @@
                                 />
                                 <p class="mt-1 text-xs text-gray-500">
                                     Total amount: Interest + Service Charge
-                                    @if($additionalChargeAmount > 0 && $additionalChargeConfig)
-                                        + Additional Charge ({{ $additionalChargeType === 'EC' ? 'Exceeded' : 'Late Days' }})
+                                    @if(isset($additionalChargeBreakdown) && count($additionalChargeBreakdown) > 0)
+                                        + Additional Charge
                                     @else
                                         + Additional Charge (if applicable)
                                     @endif

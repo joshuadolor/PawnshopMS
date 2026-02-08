@@ -192,14 +192,9 @@
                             <div class="mb-3" id="payment_summary_additional_charge">
                                 <div class="flex justify-between items-center text-sm">
                                     <span class="text-green-800">
-                                        @if($additionalChargeAmount > 0 && $additionalChargeConfig)
-                                            @php
-                                                $chargeBasis = isset($chargePrincipalBasis) ? (float) $chargePrincipalBasis : (float) $currentPrincipalAmount;
-                                            @endphp
-                                            Additional Charge ({{ $additionalChargeType === 'EC' ? 'Exceeded Charge' : 'Late Days' }} - {{ $daysExceeded }} day(s), {{ $additionalChargeConfig->percentage }}% of ₱{{ number_format($chargeBasis, 2) }}
-                                            @if($chargeBasis != (float) $currentPrincipalAmount)
-                                                <span class="text-xs text-green-700">(based on original principal)</span>
-                                            @endif
+                                        @if(isset($additionalChargeBreakdown) && count($additionalChargeBreakdown) > 0)
+                                            Additional Charge (
+                                            {{ collect($additionalChargeBreakdown)->map(fn ($c) => ($c['type'] === 'EC' ? 'Exceeded' : 'Late Days') . " {$c['days']} day(s) @ {$c['percentage']}%")->implode(' + ') }}
                                             ):
                                         @else
                                             Additional Charge:
@@ -418,7 +413,7 @@
                             </div>
 
                             <!-- Additional Charge Toggle -->
-                            @if($additionalChargeAmount > 0 && $additionalChargeConfig)
+                            @if(isset($additionalChargeBreakdown) && count($additionalChargeBreakdown) > 0)
                             <div class="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
                                 <div class="flex items-start">
                                     <div class="flex items-center h-5">
@@ -436,12 +431,7 @@
                                             Apply Additional Charge
                                         </label>
                                         <p class="text-xs text-yellow-700 mt-1">
-                                            @php
-                                                $chargeBasis = isset($chargePrincipalBasis) ? (float) $chargePrincipalBasis : (float) $currentPrincipalAmount;
-                                            @endphp
-                                            {{ $additionalChargeType === 'EC' ? 'Exceeded Charge' : 'Late Days' }} - {{ $daysExceeded }} day(s) exceeded, {{ $additionalChargeConfig->percentage }}% of
-                                            {{ $chargeBasis != (float) $currentPrincipalAmount ? 'original principal' : 'current principal' }}
-                                            (₱{{ number_format($chargeBasis, 2) }})
+                                            {{ collect($additionalChargeBreakdown)->map(fn ($c) => ($c['type'] === 'EC' ? 'Exceeded' : 'Late Days') . " {$c['days']} day(s) @ {$c['percentage']}%")->implode(' + ') }}
                                         </p>
                                     </div>
                                 </div>
@@ -461,13 +451,8 @@
                                     disabled
                                 />
                                 <p class="mt-1 text-xs text-gray-500">
-                                    @if($additionalChargeAmount > 0 && $additionalChargeConfig)
-                                        @php
-                                            $chargeBasis = isset($chargePrincipalBasis) ? (float) $chargePrincipalBasis : (float) $currentPrincipalAmount;
-                                        @endphp
-                                        {{ $additionalChargeType === 'EC' ? 'Exceeded Charge' : 'Late Days' }} - {{ $daysExceeded }} day(s) exceeded, {{ $additionalChargeConfig->percentage }}% of
-                                        {{ $chargeBasis != (float) $currentPrincipalAmount ? 'original principal' : 'current principal' }}
-                                        (₱{{ number_format($chargeBasis, 2) }})
+                                    @if(isset($additionalChargeBreakdown) && count($additionalChargeBreakdown) > 0)
+                                        {{ collect($additionalChargeBreakdown)->map(fn ($c) => ($c['type'] === 'EC' ? 'Exceeded' : 'Late Days') . " {$c['days']} day(s) @ {$c['percentage']}%")->implode(' + ') }}
                                     @else
                                         No additional charge applicable
                                     @endif
@@ -511,8 +496,8 @@
                                 />
                                 <p class="mt-1 text-xs text-gray-500">
                                     Total amount: Principal
-                                    @if($additionalChargeAmount > 0 && $additionalChargeConfig)
-                                        + Additional Charge ({{ $additionalChargeType === 'EC' ? 'Exceeded' : 'Late Days' }})
+                                    @if(isset($additionalChargeBreakdown) && count($additionalChargeBreakdown) > 0)
+                                        + Additional Charge
                                     @else
                                         + Additional Charge (if applicable)
                                     @endif

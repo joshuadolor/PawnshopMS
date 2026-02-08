@@ -82,6 +82,7 @@ class TubosController extends Controller
         // The oldest transaction has the actual loan amount (additional items have loan_amount = 0)
         $oldestTransaction = $allTransactions->first();
         $branchId = $oldestTransaction->branch_id;
+        $loanGrantedDate = Carbon::parse($oldestTransaction->created_at)->startOfDay();
 
         // Get the latest transaction (Sangla OR Renewal OR Partial OR Tubos) for date calculations (most current dates)
         // This ensures we use the dates from the most recent renewal/partial/tubos if one exists
@@ -139,30 +140,47 @@ class TubosController extends Controller
         $today = Carbon::today();
         $expiryRedemptionDate = $latestTransactionForDates->expiry_date ? Carbon::parse($latestTransactionForDates->expiry_date) : null;
         $maturityDate = $latestTransactionForDates->maturity_date ? Carbon::parse($latestTransactionForDates->maturity_date) : null;
-        $daysExceeded = 0;
-        $additionalChargeType = null;
+
+        // Charge reference rule:
+        // If parent Sangla is no_advance=true and advance_paid=false, late days + LD additional charges
+        // should be computed against the loan granted date (oldest Sangla created_at), not maturity_date.
+        $useLoanGrantedDateForCharges = (bool) $oldestTransaction->no_advance && !(bool) $oldestTransaction->advance_paid;
+        $maturityDateForCharges = $useLoanGrantedDateForCharges ? $loanGrantedDate : $maturityDate;
         $additionalChargeAmount = 0;
-        $additionalChargeConfig = null;
+        $additionalChargeBreakdown = [];
 
-        // First, check if expiry redemption date is exceeded
+        // Additional charges
+        // Rule: if both LD and EC are applicable, they are BOTH applied (AND), not either/or.
+        // EC
         if ($expiryRedemptionDate && $today->gt($expiryRedemptionDate)) {
-            // Expiry redemption date is exceeded - use EC (Exceeded Charge)
-            // Count days exceeded from expiry redemption date to today
-            $daysExceeded = abs($expiryRedemptionDate->diffInDays($today, false));
-            $additionalChargeType = 'EC';
-        } elseif ($maturityDate && $today->gt($maturityDate)) {
-            // Expiry redemption date is NOT exceeded, but maturity date is exceeded - use LD (Late Days)
-            // Count days exceeded from maturity date to today
-            $daysExceeded = abs($maturityDate->diffInDays($today, false));
-            $additionalChargeType = 'LD';
+            $ecDays = abs($expiryRedemptionDate->diffInDays($today, false));
+            $ecConfig = AdditionalChargeConfig::findApplicable($ecDays, 'EC', 'tubos');
+            if ($ecConfig) {
+                $ecAmount = $chargePrincipalBasis * ((float) $ecConfig->percentage / 100);
+                $additionalChargeAmount += $ecAmount;
+                $additionalChargeBreakdown[] = [
+                    'type' => 'EC',
+                    'days' => $ecDays,
+                    'percentage' => (float) $ecConfig->percentage,
+                    'amount' => $ecAmount,
+                    'basis' => $chargePrincipalBasis,
+                ];
+            }
         }
-
-        // Get the percentage from additionalChargeConfig table based on days exceeded and type
-        if ($daysExceeded > 0 && $additionalChargeType) {
-            $additionalChargeConfig = AdditionalChargeConfig::findApplicable($daysExceeded, $additionalChargeType, 'tubos');
-            if ($additionalChargeConfig) {
-                // Calculate charge amount based on principal basis * percentage from config
-                $additionalChargeAmount = $chargePrincipalBasis * ($additionalChargeConfig->percentage / 100);
+        // LD
+        if ($maturityDateForCharges && $today->gt($maturityDateForCharges)) {
+            $ldDays = abs(Carbon::parse($maturityDateForCharges)->diffInDays($today, false));
+            $ldConfig = AdditionalChargeConfig::findApplicable($ldDays, 'LD', 'tubos');
+            if ($ldConfig) {
+                $ldAmount = $chargePrincipalBasis * ((float) $ldConfig->percentage / 100);
+                $additionalChargeAmount += $ldAmount;
+                $additionalChargeBreakdown[] = [
+                    'type' => 'LD',
+                    'days' => $ldDays,
+                    'percentage' => (float) $ldConfig->percentage,
+                    'amount' => $ldAmount,
+                    'basis' => $chargePrincipalBasis,
+                ];
             }
         }
 
@@ -171,21 +189,21 @@ class TubosController extends Controller
         $lateDaysCharge = 0;
         $lateDaysChargeBreakdown = null;
         
-        if ($maturityDate && $today->gt($maturityDate)) {
+        if ($maturityDateForCharges && $today->gt($maturityDateForCharges)) {
             // Transaction is overdue, calculate late days charge
             $lateDaysCharge = $computationController->computeLateDaysCharge(
                 $oldestTransaction, 
                 $today, 
                 $chargePrincipalBasis,
                 (float) $oldestTransaction->interest_rate,
-                $maturityDate
+                $maturityDateForCharges
             );
             $lateDaysChargeBreakdown = $computationController->getLateDaysChargeBreakdown(
                 $oldestTransaction, 
                 $today, 
                 $chargePrincipalBasis,
                 (float) $oldestTransaction->interest_rate,
-                $maturityDate
+                $maturityDateForCharges
             );
         }
 
@@ -210,10 +228,11 @@ class TubosController extends Controller
             'partialTransactions' => $partialTransactions, // Pass partial transactions for history
             'serviceCharge' => $serviceCharge,
             'totalServiceCharge' => $totalServiceCharge,
-            'additionalChargeType' => $additionalChargeType,
+            'additionalChargeType' => null,
             'additionalChargeAmount' => $additionalChargeAmount,
-            'daysExceeded' => $daysExceeded,
-            'additionalChargeConfig' => $additionalChargeConfig,
+            'daysExceeded' => null,
+            'additionalChargeConfig' => null,
+            'additionalChargeBreakdown' => $additionalChargeBreakdown,
             'lateDaysCharge' => $lateDaysCharge,
             'lateDaysChargeBreakdown' => $lateDaysChargeBreakdown,
             'totalAmountToPay' => $totalAmountToPay,
