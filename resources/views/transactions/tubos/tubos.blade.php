@@ -171,6 +171,21 @@
                                     <span class="font-medium text-green-900">₱{{ number_format($principalAmount, 2) }}</span>
                                 </div>
                             </div>
+
+                            <!-- Advance Interest (only for no_advance tickets before advance is paid) -->
+                            @if(isset($advanceInterestDue) && $advanceInterestDue > 0)
+                            <div class="mb-3">
+                                <div class="flex justify-between items-center text-sm">
+                                    <span class="text-green-800">
+                                        Advance Interest (₱{{ number_format($originalPrincipalAmount, 2) }} × {{ $transaction->interest_rate }}%):
+                                    </span>
+                                    <span class="font-medium text-green-900">₱{{ number_format($advanceInterestDue, 2) }}</span>
+                                </div>
+                                <p class="mt-1 text-xs text-green-700">
+                                    This is unpaid interest because the Sangla was created with <strong>No advance</strong>. It must be paid before principal is fully redeemed.
+                                </p>
+                            </div>
+                            @endif
                             
                             
                             <!-- Additional Charge -->
@@ -178,7 +193,14 @@
                                 <div class="flex justify-between items-center text-sm">
                                     <span class="text-green-800">
                                         @if($additionalChargeAmount > 0 && $additionalChargeConfig)
-                                            Additional Charge ({{ $additionalChargeType === 'EC' ? 'Exceeded Charge' : 'Late Days' }} - {{ $daysExceeded }} day(s), {{ $additionalChargeConfig->percentage }}% of ₱{{ number_format($currentPrincipalAmount, 2) }}):
+                                            @php
+                                                $chargeBasis = isset($chargePrincipalBasis) ? (float) $chargePrincipalBasis : (float) $currentPrincipalAmount;
+                                            @endphp
+                                            Additional Charge ({{ $additionalChargeType === 'EC' ? 'Exceeded Charge' : 'Late Days' }} - {{ $daysExceeded }} day(s), {{ $additionalChargeConfig->percentage }}% of ₱{{ number_format($chargeBasis, 2) }}
+                                            @if($chargeBasis != (float) $currentPrincipalAmount)
+                                                <span class="text-xs text-green-700">(based on original principal)</span>
+                                            @endif
+                                            ):
                                         @else
                                             Additional Charge:
                                         @endif
@@ -414,7 +436,12 @@
                                             Apply Additional Charge
                                         </label>
                                         <p class="text-xs text-yellow-700 mt-1">
-                                            {{ $additionalChargeType === 'EC' ? 'Exceeded Charge' : 'Late Days' }} - {{ $daysExceeded }} day(s) exceeded, {{ $additionalChargeConfig->percentage }}% of current principal (₱{{ number_format($currentPrincipalAmount, 2) }})
+                                            @php
+                                                $chargeBasis = isset($chargePrincipalBasis) ? (float) $chargePrincipalBasis : (float) $currentPrincipalAmount;
+                                            @endphp
+                                            {{ $additionalChargeType === 'EC' ? 'Exceeded Charge' : 'Late Days' }} - {{ $daysExceeded }} day(s) exceeded, {{ $additionalChargeConfig->percentage }}% of
+                                            {{ $chargeBasis != (float) $currentPrincipalAmount ? 'original principal' : 'current principal' }}
+                                            (₱{{ number_format($chargeBasis, 2) }})
                                         </p>
                                     </div>
                                 </div>
@@ -435,7 +462,12 @@
                                 />
                                 <p class="mt-1 text-xs text-gray-500">
                                     @if($additionalChargeAmount > 0 && $additionalChargeConfig)
-                                        {{ $additionalChargeType === 'EC' ? 'Exceeded Charge' : 'Late Days' }} - {{ $daysExceeded }} day(s) exceeded, {{ $additionalChargeConfig->percentage }}% of current principal (₱{{ number_format($currentPrincipalAmount, 2) }})
+                                        @php
+                                            $chargeBasis = isset($chargePrincipalBasis) ? (float) $chargePrincipalBasis : (float) $currentPrincipalAmount;
+                                        @endphp
+                                        {{ $additionalChargeType === 'EC' ? 'Exceeded Charge' : 'Late Days' }} - {{ $daysExceeded }} day(s) exceeded, {{ $additionalChargeConfig->percentage }}% of
+                                        {{ $chargeBasis != (float) $currentPrincipalAmount ? 'original principal' : 'current principal' }}
+                                        (₱{{ number_format($chargeBasis, 2) }})
                                     @else
                                         No additional charge applicable
                                     @endif
@@ -492,6 +524,8 @@
 
                             <!-- Hidden input for additional charge amount -->
                             <input type="hidden" id="additional_charge_amount" name="additional_charge_amount" value="{{ number_format($additionalChargeAmount, 2, '.', '') }}">
+                            <!-- Hidden input for advance interest amount (server will recompute as source of truth) -->
+                            <input type="hidden" id="advance_interest_amount" name="advance_interest_amount" value="{{ number_format($advanceInterestDue ?? 0, 2, '.', '') }}">
                             <!-- Hidden input for late days charge amount -->
                             <input type="hidden" name="late_days_charge_amount" value="{{ number_format($lateDaysCharge, 2, '.', '') }}">
                         </div>
@@ -755,16 +789,18 @@
             const additionalChargeDisplay = document.getElementById('additional_charge');
             const additionalChargeAmountInput = document.getElementById('additional_charge_amount');
             const totalAmountDisplay = document.getElementById('total_amount');
+            const advanceInterestAmountInput = document.getElementById('advance_interest_amount');
             
             // Store original values
             const originalAdditionalChargeAmount = parseFloat(additionalChargeAmountInput ? additionalChargeAmountInput.value : 0) || 0;
             const lateDaysChargeAmount = parseFloat(document.querySelector('input[name="late_days_charge_amount"]') ? document.querySelector('input[name="late_days_charge_amount"]').value : 0) || 0;
             const principalAmount = parseFloat(document.querySelector('input[name="principal_amount"]') ? document.querySelector('input[name="principal_amount"]').value : 0) || 0;
+            const advanceInterestAmount = parseFloat(advanceInterestAmountInput ? advanceInterestAmountInput.value : 0) || 0;
 
             function updateTotalAmount() {
                 const applyAdditionalCharge = applyAdditionalChargeCheckbox ? applyAdditionalChargeCheckbox.checked : true;
                 const currentAdditionalCharge = applyAdditionalCharge ? originalAdditionalChargeAmount : 0;
-                const totalAmount = principalAmount + currentAdditionalCharge + lateDaysChargeAmount;
+                const totalAmount = principalAmount + advanceInterestAmount + currentAdditionalCharge + lateDaysChargeAmount;
                 
                 // Format currency
                 const formatCurrency = (amount) => {

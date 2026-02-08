@@ -82,7 +82,14 @@
                             <div class="mb-3">
                                 <div class="flex justify-between items-center text-sm">
                                     <span class="text-yellow-800">
-                                        Interest (₱{{ number_format($currentPrincipalAmount, 2) }} × {{ $transaction->interest_rate }}%):
+                                        @php
+                                            $interestBasis = isset($interestPrincipalBasis) ? (float) $interestPrincipalBasis : (float) $currentPrincipalAmount;
+                                        @endphp
+                                        Interest (₱{{ number_format($interestBasis, 2) }} × {{ $transaction->interest_rate }}%
+                                        @if($interestBasis != (float) $currentPrincipalAmount)
+                                            <span class="text-xs text-yellow-700">(based on original principal)</span>
+                                        @endif
+                                        ):
                                     </span>
                                     <span class="font-medium text-yellow-900">₱{{ number_format($totalInterest, 2) }}</span>
                                 </div>
@@ -408,6 +415,23 @@
                                 </p>
                             </div>
 
+                            <!-- Total Amount to Pay (Calculated, Readonly) -->
+                            <div>
+                                <x-input-label for="total_amount_to_pay" value="Total Amount to Pay (Including Charges)" />
+                                <x-text-input
+                                    id="total_amount_to_pay"
+                                    name="total_amount_to_pay_display"
+                                    type="text"
+                                    class="mt-1 block w-full bg-gray-100 font-semibold"
+                                    value="₱0.00"
+                                    readonly
+                                    disabled
+                                />
+                                <p class="mt-1 text-xs text-gray-500" id="totalAmountToPayInfo">
+                                    <!-- Will be populated by JavaScript -->
+                                </p>
+                            </div>
+
                             <!-- Back Date Checkbox -->
                             @if($isOverdue)
                             <div class="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
@@ -580,6 +604,8 @@
             const partialAmountInput = document.getElementById('partial_amount');
             const newPrincipalInput = document.getElementById('new_principal_amount');
             const newPrincipalInfo = document.getElementById('newPrincipalInfo');
+            const totalAmountToPayInput = document.getElementById('total_amount_to_pay');
+            const totalAmountToPayInfo = document.getElementById('totalAmountToPayInfo');
             
             let isDrawing = false;
             let lastX = 0;
@@ -673,34 +699,89 @@
             }
 
             // Calculate new principal amount when partial amount changes
-            const currentPrincipal = {{ $currentPrincipalAmount }};
-            const minimumRenewal = {{ $minimumRenewalAmount }};
+            const currentPrincipal = parseFloat('{{ $currentPrincipalAmount }}') || 0;
+            const minimumRenewal = parseFloat('{{ $minimumRenewalAmount }}') || 0;
+            const shouldAllocatePaymentToAdvanceInterestFirst = parseInt('{{ (isset($shouldAllocatePaymentToAdvanceInterestFirst) && $shouldAllocatePaymentToAdvanceInterestFirst) ? 1 : 0 }}', 10) === 1;
+            const advanceInterestDue = parseFloat('{{ $advanceInterestDue ?? 0 }}') || 0;
+            const interestRate = parseFloat('{{ $transaction->interest_rate }}') || 0;
+            const serviceCharge = parseFloat('{{ $totalServiceCharge }}') || 0;
+            const additionalCharge = parseFloat('{{ $additionalChargeAmount }}') || 0;
+            const lateDaysCharge = parseFloat('{{ $lateDaysCharge }}') || 0;
+
+            const formatCurrency = (amount) => {
+                const n = isFinite(amount) ? amount : 0;
+                return '₱' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+            };
 
             function calculateNewPrincipal() {
                 const partialAmount = parseFloat(partialAmountInput.value) || 0;
-                const newPrincipal = currentPrincipal - partialAmount;
+                const advanceInterestPaid = (shouldAllocatePaymentToAdvanceInterestFirst && partialAmount > 0)
+                    ? Math.min(partialAmount, advanceInterestDue)
+                    : 0;
+                const principalPaid = partialAmount > 0 ? Math.max(0, partialAmount - advanceInterestPaid) : partialAmount;
+
+                // For negative partial amounts (principal increase), keep old behavior
+                const newPrincipal = partialAmount < 0
+                    ? (currentPrincipal - partialAmount)
+                    : (currentPrincipal - principalPaid);
+                
+                const finalPrincipal = newPrincipal < 0 ? 0 : newPrincipal;
+
+                // Total to pay display:
+                // - No-advance unpaid mode: show entered amount as total (existing behavior)
+                // - Otherwise (normal): partial + interest(on new principal) + service + other charges
+                let totalToPay = Math.abs(partialAmount);
+                let totalInfo = '';
+                if (partialAmount > 0 && !shouldAllocatePaymentToAdvanceInterestFirst) {
+                    const interestOnNewPrincipal = finalPrincipal * (interestRate / 100);
+                    totalToPay = partialAmount + interestOnNewPrincipal + serviceCharge + additionalCharge + lateDaysCharge;
+                    totalInfo = `Total = Partial (₱${partialAmount.toFixed(2)}) + Interest (₱${interestOnNewPrincipal.toFixed(2)} on new principal) + Service Charge (₱${serviceCharge.toFixed(2)})`
+                        + (additionalCharge > 0 ? ` + Additional Charge (₱${additionalCharge.toFixed(2)})` : '')
+                        + (lateDaysCharge > 0 ? ` + Late Days Charge (₱${lateDaysCharge.toFixed(2)})` : '');
+                } else if (partialAmount > 0 && shouldAllocatePaymentToAdvanceInterestFirst && advanceInterestDue > 0) {
+                    totalToPay = partialAmount;
+                    totalInfo = `Payment allocation: ₱${advanceInterestPaid.toFixed(2)} to advance interest, ₱${(partialAmount - advanceInterestPaid).toFixed(2)} to principal.`;
+                } else if (partialAmount < 0) {
+                    totalToPay = Math.abs(partialAmount);
+                    totalInfo = 'This is a principal increase (money out).';
+                }
                 
                 // Handle negative values (increases principal)
                 if (partialAmount < 0) {
-                    newPrincipalInput.value = '₱' + newPrincipal.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                    newPrincipalInput.value = formatCurrency(finalPrincipal);
                     newPrincipalInfo.textContent = `Principal increase of ₱${Math.abs(partialAmount).toFixed(2)} will increase the principal from ₱${currentPrincipal.toFixed(2)} to ₱${newPrincipal.toFixed(2)}.`;
                     newPrincipalInfo.classList.remove('hidden');
                     newPrincipalInfo.classList.remove('text-red-600');
                     newPrincipalInfo.classList.add('text-green-600');
                 } else if (partialAmount > 0) {
                     // Positive values (payment)
-                    const finalPrincipal = newPrincipal < 0 ? 0 : newPrincipal;
-                    newPrincipalInput.value = '₱' + finalPrincipal.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                    newPrincipalInput.value = formatCurrency(finalPrincipal);
                     
                     // Show informational message about minimum (as a guide, not a requirement)
                     if (partialAmount < minimumRenewal) {
-                        newPrincipalInfo.textContent = `Partial payment of ₱${partialAmount.toFixed(2)} will reduce the principal from ₱${currentPrincipal.toFixed(2)} to ₱${finalPrincipal.toFixed(2)}. Note: Minimum renewal amount is ₱${minimumRenewal.toFixed(2)} (for reference only).`;
+                        if (advanceInterestPaid > 0) {
+                            if (principalPaid > 0) {
+                                newPrincipalInfo.textContent = `Payment breakdown: ₱${advanceInterestPaid.toFixed(2)} to advance interest, ₱${principalPaid.toFixed(2)} to principal. Principal goes from ₱${currentPrincipal.toFixed(2)} to ₱${finalPrincipal.toFixed(2)}. Note: Minimum renewal amount is ₱${minimumRenewal.toFixed(2)} (for reference only).`;
+                            } else {
+                                newPrincipalInfo.textContent = `Payment breakdown: ₱${advanceInterestPaid.toFixed(2)} to advance interest. Principal remains ₱${currentPrincipal.toFixed(2)}. Note: Minimum renewal amount is ₱${minimumRenewal.toFixed(2)} (for reference only).`;
+                            }
+                        } else {
+                            newPrincipalInfo.textContent = `Partial payment of ₱${partialAmount.toFixed(2)} will reduce the principal from ₱${currentPrincipal.toFixed(2)} to ₱${finalPrincipal.toFixed(2)}. Note: Minimum renewal amount is ₱${minimumRenewal.toFixed(2)} (for reference only).`;
+                        }
                         newPrincipalInfo.classList.remove('hidden');
                         newPrincipalInfo.classList.remove('text-red-600');
                         newPrincipalInfo.classList.remove('text-green-600');
                         newPrincipalInfo.classList.add('text-yellow-600');
                     } else {
-                        newPrincipalInfo.textContent = `Partial payment of ₱${partialAmount.toFixed(2)} will reduce the principal from ₱${currentPrincipal.toFixed(2)} to ₱${finalPrincipal.toFixed(2)}.`;
+                        if (advanceInterestPaid > 0) {
+                            if (principalPaid > 0) {
+                                newPrincipalInfo.textContent = `Payment breakdown: ₱${advanceInterestPaid.toFixed(2)} to advance interest, ₱${principalPaid.toFixed(2)} to principal. Principal goes from ₱${currentPrincipal.toFixed(2)} to ₱${finalPrincipal.toFixed(2)}.`;
+                            } else {
+                                newPrincipalInfo.textContent = `Payment breakdown: ₱${advanceInterestPaid.toFixed(2)} to advance interest. Principal remains ₱${currentPrincipal.toFixed(2)}.`;
+                            }
+                        } else {
+                            newPrincipalInfo.textContent = `Partial payment of ₱${partialAmount.toFixed(2)} will reduce the principal from ₱${currentPrincipal.toFixed(2)} to ₱${finalPrincipal.toFixed(2)}.`;
+                        }
                         newPrincipalInfo.classList.remove('hidden');
                         newPrincipalInfo.classList.remove('text-red-600');
                         newPrincipalInfo.classList.remove('text-green-600');
@@ -708,9 +789,16 @@
                     }
                 } else {
                     // Zero or empty
-                    newPrincipalInput.value = '₱' + currentPrincipal.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                    newPrincipalInput.value = formatCurrency(currentPrincipal);
                     newPrincipalInfo.textContent = '';
                     newPrincipalInfo.classList.add('hidden');
+                }
+
+                if (totalAmountToPayInput) {
+                    totalAmountToPayInput.value = formatCurrency(totalToPay);
+                }
+                if (totalAmountToPayInfo) {
+                    totalAmountToPayInfo.textContent = totalInfo;
                 }
             }
 
@@ -721,8 +809,8 @@
             const maturityDateInput = document.getElementById('maturity_date');
             const expiryDateInput = document.getElementById('expiry_date');
             const auctionDateInput = document.getElementById('auction_sale_date');
-            const daysBeforeRedemption = {{ $daysBeforeRedemption }};
-            const daysBeforeAuctionSale = {{ $daysBeforeAuctionSale }};
+            const daysBeforeRedemption = parseInt('{{ $daysBeforeRedemption }}', 10) || 0;
+            const daysBeforeAuctionSale = parseInt('{{ $daysBeforeAuctionSale }}', 10) || 0;
 
             maturityDateInput.addEventListener('change', function() {
                 if (maturityDateInput.value) {

@@ -114,8 +114,21 @@ class TubosController extends Controller
             ? (float) $latestPartialTransaction->loan_amount 
             : $originalPrincipalAmount;
 
+        // Principal-basis rule for Tubos computations (charges):
+        // - If parent Sangla is no_advance=true and advance_paid=false: use CURRENT principal
+        // - Otherwise: use ORIGINAL principal
+        $useCurrentPrincipalForCharges = (bool) $oldestTransaction->no_advance && !(bool) $oldestTransaction->advance_paid;
+        $chargePrincipalBasis = $useCurrentPrincipalForCharges ? $currentPrincipalAmount : $originalPrincipalAmount;
+
         // For tubos: Principal amount (current loan_amount after any partial payments)
         $principalAmount = $currentPrincipalAmount;
+
+        // If parent Sangla is no_advance=true and advance_paid=false, then "advance interest" is still unpaid.
+        // For redemption (tubos), the customer must pay this interest first (interest is based on ORIGINAL principal).
+        $shouldAllocatePaymentToAdvanceInterestFirst = (bool) $oldestTransaction->no_advance && !(bool) $oldestTransaction->advance_paid;
+        $advanceInterestDue = $shouldAllocatePaymentToAdvanceInterestFirst
+            ? ($originalPrincipalAmount * ((float) $oldestTransaction->interest_rate / 100))
+            : 0.0;
 
         // No service charge for tubos transactions
         $serviceCharge = 0;
@@ -148,8 +161,8 @@ class TubosController extends Controller
         if ($daysExceeded > 0 && $additionalChargeType) {
             $additionalChargeConfig = AdditionalChargeConfig::findApplicable($daysExceeded, $additionalChargeType, 'tubos');
             if ($additionalChargeConfig) {
-                // Calculate charge amount: current principal * percentage from config
-                $additionalChargeAmount = $currentPrincipalAmount * ($additionalChargeConfig->percentage / 100);
+                // Calculate charge amount based on principal basis * percentage from config
+                $additionalChargeAmount = $chargePrincipalBasis * ($additionalChargeConfig->percentage / 100);
             }
         }
 
@@ -163,21 +176,21 @@ class TubosController extends Controller
             $lateDaysCharge = $computationController->computeLateDaysCharge(
                 $oldestTransaction, 
                 $today, 
-                $currentPrincipalAmount,
+                $chargePrincipalBasis,
                 (float) $oldestTransaction->interest_rate,
                 $maturityDate
             );
             $lateDaysChargeBreakdown = $computationController->getLateDaysChargeBreakdown(
                 $oldestTransaction, 
                 $today, 
-                $currentPrincipalAmount,
+                $chargePrincipalBasis,
                 (float) $oldestTransaction->interest_rate,
                 $maturityDate
             );
         }
 
         // Total amount to pay: Principal + Additional Charge + Late Days Charge (no service charge for tubos)
-        $totalAmountToPay = $principalAmount + $additionalChargeAmount + $lateDaysCharge;
+        $totalAmountToPay = $principalAmount + $advanceInterestDue + $additionalChargeAmount + $lateDaysCharge;
 
         // Combine all item descriptions for the tubos transaction
         $combinedDescriptions = $allTransactions->pluck('item_description')->filter()->unique()->values()->implode('; ');
@@ -191,6 +204,9 @@ class TubosController extends Controller
             'principalAmount' => $principalAmount,
             'currentPrincipalAmount' => $currentPrincipalAmount, // Pass current principal to view
             'originalPrincipalAmount' => $originalPrincipalAmount, // Pass original principal to view
+            'chargePrincipalBasis' => $chargePrincipalBasis, // Principal used for additional/late-days charge computations
+            'shouldAllocatePaymentToAdvanceInterestFirst' => $shouldAllocatePaymentToAdvanceInterestFirst,
+            'advanceInterestDue' => $advanceInterestDue,
             'partialTransactions' => $partialTransactions, // Pass partial transactions for history
             'serviceCharge' => $serviceCharge,
             'totalServiceCharge' => $totalServiceCharge,
@@ -216,6 +232,7 @@ class TubosController extends Controller
             'principal_amount' => ['required', 'numeric', 'min:0'],
             'additional_charge_amount' => ['nullable', 'numeric', 'min:0'],
             'late_days_charge_amount' => ['nullable', 'numeric', 'min:0'],
+            'advance_interest_amount' => ['nullable', 'numeric', 'min:0'],
             'apply_additional_charge' => ['nullable', 'boolean'],
             'transaction_pawn_ticket' => ['required', 'string', 'max:100'],
             'signature_photo' => ['nullable', 'image', 'mimes:jpeg,png,jpg', 'max:5120'], // Optional
@@ -260,7 +277,13 @@ class TubosController extends Controller
         // Checkbox sends value when checked, nothing when unchecked
         // If checkbox is present in request, it's checked (true), otherwise unchecked (false)
         $applyAdditionalCharge = $request->has('apply_additional_charge') ? true : false;
-        $totalAmount = $principalAmount + $additionalChargeAmount + $lateDaysCharge; // No service charge for tubos
+        // Determine advance interest due from parent Sangla flags (server-side source of truth)
+        $originalPrincipalAmount = (float) $oldestTransaction->loan_amount;
+        $advanceInterestDue = ((bool) $oldestTransaction->no_advance && !(bool) $oldestTransaction->advance_paid)
+            ? ($originalPrincipalAmount * ((float) $oldestTransaction->interest_rate / 100))
+            : 0.0;
+
+        $totalAmount = $principalAmount + $advanceInterestDue + $additionalChargeAmount + $lateDaysCharge; // No service charge for tubos
 
         // Combine all item descriptions for the tubos transaction
         $combinedDescriptions = $allTransactions->pluck('item_description')->filter()->unique()->values()->implode('; ');
@@ -312,6 +335,19 @@ class TubosController extends Controller
 
         // Use database transaction to ensure data integrity
         DB::transaction(function () use ($allTransactions, $request, $branchId, $principalAmount, $serviceCharge, $additionalChargeAmount, $lateDaysCharge, $applyAdditionalCharge, $totalAmount, $pawnTicketNumber, $oldestTransaction, $combinedDescriptions, $signaturePath) {
+            $noAdvance = (bool) $oldestTransaction->no_advance;
+            $advancePaid = (bool) $oldestTransaction->advance_paid;
+
+            // If this pawn ticket's parent Sangla is "no advance" and not yet paid, redemption settles it.
+            if ($noAdvance && !$advancePaid) {
+                Transaction::where('pawn_ticket_number', $pawnTicketNumber)
+                    ->where('type', 'sangla')
+                    ->whereDoesntHave('voided')
+                    ->where('no_advance', true)
+                    ->update(['advance_paid' => true]);
+                $advancePaid = true;
+            }
+
             // Generate tubos transaction number
             $tubosTransactionNumber = $this->generateTubosTransactionNumber();
 
@@ -328,6 +364,8 @@ class TubosController extends Controller
                 'loan_amount' => $principalAmount, // Principal amount paid
                 'interest_rate' => $oldestTransaction->interest_rate,
                 'interest_rate_period' => $oldestTransaction->interest_rate_period,
+                'no_advance' => $noAdvance,
+                'advance_paid' => $advancePaid,
                 'maturity_date' => $oldestTransaction->maturity_date, // Keep original dates
                 'expiry_date' => $oldestTransaction->expiry_date, // Keep original dates
                 'pawn_ticket_number' => $pawnTicketNumber,
@@ -345,7 +383,7 @@ class TubosController extends Controller
                 'service_charge' => $serviceCharge,
                 'late_days_charge' => $lateDaysCharge,
                 'apply_additional_charge' => $applyAdditionalCharge,
-                'net_proceeds' => $totalAmount, // Total amount paid (principal + additional charge + late days charge, no service charge for tubos)
+                'net_proceeds' => $totalAmount, // Total amount paid (principal + advance interest (if any) + additional charge + late days charge)
                 'status' => 'redeemed', // Mark as redeemed
                 'transaction_pawn_ticket' => $request->input('transaction_pawn_ticket'),
                 'note' => $request->input('note'),
@@ -359,7 +397,7 @@ class TubosController extends Controller
                 'transaction_id' => $tubosTransaction->id,
                 'type' => 'transaction',
                 'description' => "Tubos (Redemption) payment - Pawn Ticket #{$pawnTicketNumber}",
-                'amount' => $totalAmount, // Positive amount (money coming in: principal + additional charge, no service charge for tubos)
+                'amount' => $totalAmount, // Positive amount (money coming in: principal + advance interest (if any) + additional charge + late days charge)
                 'transaction_date' => now()->toDateString(),
             ]);
 
@@ -373,6 +411,9 @@ class TubosController extends Controller
         });
 
         $paymentBreakdown = "Principal: ₱" . number_format($principalAmount, 2);
+        if ($advanceInterestDue > 0) {
+            $paymentBreakdown .= ", Advance Interest: ₱" . number_format($advanceInterestDue, 2);
+        }
         if ($additionalChargeAmount > 0) {
             $paymentBreakdown .= ", Additional Charge: ₱" . number_format($additionalChargeAmount, 2);
         }

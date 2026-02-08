@@ -135,6 +135,23 @@
                             <x-input-error :messages="$errors->get('interest_rate')" class="mt-2" />
                         </div>
 
+                        <!-- No Advance (Do not deduct interest upfront) -->
+                        <div class="mt-4">
+                            <label class="inline-flex items-center gap-2">
+                                <input
+                                    id="no_advance"
+                                    name="no_advance"
+                                    type="checkbox"
+                                    value="1"
+                                    class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
+                                    {{ old('no_advance') ? 'checked' : '' }}
+                                />
+                                <span class="text-sm font-medium text-gray-700">No advance</span>
+                            </label>
+                            <p class="mt-1 text-xs text-gray-500">If checked, interest will not be deducted from the Sangla net proceeds computation.</p>
+                            <x-input-error :messages="$errors->get('no_advance')" class="mt-2" />
+                        </div>
+
                         <!-- Interest Rate Period -->
                         <div class="mt-4">
                             <x-input-label value="Interest Rate Period *" />
@@ -428,6 +445,7 @@
             const loanAmountInput = document.getElementById('loan_amount');
             const interestRateInput = document.getElementById('interest_rate');
             const interestRatePeriodInputs = document.querySelectorAll('input[name="interest_rate_period"]');
+            const noAdvanceCheckbox = document.getElementById('no_advance');
             
             // Config values from backend
             const serviceCharge = {{ $serviceCharge }};
@@ -654,9 +672,10 @@
             function calculateAmounts() {
                 const principal = parseFloat(loanAmountInput.value) || 0;
                 const interestRate = parseFloat(interestRateInput.value) || 0;
+                const noAdvance = noAdvanceCheckbox ? noAdvanceCheckbox.checked : false;
                 
                 // Calculate interest as percentage of principal (no time-based calculation)
-                const interest = principal > 0 && interestRate > 0 
+                const interest = (!noAdvance && principal > 0 && interestRate > 0)
                     ? principal * (interestRate / 100) 
                     : 0;
                 
@@ -675,6 +694,9 @@
             loanAmountInput.addEventListener('change', calculateAmounts);
             interestRateInput.addEventListener('input', calculateAmounts);
             interestRateInput.addEventListener('change', calculateAmounts);
+            if (noAdvanceCheckbox) {
+                noAdvanceCheckbox.addEventListener('change', calculateAmounts);
+            }
             
             // Handle grams input to ensure single decimal place (no rounding)
             gramsInput.addEventListener('input', function() {

@@ -13,6 +13,7 @@ use App\Models\ItemType;
 use App\Models\Transaction;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
@@ -49,7 +50,8 @@ class SanglaController extends Controller
         }
 
         // Get user's branches
-        $user = auth()->user();
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
         
         // Admins and superadmins can access all branches
         if ($user->isAdminOrSuperAdmin()) {
@@ -89,10 +91,14 @@ class SanglaController extends Controller
             // Get service charge from config
             $serviceCharge = Config::getValue('sangla_service_charge', 0);
             
-            // Calculate net proceeds: principal - (principal * interest) - service charge
+            // No advance flag:
+            // - When checked, we do NOT deduct interest from the net proceeds (interest is not taken upfront).
+            $noAdvance = $request->boolean('no_advance', false);
+
+            // Calculate net proceeds: principal - (principal * interest if advance) - service charge
             $principal = (float) $validated['loan_amount'];
             $interestRate = (float) $validated['interest_rate'];
-            $interest = $principal * ($interestRate / 100);
+            $interest = $noAdvance ? 0.0 : ($principal * ($interestRate / 100));
             $netProceeds = $principal - $interest - $serviceCharge;
             
             // Generate unique transaction number
@@ -153,6 +159,8 @@ class SanglaController extends Controller
                 'loan_amount' => $principal,
                 'interest_rate' => $interestRate,
                 'interest_rate_period' => $validated['interest_rate_period'],
+                'no_advance' => $noAdvance,
+                'advance_paid' => !$noAdvance,
                 'maturity_date' => $validated['maturity_date'],
                 'expiry_date' => $validated['expiry_date'],
                 'pawn_ticket_number' => $validated['pawn_ticket_number'],
@@ -329,7 +337,8 @@ class SanglaController extends Controller
         }
 
         // Get user's branches
-        $user = auth()->user();
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
         
         if ($user->isAdminOrSuperAdmin()) {
             $userBranches = Branch::orderBy('name', 'asc')->get();
@@ -478,6 +487,8 @@ class SanglaController extends Controller
                 'loan_amount' => $principal, // 0 for additional items (first transaction is the summary)
                 'interest_rate' => $interestRate, // From first transaction
                 'interest_rate_period' => $interestRatePeriod, // From first transaction
+                'no_advance' => (bool) $firstTransaction->no_advance,
+                'advance_paid' => (bool) $firstTransaction->advance_paid,
                 'maturity_date' => $firstTransaction->maturity_date, // From first transaction
                 'expiry_date' => $firstTransaction->expiry_date, // From first transaction
                 'pawn_ticket_number' => $pawnTicketNumber, // Same pawn ticket number

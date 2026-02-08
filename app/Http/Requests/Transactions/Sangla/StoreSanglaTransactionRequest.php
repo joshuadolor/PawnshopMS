@@ -56,6 +56,7 @@ class StoreSanglaTransactionRequest extends FormRequest
                 }
             ],
             'interest_rate_period' => ['required', 'in:per_annum,per_month,others'],
+            'no_advance' => ['nullable', 'boolean'],
             'maturity_date' => ['required', 'date', 'after_or_equal:today'],
             'expiry_date' => ['required', 'date', 'after_or_equal:maturity_date'],
             'pawn_ticket_number' => [

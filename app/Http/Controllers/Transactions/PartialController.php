@@ -11,6 +11,7 @@ use App\Models\BranchBalance;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 use Carbon\Carbon;
@@ -116,8 +117,18 @@ class PartialController extends Controller
             : $originalPrincipalAmount;
 
         // Calculate renewal amount (interest + service charge + additional charges)
-        // This is the minimum amount that must be paid
-        $totalInterest = $currentPrincipalAmount * ((float) $oldestTransaction->interest_rate / 100);
+        //
+        // For partial display:
+        // - When parent Sangla is no_advance=true and advance_paid=false, the "advance interest" is still unpaid.
+        //   We compute that interest based on the ORIGINAL principal (same basis as Sangla).
+        // - Otherwise, we also compute interest based on the ORIGINAL principal (reference/guide).
+        $interestPrincipalBasis = $originalPrincipalAmount;
+        $totalInterest = $interestPrincipalBasis * ((float) $oldestTransaction->interest_rate / 100);
+
+        // Allocation rule for partials when no_advance=true and advance_paid=false:
+        // Payment goes to INTEREST first, then any remainder reduces principal.
+        $shouldAllocatePaymentToAdvanceInterestFirst = (bool) $oldestTransaction->no_advance && !(bool) $oldestTransaction->advance_paid;
+        $advanceInterestDue = $shouldAllocatePaymentToAdvanceInterestFirst ? $totalInterest : 0.0;
 
         // Get service charge from config (one service charge per pawn ticket)
         $serviceCharge = Config::getValue('sangla_service_charge', 0);
@@ -240,6 +251,9 @@ class PartialController extends Controller
             'partialTransactionsForRedemption' => $partialTransactionsForRedemption, // Partial transactions for redemption info
             'pawnTicketNumber' => $pawnTicketNumber,
             'totalInterest' => $totalInterest,
+            'interestPrincipalBasis' => $interestPrincipalBasis,
+            'shouldAllocatePaymentToAdvanceInterestFirst' => $shouldAllocatePaymentToAdvanceInterestFirst,
+            'advanceInterestDue' => $advanceInterestDue,
             'serviceCharge' => $serviceCharge,
             'totalServiceCharge' => $totalServiceCharge,
             'additionalChargeType' => $additionalChargeType,
@@ -296,7 +310,7 @@ class PartialController extends Controller
         $selectedItemIds = $request->input('selected_items', []);
         
         // Debug: Log what we received
-        \Log::info('=== PARTIAL STORE START ===', [
+        Log::info('=== PARTIAL STORE START ===', [
             'pawn_ticket_number' => $pawnTicketNumber,
             'selected_items_raw' => $request->input('selected_items'),
             'selected_items_type' => gettype($request->input('selected_items')),
@@ -305,12 +319,12 @@ class PartialController extends Controller
         
         // Ensure selectedItemIds is an array and contains only integers
         if (!is_array($selectedItemIds)) {
-            \Log::warning('Partial Store - selected_items is not an array', ['type' => gettype($selectedItemIds), 'value' => $selectedItemIds]);
+            Log::warning('Partial Store - selected_items is not an array', ['type' => gettype($selectedItemIds), 'value' => $selectedItemIds]);
             $selectedItemIds = [];
         }
         $selectedItemIds = array_filter(array_map('intval', $selectedItemIds));
         
-        \Log::info('Partial Store - Processed Selected Items', [
+        Log::info('Partial Store - Processed Selected Items', [
             'selected_item_ids' => $selectedItemIds,
             'count' => count($selectedItemIds),
             'is_empty' => empty($selectedItemIds),
@@ -348,7 +362,7 @@ class PartialController extends Controller
         $selectedTransactions = $activeTransactions->whereIn('id', $selectedItemIds);
         $remainingTransactions = $activeTransactions->whereNotIn('id', $selectedItemIds);
         
-        \Log::info('Partial Store - Transaction Separation', [
+        Log::info('Partial Store - Transaction Separation', [
             'all_transactions_count' => $allTransactions->count(),
             'all_transaction_ids' => $allTransactions->pluck('id')->toArray(),
             'selected_item_ids' => $selectedItemIds,
@@ -361,7 +375,7 @@ class PartialController extends Controller
         // If items are selected, mark them as redeemed (but don't create tubos transaction)
         $selectedItemsMessage = '';
         if (!empty($selectedItemIds) && $selectedTransactions->isNotEmpty()) {
-            \Log::info('Partial Store - Processing Selected Items', [
+            Log::info('Partial Store - Processing Selected Items', [
                 'selected_item_ids' => $selectedItemIds,
                 'selected_transactions_count' => $selectedTransactions->count(),
             ]);
@@ -396,7 +410,7 @@ class PartialController extends Controller
             $selectedItemsToRedeem = $selectedItemIds;
             $selectedItemsMessage = "Selected " . count($selectedItemsToRedeem) . " item(s) will be marked as redeemed. ";
             
-            \Log::info('Partial Store - Prepared for Redemption', [
+            Log::info('Partial Store - Prepared for Redemption', [
                 'selected_items_to_redeem' => $selectedItemsToRedeem,
                 'count' => count($selectedItemsToRedeem),
             ]);
@@ -433,8 +447,13 @@ class PartialController extends Controller
             ? (float) $latestPartialTransaction->loan_amount 
             : (float) $oldestTransaction->loan_amount;
 
-        // Calculate renewal amount to validate minimum payment
-        $totalInterest = $currentPrincipalAmount * ((float) $oldestTransaction->interest_rate / 100);
+        // Calculate renewal amount to validate minimum payment (reference/guide only)
+        $parentSangla = $allTransactions->first(); // Oldest Sangla (true parent)
+        $originalPrincipalAmount = $parentSangla ? (float) $parentSangla->loan_amount : $currentPrincipalAmount;
+
+        // Interest basis for the reference amount is the ORIGINAL principal
+        $interestPrincipalBasis = $originalPrincipalAmount;
+        $totalInterest = $interestPrincipalBasis * ((float) $oldestTransaction->interest_rate / 100);
         $serviceCharge = Config::getValue('sangla_service_charge', 0);
         
         // Get latest transaction for date calculations
@@ -483,7 +502,54 @@ class PartialController extends Controller
         // Calculate new principal amount
         // If partial amount is negative, it increases the principal (pawner adds more money)
         // If partial amount is positive, it decreases the principal (pawner pays)
-        $newPrincipalAmount = $currentPrincipalAmount - $partialAmount;
+        //
+        // Special rule:
+        // If parent Sangla is no_advance=true and advance_paid=false, payment is allocated to INTEREST first,
+        // then any remainder reduces principal.
+        $advanceInterestDue = 0.0;
+        $advanceInterestPaid = 0.0;
+        $principalPaid = 0.0;
+        $markAdvancePaid = false;
+        $totalPaymentReceived = abs($partialAmount);
+        $interestOnNewPrincipal = 0.0;
+        $isNormalPartialMode = false;
+
+        if ($partialAmount > 0) {
+            if ($parentSangla && (bool) $parentSangla->no_advance && !(bool) $parentSangla->advance_paid) {
+                $advanceInterestDue = $originalPrincipalAmount * ((float) $oldestTransaction->interest_rate / 100);
+                $advanceInterestPaid = min($partialAmount, $advanceInterestDue);
+                $principalPaid = max(0.0, $partialAmount - $advanceInterestPaid);
+                $markAdvancePaid = $advanceInterestDue > 0 && $advanceInterestPaid >= $advanceInterestDue;
+                // In no-advance unpaid mode, we keep "cash received" as the entered partial amount (existing behavior).
+                $totalPaymentReceived = $partialAmount;
+            } else {
+                $principalPaid = $partialAmount;
+                $isNormalPartialMode = true;
+            }
+        }
+
+        $newPrincipalAmount = $currentPrincipalAmount - $principalPaid;
+        if ($partialAmount < 0) {
+            // Negative partial increases principal
+            $newPrincipalAmount = $currentPrincipalAmount - $partialAmount;
+        }
+        if ($newPrincipalAmount < 0) {
+            $newPrincipalAmount = 0;
+        }
+
+        // For normal partial mode (no_advance=false OR advance_paid=true):
+        // To proceed, customer must pay:
+        // - the partial amount (principal reduction)
+        // - interest computed on the NEW principal
+        // - service charge (+ other computed charges)
+        if ($isNormalPartialMode && $partialAmount > 0) {
+            $interestOnNewPrincipal = $newPrincipalAmount * ((float) $oldestTransaction->interest_rate / 100);
+            $totalPaymentReceived = $partialAmount
+                + $interestOnNewPrincipal
+                + (float) $serviceCharge
+                + (float) $additionalChargeAmount
+                + (float) $lateDaysCharge;
+        }
 
         // Combine all item descriptions for the partial transaction (from active transactions only)
         $combinedDescriptions = $activeTransactions->pluck('item_description')->filter()->unique()->values()->implode('; ');
@@ -535,16 +601,16 @@ class PartialController extends Controller
         // Include selected items redemption in the same transaction
         $selectedItemsToRedeem = isset($selectedItemIds) && !empty($selectedItemIds) ? $selectedItemIds : [];
         
-        \Log::info('Partial Store - Before DB Transaction', [
+        Log::info('Partial Store - Before DB Transaction', [
             'selected_items_to_redeem' => $selectedItemsToRedeem,
             'pawn_ticket_number' => $pawnTicketNumber,
             'partial_amount' => $partialAmount,
         ]);
         
-        DB::transaction(function () use ($activeTransactions, $request, $branchId, $partialAmount, $lateDaysCharge, $backDate, $pawnTicketNumber, $oldestTransaction, $combinedDescriptions, $signaturePath, $newPrincipalAmount, $totalInterest, $serviceCharge, $additionalChargeAmount, $selectedItemsToRedeem) {
+        DB::transaction(function () use ($activeTransactions, $request, $branchId, $partialAmount, $lateDaysCharge, $backDate, $pawnTicketNumber, $oldestTransaction, $combinedDescriptions, $signaturePath, $newPrincipalAmount, $totalInterest, $serviceCharge, $additionalChargeAmount, $selectedItemsToRedeem, $markAdvancePaid, $totalPaymentReceived, $isNormalPartialMode, $interestOnNewPrincipal) {
             // First, mark selected items as redeemed (if any)
             if (!empty($selectedItemsToRedeem)) {
-                \Log::info('Partial Store - Inside DB Transaction - Updating Selected Items', [
+                Log::info('Partial Store - Inside DB Transaction - Updating Selected Items', [
                     'selected_items_to_redeem' => $selectedItemsToRedeem,
                     'pawn_ticket_number' => $pawnTicketNumber,
                 ]);
@@ -554,7 +620,7 @@ class PartialController extends Controller
                     ->get(['id', 'status', 'pawn_ticket_number', 'type'])
                     ->toArray();
                 
-                \Log::info('Partial Store - Before Update Status', [
+                Log::info('Partial Store - Before Update Status', [
                     'transactions_before' => $beforeUpdate,
                 ]);
                 
@@ -564,7 +630,7 @@ class PartialController extends Controller
                     ->where('status', '!=', 'redeemed') // Only update if not already redeemed
                     ->update(['status' => 'redeemed']);
                 
-                \Log::info('Partial Store - Update Result', [
+                Log::info('Partial Store - Update Result', [
                     'updated_count' => $updatedCount,
                     'selected_items_to_redeem' => $selectedItemsToRedeem,
                 ]);
@@ -574,12 +640,12 @@ class PartialController extends Controller
                     ->get(['id', 'status', 'pawn_ticket_number', 'type'])
                     ->toArray();
                 
-                \Log::info('Partial Store - After Update Status', [
+                Log::info('Partial Store - After Update Status', [
                     'transactions_after' => $afterUpdate,
                 ]);
                 
                 if ($updatedCount === 0 && !empty($selectedItemsToRedeem)) {
-                    \Log::error('Partial Store - Update Failed', [
+                    Log::error('Partial Store - Update Failed', [
                         'selected_items_to_redeem' => $selectedItemsToRedeem,
                         'updated_count' => $updatedCount,
                     ]);
@@ -620,7 +686,10 @@ class PartialController extends Controller
                 'service_charge' => $serviceCharge,
                 'late_days_charge' => $lateDaysCharge,
                 'back_date' => $backDate,
-                'net_proceeds' => abs($partialAmount), // Use absolute value for net proceeds
+                // For partials we store the total cash received for this transaction in net_proceeds.
+                // - In normal mode: partial + interest(on new principal) + service charge (+ other charges)
+                // - Otherwise: keep existing behavior (abs(partial))
+                'net_proceeds' => $partialAmount > 0 ? $totalPaymentReceived : abs($partialAmount),
                 'status' => 'active',
                 'transaction_pawn_ticket' => $request->input('transaction_pawn_ticket'),
                 'note' => $request->input('note'),
@@ -638,7 +707,7 @@ class PartialController extends Controller
                     'transaction_id' => $partialTransaction->id,
                     'type' => 'transaction',
                     'description' => "Partial payment - Pawn Ticket #{$pawnTicketNumber}",
-                    'amount' => $partialAmount, // Positive amount
+                    'amount' => $isNormalPartialMode ? $totalPaymentReceived : $partialAmount, // Positive amount (cash received)
                     'transaction_date' => now()->toDateString(),
                 ]);
             } else {
@@ -655,21 +724,40 @@ class PartialController extends Controller
             }
 
             // Update branch balance (add the partial amount - negative values will decrease balance)
-            BranchBalance::updateBalance($branchId, $partialAmount);
+            BranchBalance::updateBalance($branchId, $partialAmount > 0 ? $totalPaymentReceived : $partialAmount);
+
+            // Mark advance_paid only when the advance interest has been fully covered by partial payment.
+            if ($markAdvancePaid) {
+                Transaction::where('pawn_ticket_number', $pawnTicketNumber)
+                    ->where('type', 'sangla')
+                    ->whereDoesntHave('voided')
+                    ->where('no_advance', true)
+                    ->update(['advance_paid' => true]);
+            }
             
-            \Log::info('Partial Store - DB Transaction Completed Successfully', [
+            Log::info('Partial Store - DB Transaction Completed Successfully', [
                 'selected_items_to_redeem' => $selectedItemsToRedeem ?? [],
             ]);
         });
         
-        \Log::info('=== PARTIAL STORE END ===', [
+        Log::info('=== PARTIAL STORE END ===', [
             'pawn_ticket_number' => $pawnTicketNumber,
             'selected_items_redeemed' => $selectedItemsToRedeem ?? [],
         ]);
 
-        $partialMessage = $partialAmount >= 0
-            ? "Partial payment of ₱" . number_format($partialAmount, 2) . " for pawn ticket number '{$pawnTicketNumber}' has been recorded successfully. Principal reduced from ₱" . number_format($currentPrincipalAmount, 2) . " to ₱" . number_format($newPrincipalAmount, 2) . "."
-            : "Principal increase of ₱" . number_format(abs($partialAmount), 2) . " for pawn ticket number '{$pawnTicketNumber}' has been recorded successfully. Principal increased from ₱" . number_format($currentPrincipalAmount, 2) . " to ₱" . number_format($newPrincipalAmount, 2) . ".";
+        if ($isNormalPartialMode && $partialAmount > 0) {
+            $partialMessage = "Partial payment of ₱" . number_format($partialAmount, 2) . " for pawn ticket number '{$pawnTicketNumber}' has been recorded successfully. Principal reduced from ₱" . number_format($currentPrincipalAmount, 2) . " to ₱" . number_format($newPrincipalAmount, 2) . ". Amount paid includes Interest (₱" . number_format($interestOnNewPrincipal, 2) . " on new principal) and Service Charge (₱" . number_format((float) $serviceCharge, 2) . "). Total received: ₱" . number_format($totalPaymentReceived, 2) . ".";
+        } elseif ($partialAmount > 0 && $advanceInterestDue > 0) {
+            if ($principalPaid > 0) {
+                $partialMessage = "Partial payment of ₱" . number_format($partialAmount, 2) . " for pawn ticket number '{$pawnTicketNumber}' has been recorded successfully. ₱" . number_format($advanceInterestPaid, 2) . " applied to advance interest, and ₱" . number_format($principalPaid, 2) . " applied to principal. Principal updated from ₱" . number_format($currentPrincipalAmount, 2) . " to ₱" . number_format($newPrincipalAmount, 2) . ".";
+            } else {
+                $partialMessage = "Partial payment of ₱" . number_format($partialAmount, 2) . " for pawn ticket number '{$pawnTicketNumber}' has been recorded successfully. ₱" . number_format($advanceInterestPaid, 2) . " applied to advance interest. Principal remains ₱" . number_format($currentPrincipalAmount, 2) . ".";
+            }
+        } else {
+            $partialMessage = $partialAmount >= 0
+                ? "Partial payment of ₱" . number_format($partialAmount, 2) . " for pawn ticket number '{$pawnTicketNumber}' has been recorded successfully. Principal reduced from ₱" . number_format($currentPrincipalAmount, 2) . " to ₱" . number_format($newPrincipalAmount, 2) . "."
+                : "Principal increase of ₱" . number_format(abs($partialAmount), 2) . " for pawn ticket number '{$pawnTicketNumber}' has been recorded successfully. Principal increased from ₱" . number_format($currentPrincipalAmount, 2) . " to ₱" . number_format($newPrincipalAmount, 2) . ".";
+        }
         
         // Combine messages if items were selected
         $successMessage = (isset($selectedItemsMessage) ? $selectedItemsMessage : '') . $partialMessage;
