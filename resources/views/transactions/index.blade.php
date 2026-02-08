@@ -128,12 +128,15 @@
 
                             <!-- Hide Voided Transactions Checkbox -->
                             <div class="flex items-end">
-                                <div class="flex items-center">
+                                <div class="flex items-center px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg w-full">
+                                    <input type="hidden" name="hide_voided" value="0">
                                     <input 
                                         id="hide_voided" 
+                                        name="hide_voided"
                                         type="checkbox" 
                                         class="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                                        checked
+                                        value="1"
+                                        {{ ($filters['hide_voided'] ?? true) ? 'checked' : '' }}
                                     >
                                     <label for="hide_voided" class="ml-2 text-sm text-gray-700">
                                         Hide Voided Transactions
@@ -141,19 +144,61 @@
                                 </div>
                             </div>
 
-                            <!-- Apply/Reset Buttons -->
-                            <div class="flex items-end gap-2">
-                                <button
-                                    type="submit"
-                                    class="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 text-sm font-medium transition-colors">
-                                    Apply Filters
-                                </button>
+                            @if(auth()->user()->isAdminOrSuperAdmin())
+                                <!-- Show all (no pagination) -->
+                                <div class="flex items-end">
+                                    <div class="flex items-center px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg w-full">
+                                        <input type="hidden" name="show_all" value="0">
+                                        <input
+                                            id="show_all"
+                                            name="show_all"
+                                            type="checkbox"
+                                            value="1"
+                                            class="rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                            {{ ($filters['show_all'] ?? false) ? 'checked' : '' }}
+                                        >
+                                        <label for="show_all" class="ml-2 text-sm text-gray-700">
+                                            Show all (no pagination)
+                                        </label>
+                                    </div>
+                                </div>
+                            @endif
+
+                        </div>
+
+                        <!-- Actions Row -->
+                        <div class="flex flex-col sm:flex-row gap-2 sm:justify-end pt-2 border-t border-gray-100">
+                            <button
+                                type="submit"
+                                class="inline-flex w-full sm:w-auto justify-center items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-lg shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 text-sm font-semibold transition-colors"
+                            >
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L15 12.414V19a1 1 0 01-1.447.894l-4-2A1 1 0 019 17v-4.586L3.293 6.707A1 1 0 013 6V4z"/>
+                                </svg>
+                                Apply
+                            </button>
+
+                            @if(auth()->user()->isAdminOrSuperAdmin())
                                 <a
-                                    href="{{ route('transactions.index') }}"
-                                    class="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 text-sm font-medium transition-colors text-center">
-                                    Reset
+                                    href="{{ route('transactions.export', request()->query()) }}"
+                                    class="inline-flex w-full sm:w-auto justify-center items-center gap-2 px-4 py-2.5 bg-white text-emerald-700 border border-emerald-200 rounded-lg shadow-sm hover:bg-emerald-50 hover:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 text-sm font-semibold transition-colors text-center"
+                                >
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v12m0 0l4-4m-4 4l-4-4M4 19a2 2 0 002 2h12a2 2 0 002-2"/>
+                                    </svg>
+                                    Export CSV
                                 </a>
-                            </div>
+                            @endif
+
+                            <a
+                                href="{{ route('transactions.index') }}"
+                                class="inline-flex w-full sm:w-auto justify-center items-center gap-2 px-4 py-2.5 bg-white text-gray-700 border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 text-sm font-semibold transition-colors text-center"
+                            >
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                </svg>
+                                Reset
+                            </a>
                         </div>
                     </form>
 
@@ -418,6 +463,7 @@
                                         @endphp
                                         <tr 
                                             class="hover:bg-gray-50 transition-colors transaction-row {{ $isVoided ? 'opacity-40' : '' }} {{ $pawnTicketNumber ? 'bg-gray-50' : '' }}"
+                                            data-print-url="{{ route('transactions.print-pawn-ticket', $transaction) }}"
                                             data-item-image="{{ route('images.show', ['path' => $transaction->item_image_path]) }}"
                                             data-pawner-image="{{ $transaction->pawner_id_image_path ? route('images.show', ['path' => $transaction->pawner_id_image_path]) : '' }}"
                                             data-pawn-ticket-image="{{ $transaction->pawn_ticket_image_path ? route('images.show', ['path' => $transaction->pawn_ticket_image_path]) : '' }}"
@@ -454,8 +500,23 @@
                                             <td class="px-6 py-4 whitespace-nowrap {{ $pawnTicketNumber ? 'pl-12' : '' }}">
                                                 <div class="text-xs text-gray-500">Transaction #</div>
                                                 <div class="text-sm font-medium text-gray-900">{{ $transaction->transaction_number }}</div>
+                                                <a
+                                                    href="{{ route('transactions.print-pawn-ticket', $transaction) }}"
+                                                    target="_blank"
+                                                    rel="noopener"
+                                                    class="mt-2 inline-flex items-center gap-1 px-2 py-1 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 transition text-[10px] font-semibold uppercase tracking-wide"
+                                                    onclick="event.stopPropagation();"
+                                                    title="Print"
+                                                >
+                                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 9V2h12v7M6 18h12v4H6v-4zm-2-9h16a2 2 0 012 2v5h-4v-4H6v4H2v-5a2 2 0 012-2z"/>
+                                                    </svg>
+                                                    Print
+                                                </a>
                                                 @if($transaction->transaction_pawn_ticket)
-                                                    <div class="text-xs text-gray-500 mt-1">Pawn ticket: {{ $transaction->transaction_pawn_ticket }}</div>
+                                                    <div class="text-xs text-gray-500 mt-1">
+                                                        Pawn ticket: {{ $transaction->transaction_pawn_ticket }}
+                                                    </div>
                                                 @endif
                                             </td>
                                             <td class="px-6 py-4 whitespace-nowrap">
@@ -566,6 +627,7 @@
                                         @endphp
                                         <tr 
                                             class="{{ $bgColor }} transition-colors cursor-pointer transaction-row {{ $isVoided ? 'opacity-40' : '' }}"
+                                            data-print-url="{{ route('transactions.print-pawn-ticket', $childTransaction) }}"
                                             data-item-image="{{ route('images.show', ['path' => $childTransaction->item_image_path]) }}"
                                             data-pawner-image="{{ $childTransaction->pawner_id_image_path ? route('images.show', ['path' => $childTransaction->pawner_id_image_path]) : '' }}"
                                             data-pawn-ticket-image="{{ $childTransaction->pawn_ticket_image_path ? route('images.show', ['path' => $childTransaction->pawn_ticket_image_path]) : '' }}"
@@ -608,8 +670,23 @@
                                                 <div class="text-[11px] text-gray-600 mt-1">
                                                     {{ $childTransaction->transaction_number }}
                                                 </div>
+                                                <a
+                                                    href="{{ route('transactions.print-pawn-ticket', $childTransaction) }}"
+                                                    target="_blank"
+                                                    rel="noopener"
+                                                    class="mt-2 inline-flex items-center gap-1 px-2 py-1 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 transition text-[10px] font-semibold uppercase tracking-wide"
+                                                    onclick="event.stopPropagation();"
+                                                    title="Print"
+                                                >
+                                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 9V2h12v7M6 18h12v4H6v-4zm-2-9h16a2 2 0 012 2v5h-4v-4H6v4H2v-5a2 2 0 012-2z"/>
+                                                    </svg>
+                                                    Print
+                                                </a>
                                                 @if($childTransaction->transaction_pawn_ticket)
-                                                    <div class="text-[11px] text-gray-500 mt-1">Pawn ticket: {{ $childTransaction->transaction_pawn_ticket }}</div>
+                                                    <div class="text-[11px] text-gray-500 mt-1">
+                                                        Pawn ticket: {{ $childTransaction->transaction_pawn_ticket }}
+                                                    </div>
                                                 @endif
                                             </td>
                                             <td class="px-6 py-2 whitespace-nowrap">
@@ -687,6 +764,7 @@
                                             @endphp
                                         <tr 
                                             class="hover:bg-gray-50 transition-colors cursor-pointer transaction-row {{ $isVoided ? 'opacity-40' : '' }}"
+                                            data-print-url="{{ route('transactions.print-pawn-ticket', $transaction) }}"
                                             data-item-image="{{ route('images.show', ['path' => $transaction->item_image_path]) }}"
                                             data-pawner-image="{{ $transaction->pawner_id_image_path ? route('images.show', ['path' => $transaction->pawner_id_image_path]) : '' }}"
                                             data-pawn-ticket-image="{{ $transaction->pawn_ticket_image_path ? route('images.show', ['path' => $transaction->pawn_ticket_image_path]) : '' }}"
@@ -723,8 +801,23 @@
                                                 <td class="px-6 py-4 whitespace-nowrap">
                                                     <div class="text-xs text-gray-500">Transaction #</div>
                                                     <div class="text-sm font-medium text-gray-900">{{ $transaction->transaction_number }}</div>
+                                                    <a
+                                                        href="{{ route('transactions.print-pawn-ticket', $transaction) }}"
+                                                        target="_blank"
+                                                        rel="noopener"
+                                                        class="mt-2 inline-flex items-center gap-1 px-2 py-1 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 transition text-[10px] font-semibold uppercase tracking-wide"
+                                                        onclick="event.stopPropagation();"
+                                                        title="Print"
+                                                    >
+                                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 9V2h12v7M6 18h12v4H6v-4zm-2-9h16a2 2 0 012 2v5h-4v-4H6v4H2v-5a2 2 0 012-2z"/>
+                                                        </svg>
+                                                        Print
+                                                    </a>
                                                     @if($transaction->transaction_pawn_ticket)
-                                                        <div class="text-xs text-gray-500 mt-1">Pawn ticket: {{ $transaction->transaction_pawn_ticket }}</div>
+                                                        <div class="text-xs text-gray-500 mt-1">
+                                                            Pawn ticket: {{ $transaction->transaction_pawn_ticket }}
+                                                        </div>
                                                     @endif
                                                 </td>
                                                 <td class="px-6 py-4 whitespace-nowrap">
@@ -789,9 +882,11 @@
                     </div>
 
                     <!-- Pagination -->
-                    <div class="mt-4">
-                        {{ $transactions->links() }}
-                    </div>
+                    @if(empty($showAll))
+                        <div class="mt-4">
+                            {{ $transactions->links() }}
+                        </div>
+                    @endif
                 </div>
             </div>
         </div>
@@ -805,15 +900,30 @@
                     <h3 class="text-lg font-semibold text-gray-900">
                         Transaction Details - <span id="modalTransactionNumber" class="text-indigo-600"></span>
                     </h3>
-                    <button
-                        type="button"
-                        onclick="closeTransactionImagesModal()"
-                        class="text-gray-400 hover:text-gray-500 focus:outline-none"
-                    >
-                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                        </svg>
-                    </button>
+                    <div class="flex items-center gap-2">
+                        <a
+                            id="modalPrintButton"
+                            href="#"
+                            target="_blank"
+                            rel="noopener"
+                            class="hidden items-center gap-2 px-3 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition text-xs font-semibold uppercase tracking-wide"
+                            title="Print pawn ticket"
+                        >
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 9V2h12v7M6 18h12v4H6v-4zm-2-9h16a2 2 0 012 2v5h-4v-4H6v4H2v-5a2 2 0 012-2z"/>
+                            </svg>
+                            Print
+                        </a>
+                        <button
+                            type="button"
+                            onclick="closeTransactionImagesModal()"
+                            class="text-gray-400 hover:text-gray-500 focus:outline-none"
+                        >
+                            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
             </div>
             
@@ -1256,6 +1366,7 @@
                     const pawnerImageUrl = this.getAttribute('data-pawner-image');
                     const pawnTicketImageUrl = this.getAttribute('data-pawn-ticket-image');
                     const signatureImageUrl = this.getAttribute('data-signature-image');
+                    const printUrl = this.getAttribute('data-print-url') || '';
                     const transactionId = this.getAttribute('data-transaction-id');
                     const transactionNumber = this.getAttribute('data-transaction-number');
                     const pawnTicketNumber = this.getAttribute('data-pawn-ticket-number');
@@ -1302,6 +1413,7 @@
                         pawnerImageUrl,
                         pawnTicketImageUrl,
                         signatureImageUrl,
+                        printUrl,
                         transactionId,
                         transactionNumber,
                         pawnTicketNumber,
@@ -1445,6 +1557,20 @@
             const modal = document.getElementById('transactionImagesModal');
             currentTransactionId = data.transactionId;
             currentPawnTicketNumber = null; // Clear pawn ticket number for individual transactions
+            
+            // Wire up print button (opens in new tab)
+            const modalPrintButton = document.getElementById('modalPrintButton');
+            if (modalPrintButton) {
+                if (data.printUrl && data.printUrl.trim() !== '') {
+                    modalPrintButton.href = data.printUrl;
+                    modalPrintButton.classList.remove('hidden');
+                    modalPrintButton.classList.add('inline-flex');
+                } else {
+                    modalPrintButton.href = '#';
+                    modalPrintButton.classList.add('hidden');
+                    modalPrintButton.classList.remove('inline-flex');
+                }
+            }
             
             // Ensure transaction summary is visible for individual transactions
             const summarySection = document.getElementById('transactionSummarySection');
@@ -1954,13 +2080,21 @@
             if (backDatedNotice) {
                 backDatedNotice.classList.add('hidden');
             }
+            
+            // Hide print button
+            const modalPrintButton = document.getElementById('modalPrintButton');
+            if (modalPrintButton) {
+                modalPrintButton.href = '#';
+                modalPrintButton.classList.add('hidden');
+                modalPrintButton.classList.remove('inline-flex');
+            }
             document.getElementById('transactionImagesModal').close();
         }
 
         // Close modal when clicking outside
         document.getElementById('transactionImagesModal').addEventListener('click', function(event) {
             if (event.target === this) {
-                this.close();
+                closeTransactionImagesModal();
             }
         });
 

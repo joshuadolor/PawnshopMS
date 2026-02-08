@@ -16,9 +16,18 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+use Carbon\Carbon;
 
 class TransactionController extends Controller
 {
+    private function assertAdminOrSuperAdmin(Request $request): void
+    {
+        if (!$request->user() || !$request->user()->isAdminOrSuperAdmin()) {
+            abort(403);
+        }
+    }
+
     /**
      * Display a listing of transactions.
      */
@@ -26,6 +35,7 @@ class TransactionController extends Controller
     {
         $user = $request->user();
         $query = Transaction::with(['branch', 'user', 'itemType', 'itemTypeSubtype', 'tags', 'voided.voidedBy']);
+        $showAll = false;
 
         // Staff users only see transactions for today
         if ($user->isStaff()) {
@@ -33,6 +43,7 @@ class TransactionController extends Controller
             $query->whereDate('created_at', today());
         } else {
             // Admin and Superadmin can filter by date range
+            $showAll = $request->boolean('show_all', false);
             if ($request->has('today_only') && $request->boolean('today_only')) {
                 // Today Only: clear date filters and set to today
                 $query->whereDate('created_at', today());
@@ -74,14 +85,25 @@ class TransactionController extends Controller
             $query->where('type', $request->type);
         }
 
+        // Hide voided (default true for admin/superadmin; staff UI hides via JS only)
+        $hideVoided = $user->isAdminOrSuperAdmin()
+            ? $request->boolean('hide_voided', true)
+            : false;
+        if ($hideVoided) {
+            $query->whereDoesntHave('voided');
+        }
+
         // Filter by user (admin and superadmin only)
         if ($user->isAdminOrSuperAdmin() && $request->filled('user_id')) {
             $query->where('user_id', $request->user_id);
         }
 
-        // Get all transactions (sangla and renew) - we'll group by pawn ticket in the view
-        $transactions = $query->orderBy('created_at', 'desc')
-            ->paginate(20);
+        // Get all transactions - we'll group by pawn ticket in the view
+        if ($showAll && $user->isAdminOrSuperAdmin()) {
+            $transactions = $query->orderBy('created_at', 'desc')->get();
+        } else {
+            $transactions = $query->orderBy('created_at', 'desc')->paginate(20);
+        }
 
         // Get all unique pawn ticket numbers from the current page
         $pawnTicketNumbers = $transactions->pluck('pawn_ticket_number')->filter()->unique()->values();
@@ -275,6 +297,7 @@ class TransactionController extends Controller
             'partialsForPawnTickets' => $partialsForPawnTickets,
             'branches' => $branches,
             'users' => $users,
+            'showAll' => $showAll,
             'filters' => [
                 'start_date' => $request->start_date ?? null,
                 'end_date' => $request->end_date ?? null,
@@ -283,7 +306,336 @@ class TransactionController extends Controller
                 'branch_id' => $request->branch_id ?? null,
                 'type' => $request->type ?? null,
                 'user_id' => $request->user_id ?? null,
+                'hide_voided' => $hideVoided,
+                'show_all' => $showAll,
             ],
+        ]);
+    }
+
+    /**
+     * Export the currently filtered transactions to CSV (Excel-readable).
+     * Admin/Superadmin only.
+     */
+    public function export(Request $request): StreamedResponse
+    {
+        $this->assertAdminOrSuperAdmin($request);
+
+        // Reuse the same filters as index, but always export the full filtered dataset.
+        $query = Transaction::with(['branch', 'user', 'itemType', 'itemTypeSubtype', 'tags', 'voided.voidedBy']);
+
+        if ($request->has('today_only') && $request->boolean('today_only')) {
+            $query->whereDate('created_at', today());
+        } elseif ($request->filled('start_date') || $request->filled('end_date')) {
+            if ($request->filled('start_date')) {
+                $query->whereDate('created_at', '>=', $request->start_date);
+            }
+            if ($request->filled('end_date')) {
+                $query->whereDate('created_at', '<=', $request->end_date);
+            }
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('item_description', 'like', "%{$search}%")
+                    ->orWhere('first_name', 'like', "%{$search}%")
+                    ->orWhere('last_name', 'like', "%{$search}%")
+                    ->orWhere('transaction_number', 'like', "%{$search}%")
+                    ->orWhere('pawn_ticket_number', 'like', "%{$search}%");
+            });
+        }
+
+        if ($request->filled('branch_id')) {
+            $query->where('branch_id', $request->branch_id);
+        }
+        if ($request->filled('type')) {
+            $query->where('type', $request->type);
+        }
+        if ($request->filled('user_id')) {
+            $query->where('user_id', $request->user_id);
+        }
+
+        $hideVoided = $request->boolean('hide_voided', true);
+        if ($hideVoided) {
+            $query->whereDoesntHave('voided');
+        }
+
+        $transactions = $query->orderBy('created_at', 'desc')->get();
+
+        // Precompute "principal increase" flags for partials (matches table logic).
+        $partialIds = $transactions->where('type', 'partial')->pluck('id')->values();
+        $principalIncreasePartialIds = collect();
+        if ($partialIds->isNotEmpty()) {
+            $principalIncreasePartialIds = \App\Models\BranchFinancialTransaction::whereIn('transaction_id', $partialIds)
+                ->where('type', 'expense')
+                ->where('description', 'like', '%Principal increase%')
+                ->whereDoesntHave('voided')
+                ->pluck('transaction_id')
+                ->unique();
+        }
+
+        $filename = 'transactions_export_' . now()->format('Y-m-d_His') . '.csv';
+
+        return response()->streamDownload(function () use ($transactions, $principalIncreasePartialIds) {
+            $out = fopen('php://output', 'w');
+
+            // UTF-8 BOM for Excel compatibility
+            fwrite($out, "\xEF\xBB\xBF");
+
+            fputcsv($out, [
+                'Row Type',
+                'Pawn Ticket #',
+                'Transaction #',
+                'Date',
+                'Time',
+                'Description / Item',
+                'Type',
+                'Amount Label',
+                'Amount (₱)',
+                'Branch',
+                'Processed By',
+                'Pawner Name',
+                'Original Principal (₱)',
+                'Current Principal (₱)',
+                'Net Proceeds (₱)',
+                'Maturity',
+                'Expiry',
+                'Auction',
+                'Voided?',
+                'Voided By',
+                'Voided At',
+                'Void Reason',
+            ]);
+
+            // Group like the UI: by pawn ticket number (or standalone id)
+            $groups = $transactions->groupBy(fn (Transaction $t) => $t->pawn_ticket_number ?: ('no-pawn-ticket-' . $t->id));
+
+            foreach ($groups as $groupKey => $groupTransactions) {
+                $pawnTicketNumber = $groupTransactions->first()->pawn_ticket_number;
+
+                if ($pawnTicketNumber) {
+                    $sanglas = $groupTransactions->where('type', 'sangla')->sortBy('created_at');
+                    $oldestSangla = $sanglas->first();
+
+                    $originalPrincipal = $oldestSangla ? (float) $oldestSangla->loan_amount : 0.0;
+                    $netProceeds = $oldestSangla ? (float) $oldestSangla->net_proceeds : 0.0;
+
+                    $latestPartial = $transactions->where('pawn_ticket_number', $pawnTicketNumber)
+                        ->where('type', 'partial')
+                        ->sortByDesc('created_at')
+                        ->first();
+                    $currentPrincipal = $latestPartial ? (float) $latestPartial->loan_amount : $originalPrincipal;
+
+                    $latestTxForDates = $transactions->where('pawn_ticket_number', $pawnTicketNumber)
+                        ->whereIn('type', ['sangla', 'renew', 'partial'])
+                        ->sortByDesc('created_at')
+                        ->first();
+
+                    fputcsv($out, [
+                        'PAWN_TICKET',
+                        $pawnTicketNumber,
+                        '',
+                        '',
+                        '',
+                        '',
+                        '',
+                        'Principal / Net Proceeds',
+                        '',
+                        $oldestSangla?->branch?->name ?? '',
+                        '',
+                        $oldestSangla ? ($oldestSangla->first_name . ' ' . $oldestSangla->last_name) : '',
+                        number_format($originalPrincipal, 2, '.', ''),
+                        number_format($currentPrincipal, 2, '.', ''),
+                        number_format($netProceeds, 2, '.', ''),
+                        $latestTxForDates && $latestTxForDates->maturity_date ? $latestTxForDates->maturity_date->format('Y-m-d') : '',
+                        $latestTxForDates && $latestTxForDates->expiry_date ? $latestTxForDates->expiry_date->format('Y-m-d') : '',
+                        $latestTxForDates && $latestTxForDates->auction_sale_date ? $latestTxForDates->auction_sale_date->format('Y-m-d') : '',
+                        '',
+                        '',
+                        '',
+                        '',
+                    ]);
+                }
+
+                foreach ($groupTransactions->sortBy('created_at') as $tx) {
+                    $isVoided = $tx->isVoided();
+                    $voidedInfo = $tx->voided;
+
+                    $typeLabel = match ($tx->type) {
+                        'sangla' => 'Sangla',
+                        'renew' => 'Renewal',
+                        'tubos' => 'Tubos',
+                        'partial' => 'Partial',
+                        default => $tx->type,
+                    };
+
+                    $amountLabel = '';
+                    $amount = '';
+
+                    if ($tx->type === 'renew') {
+                        $amountLabel = 'Interest Paid';
+                        $amount = number_format((float) $tx->net_proceeds, 2, '.', '');
+                    } elseif ($tx->type === 'tubos') {
+                        $amountLabel = 'Amount Paid';
+                        $amount = number_format((float) $tx->net_proceeds, 2, '.', '');
+                    } elseif ($tx->type === 'partial') {
+                        $isPrincipalIncrease = $principalIncreasePartialIds->contains($tx->id);
+                        $amountLabel = $isPrincipalIncrease ? 'Principal Increase' : 'Partial Amount Paid';
+                        $signed = $isPrincipalIncrease ? -(float) $tx->net_proceeds : (float) $tx->net_proceeds;
+                        $amount = number_format($signed, 2, '.', '');
+                    } else {
+                        // Sangla amount is shown in the PAWN_TICKET header row on the UI; keep blank here
+                        $amountLabel = '';
+                        $amount = '';
+                    }
+
+                    $desc = $tx->type === 'sangla'
+                        ? trim(($tx->itemType?->name ?? '') . ($tx->itemTypeSubtype ? ' - ' . $tx->itemTypeSubtype->name : '') . ($tx->custom_item_type ? ' - ' . $tx->custom_item_type : '')) . ': ' . (string) $tx->item_description
+                        : (string) $tx->item_description;
+
+                    fputcsv($out, [
+                        'TRANSACTION',
+                        $tx->pawn_ticket_number ?? '',
+                        $tx->transaction_number,
+                        $tx->created_at ? $tx->created_at->format('Y-m-d') : '',
+                        $tx->created_at ? $tx->created_at->format('H:i:s') : '',
+                        $desc,
+                        $typeLabel,
+                        $amountLabel,
+                        $amount,
+                        $tx->branch?->name ?? '',
+                        $tx->user?->name ?? '',
+                        $tx->first_name . ' ' . $tx->last_name,
+                        number_format((float) $tx->loan_amount, 2, '.', ''),
+                        '',
+                        $tx->type === 'sangla' ? number_format((float) $tx->net_proceeds, 2, '.', '') : '',
+                        $tx->maturity_date ? $tx->maturity_date->format('Y-m-d') : '',
+                        $tx->expiry_date ? $tx->expiry_date->format('Y-m-d') : '',
+                        $tx->auction_sale_date ? $tx->auction_sale_date->format('Y-m-d') : '',
+                        $isVoided ? 'YES' : 'NO',
+                        $voidedInfo && $voidedInfo->voidedBy ? $voidedInfo->voidedBy->name : '',
+                        $voidedInfo && $voidedInfo->voided_at ? $voidedInfo->voided_at->format('Y-m-d H:i:s') : '',
+                        $voidedInfo ? $voidedInfo->reason : '',
+                    ]);
+                }
+            }
+
+            fclose($out);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+        ]);
+    }
+
+    /**
+     * Printable document for a transaction row.
+     * IMPORTANT: Uses the clicked transaction's own data (not the parent Sangla).
+     */
+    public function printPawnTicket(Request $request, Transaction $transaction): View
+    {
+        // Any authenticated user who can see the transaction list can print.
+        // (If you want admin-only later, we can gate it here.)
+
+        $pawnTicketNumber = $transaction->pawn_ticket_number;
+        $items = collect(); // rely on $base->item_description (partial already stores combined descriptions)
+
+        $base = $transaction->loadMissing(['itemType', 'itemTypeSubtype', 'tags', 'branch', 'user']);
+
+        $displayPawnTicketNumber = $transaction->type === 'sangla'
+            ? ($transaction->pawn_ticket_number ?: null)
+            : ($transaction->transaction_pawn_ticket ?: ($transaction->pawn_ticket_number ?: null));
+
+        $dateLoanGranted = Carbon::parse($transaction->created_at)->format('M d, Y');
+
+        $principal = (float) ($transaction->loan_amount ?? 0);
+        $rate = (float) ($transaction->interest_rate ?? 0);
+        $interest = $principal * ($rate / 100);
+        $serviceCharge = (float) ($transaction->service_charge ?? 0);
+        $netProceeds = (float) ($transaction->net_proceeds ?? 0);
+
+        $isPartialReceipt = $transaction->type === 'partial';
+        $principalBefore = null;
+        $principalAfter = null;
+        $principalChange = null;
+        $principalPaid = null;
+        $cashAmount = null;
+        $cashLabel = null;
+        $lateDaysCharge = (float) ($transaction->late_days_charge ?? 0);
+        $interestAndOtherCharges = null;
+
+        if ($isPartialReceipt && $pawnTicketNumber) {
+            $principalAfter = (float) ($transaction->loan_amount ?? 0);
+
+            $previousPartial = Transaction::where('pawn_ticket_number', $pawnTicketNumber)
+                ->where('type', 'partial')
+                ->whereDoesntHave('voided')
+                ->where('created_at', '<', $transaction->created_at)
+                ->orderBy('created_at', 'desc')
+                ->first();
+
+            if ($previousPartial) {
+                $principalBefore = (float) $previousPartial->loan_amount;
+            } else {
+                $firstSangla = Transaction::where('pawn_ticket_number', $pawnTicketNumber)
+                    ->where('type', 'sangla')
+                    ->whereDoesntHave('voided')
+                    ->orderBy('created_at', 'asc')
+                    ->first();
+                $principalBefore = (float) ($firstSangla?->loan_amount ?? $principalAfter);
+            }
+
+            // Positive means principal reduced; negative means principal increased.
+            $principalChange = $principalBefore - $principalAfter;
+            $principalPaid = max(0.0, $principalChange);
+
+            $bft = BranchFinancialTransaction::where('transaction_id', $transaction->id)
+                ->whereDoesntHave('voided')
+                ->orderBy('id', 'desc')
+                ->first();
+
+            $cashAmount = (float) ($bft?->amount ?? $transaction->net_proceeds ?? 0);
+            $cashLabel = ($bft && $bft->isExpense()) ? 'Cash Released' : 'Amount Paid';
+
+            // We only know the grand total cash movement for the partial.
+            // Break down deterministically using stored charges and inferred remainder.
+            $chargesTotal = max(0.0, $cashAmount - $principalPaid);
+            $interestAndOtherCharges = max(0.0, $chargesTotal - $serviceCharge - $lateDaysCharge);
+        }
+
+        $printedAt = now();
+        $printedById = (int) ($request->user()?->id ?? 0);
+        $processedById = (int) ($transaction->user_id ?? 0);
+        $transactionNumber = (string) ($transaction->transaction_number ?: $transaction->id);
+
+        $printTrackingCode = sprintf(
+            '%s-%s-%s-%s',
+            $transactionNumber,
+            str_pad((string) $printedById, 2, '0', STR_PAD_LEFT),
+            str_pad((string) $processedById, 2, '0', STR_PAD_LEFT),
+            $printedAt->format('YmdHis')
+        );
+
+        return view('transactions.print.pawn-ticket', [
+            'transaction' => $transaction,
+            'base' => $base,
+            'pawnTicketNumber' => $pawnTicketNumber,
+            'displayPawnTicketNumber' => $displayPawnTicketNumber,
+            'items' => $items,
+            'dateLoanGranted' => $dateLoanGranted,
+            'principal' => $principal,
+            'interest' => $interest,
+            'serviceCharge' => $serviceCharge,
+            'netProceeds' => $netProceeds,
+            'lateDaysCharge' => $lateDaysCharge,
+            'isPartialReceipt' => $isPartialReceipt,
+            'principalBefore' => $principalBefore,
+            'principalAfter' => $principalAfter,
+            'principalChange' => $principalChange,
+            'principalPaid' => $principalPaid,
+            'cashAmount' => $cashAmount,
+            'cashLabel' => $cashLabel,
+            'interestAndOtherCharges' => $interestAndOtherCharges,
+            'printedAt' => $printedAt,
+            'printTrackingCode' => $printTrackingCode,
         ]);
     }
 

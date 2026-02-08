@@ -37,6 +37,8 @@ Route::middleware('auth')->group(function () {
     // Transaction Routes
     Route::prefix('transactions')->name('transactions.')->group(function () {
         Route::get('/', [TransactionController::class, 'index'])->name('index');
+        Route::get('/export', [TransactionController::class, 'export'])->name('export');
+        Route::get('/{transaction}/print-pawn-ticket', [TransactionController::class, 'printPawnTicket'])->name('print-pawn-ticket');
         Route::post('/{transaction}/void', [TransactionController::class, 'void'])->name('void');
         Route::post('/void-pawn-ticket/{pawnTicketNumber}', [TransactionController::class, 'voidPawnTicket'])->name('void-pawn-ticket');
         Route::get('/related/{pawnTicketNumber}', [TransactionController::class, 'getRelatedTransactions'])->name('related');
